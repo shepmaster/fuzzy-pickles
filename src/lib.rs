@@ -1418,6 +1418,7 @@ pub enum PatternRangeComponent {
 #[derive(Debug, Visit)]
 pub struct PatternReference {
     extent: Extent,
+    is_mut: Option<Extent>,
     pattern: Box<Pattern>,
     whitespace: Vec<Whitespace>,
 }
@@ -3970,15 +3971,24 @@ fn pattern_number<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Patter
 
 fn pattern_reference<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternReference> {
     sequence!(pm, pt, {
-        spt     = point;
-        _       = literal("&");
-        ws      = optional_whitespace(Vec::new());
-        pattern = pattern;
+        spt          = point;
+        _            = literal("&");
+        (is_mut, ws) = concat_whitespace(Vec::new(), optional(pattern_reference_mut));
+        ws           = optional_whitespace(ws);
+        pattern      = pattern;
     }, |_, pt| PatternReference {
         extent: ex(spt, pt),
+        is_mut,
         pattern: Box::new(pattern),
         whitespace: ws
     })
+}
+
+fn pattern_reference_mut<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, (Extent, Vec<Whitespace>)> {
+    sequence!(pm, pt, {
+        is_mut  = ext(literal("mut"));
+        ws      = whitespace;
+    }, |_, _| (is_mut, ws))
 }
 
 fn pattern_range<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternRange> {
@@ -6413,6 +6423,13 @@ mod test {
     fn pattern_with_reference() {
         let p = qp(pattern, "&a");
         assert_eq!(unwrap_progress(p).extent(), (0, 2))
+    }
+
+    #[test]
+    fn pattern_with_reference_mutable() {
+        let p = unwrap_progress(qp(pattern, "&mut ()"));
+        assert!(p.is_reference());
+        assert_eq!(p.extent(), (0, 7));
     }
 
     #[test]
