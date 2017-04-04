@@ -643,16 +643,30 @@ pub enum Argument {
     Named(NamedArgument),
 }
 
+#[derive(Debug, Visit, Decompose)]
+pub enum SelfArgument {
+    Longhand(SelfArgumentLonghand),
+    Shorthand(SelfArgumentShorthand),
+}
+
 #[derive(Debug, Visit)]
-pub struct SelfArgument {
+pub struct SelfArgumentLonghand {
     extent: Extent,
-    qualifier: Option<SelfArgumentQualifier>,
+    name: Ident,
+    typ: Type,
+    whitespace: Vec<Whitespace>,
+}
+
+#[derive(Debug, Visit)]
+pub struct SelfArgumentShorthand {
+    extent: Extent,
+    qualifier: Option<SelfArgumentShorthandQualifier>,
     name: Ident,
     whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, Visit, Decompose)]
-pub enum SelfArgumentQualifier {
+pub enum SelfArgumentShorthandQualifier {
     Reference(TypeReferenceKind),
     Mut(Extent),
 }
@@ -1743,7 +1757,9 @@ pub trait Visitor {
     fn visit_reference(&mut self, &Reference) {}
     fn visit_return(&mut self, &Return) {}
     fn visit_self_argument(&mut self, &SelfArgument) {}
-    fn visit_self_argument_qualifier(&mut self, &SelfArgumentQualifier) {}
+    fn visit_self_argument_longhand(&mut self, &SelfArgumentLonghand) {}
+    fn visit_self_argument_shorthand(&mut self, &SelfArgumentShorthand) {}
+    fn visit_self_argument_shorthand_qualifier(&mut self, &SelfArgumentShorthandQualifier) {}
     fn visit_slice(&mut self, &Slice) {}
     fn visit_statement(&mut self, &Statement) {}
     fn visit_static(&mut self, &Static) {}
@@ -1894,7 +1910,9 @@ pub trait Visitor {
     fn exit_reference(&mut self, &Reference) {}
     fn exit_return(&mut self, &Return) {}
     fn exit_self_argument(&mut self, &SelfArgument) {}
-    fn exit_self_argument_qualifier(&mut self, &SelfArgumentQualifier) {}
+    fn exit_self_argument_longhand(&mut self, &SelfArgumentLonghand) {}
+    fn exit_self_argument_shorthand(&mut self, &SelfArgumentShorthand) {}
+    fn exit_self_argument_shorthand_qualifier(&mut self, &SelfArgumentShorthandQualifier) {}
     fn exit_slice(&mut self, &Slice) {}
     fn exit_statement(&mut self, &Statement) {}
     fn exit_static(&mut self, &Static) {}
@@ -2503,13 +2521,38 @@ fn function_arglist<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Vec<
 }
 
 fn self_argument<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, SelfArgument> {
+    pm.alternate(pt)
+        .one(map(self_argument_longhand, SelfArgument::Longhand))
+        .one(map(self_argument_shorthand, SelfArgument::Shorthand))
+        .finish()
+}
+
+fn self_argument_longhand<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, SelfArgumentLonghand> {
+    sequence!(pm, pt, {
+        spt  = point;
+        name = ext(literal("self"));
+        ws   = optional_whitespace(Vec::new());
+        _    = literal(":");
+        ws   = optional_whitespace(ws);
+        typ  = typ;
+        _    = optional(literal(","));
+        ws   = optional_whitespace(ws);
+    }, |_, pt| SelfArgumentLonghand {
+        extent: ex(spt, pt),
+        name: Ident { extent: name },
+        typ,
+        whitespace: ws,
+    })
+}
+
+fn self_argument_shorthand<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, SelfArgumentShorthand> {
     sequence!(pm, pt, {
         spt       = point;
         qualifier = optional(self_argument_qualifier);
         name      = ext(literal("self"));
         _         = optional(literal(","));
         ws        = optional_whitespace(Vec::new());
-    }, |_, pt| SelfArgument {
+    }, |_, pt| SelfArgumentShorthand {
         extent: ex(spt, pt),
         qualifier,
         name: Ident { extent: name },
@@ -2518,11 +2561,11 @@ fn self_argument<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, SelfArg
 }
 
 fn self_argument_qualifier<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
-    Progress<'s, SelfArgumentQualifier>
+    Progress<'s, SelfArgumentShorthandQualifier>
 {
     pm.alternate(pt)
-        .one(map(typ_reference_kind, SelfArgumentQualifier::Reference))
-        .one(map(self_argument_mut, SelfArgumentQualifier::Mut))
+        .one(map(typ_reference_kind, SelfArgumentShorthandQualifier::Reference))
+        .one(map(self_argument_mut, SelfArgumentShorthandQualifier::Mut))
         .finish()
 }
 
@@ -5434,6 +5477,12 @@ mod test {
     fn fn_with_self_type_and_regular() {
         let p = qp(function_header, "fn foo(&self, a: u8)");
         assert_eq!(unwrap_progress(p).extent, (0, 20))
+    }
+
+    #[test]
+    fn fn_with_self_type_explicit_type() {
+        let p = qp(function_header, "fn foo(self: &mut Self)");
+        assert_eq!(unwrap_progress(p).extent, (0, 23))
     }
 
     #[test]
