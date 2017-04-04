@@ -1,7 +1,7 @@
 #![feature(conservative_impl_trait)]
 
 #[macro_use]
-extern crate strata_rs_derive;
+extern crate fuzzy_pickles_derive;
 
 #[macro_use]
 extern crate peresil;

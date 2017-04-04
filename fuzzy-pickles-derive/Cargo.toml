@@ -1,6 +1,6 @@
 [package]
 authors = ["Jake Goulding <jake.goulding@gmail.com>"]
-name = "strata-rs-derive"
+name = "fuzzy-pickles-derive"
 version = "0.1.0"
 
 [lib]

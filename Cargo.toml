@@ -1,25 +1,14 @@
 [package]
 authors = ["Jake Goulding <jake.goulding@gmail.com>"]
-name = "strata_rs"
+name = "fuzzy-pickles"
 version = "0.1.0"
 
 [dependencies]
-lazy_static = "0.2.2"
-quick-error = "1.1.0"
-rocket = "0.1.5"
-rocket_codegen = "0.1.5"
-rocket_contrib = "0.1.5"
-serde = "0.8.22"
-serde_derive = "0.8.22"
-serde_json = "0.8.6"
 unicode-xid = "0.0.4"
 
 [dependencies.peresil]
 git = "https://github.com/shepmaster/peresil"
 features = ["combinators"]
 
-[dependencies.strata]
-git = "https://github.com/shepmaster/strata"
-
-[dependencies.strata-rs-derive]
-path = "strata-rs-derive"
+[dependencies.fuzzy-pickles-derive]
+path = "fuzzy-pickles-derive"
