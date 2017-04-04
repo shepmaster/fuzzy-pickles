@@ -1543,7 +1543,31 @@ pub enum ExternBlockMember {
 #[derive(Debug, Visit)]
 pub struct ExternBlockMemberFunction {
     extent: Extent,
-    header: TraitImplFunctionHeader, // TODO: rename this indicating it doesn't require names
+    visibility: Option<Visibility>,
+    pub name: Ident,
+    arguments: Vec<ExternBlockMemberFunctionArgument>,
+    return_type: Option<Type>,
+    wheres: Vec<Where>,
+    whitespace: Vec<Whitespace>,
+}
+
+#[derive(Debug, Visit, Decompose)]
+pub enum ExternBlockMemberFunctionArgument {
+    Named(ExternBlockMemberFunctionArgumentNamed),
+    Variadic(ExternBlockMemberFunctionArgumentVariadic),
+}
+
+#[derive(Debug, Visit)]
+pub struct ExternBlockMemberFunctionArgumentNamed {
+    extent: Extent,
+    name: Pattern,
+    typ: Type,
+    whitespace: Vec<Whitespace>,
+}
+
+#[derive(Debug, Visit)]
+pub struct ExternBlockMemberFunctionArgumentVariadic {
+    extent: Extent,
 }
 
 #[derive(Debug, Visit)]
@@ -1703,6 +1727,9 @@ pub trait Visitor {
     fn visit_extern_block(&mut self, &ExternBlock) {}
     fn visit_extern_block_member(&mut self, &ExternBlockMember) {}
     fn visit_extern_block_member_function(&mut self, &ExternBlockMemberFunction) {}
+    fn visit_extern_block_member_function_argument(&mut self, &ExternBlockMemberFunctionArgument) {}
+    fn visit_extern_block_member_function_argument_named(&mut self, &ExternBlockMemberFunctionArgumentNamed) {}
+    fn visit_extern_block_member_function_argument_variadic(&mut self, &ExternBlockMemberFunctionArgumentVariadic) {}
     fn visit_field_access(&mut self, &FieldAccess) {}
     fn visit_file(&mut self, &File) {}
     fn visit_for_loop(&mut self, &ForLoop) {}
@@ -1856,6 +1883,9 @@ pub trait Visitor {
     fn exit_extern_block(&mut self, &ExternBlock) {}
     fn exit_extern_block_member(&mut self, &ExternBlockMember) {}
     fn exit_extern_block_member_function(&mut self, &ExternBlockMemberFunction) {}
+    fn exit_extern_block_member_function_argument(&mut self, &ExternBlockMemberFunctionArgument) {}
+    fn exit_extern_block_member_function_argument_named(&mut self, &ExternBlockMemberFunctionArgumentNamed) {}
+    fn exit_extern_block_member_function_argument_variadic(&mut self, &ExternBlockMemberFunctionArgumentVariadic) {}
     fn exit_field_access(&mut self, &FieldAccess) {}
     fn exit_file(&mut self, &File) {}
     fn exit_for_loop(&mut self, &ForLoop) {}
@@ -4574,12 +4604,80 @@ fn extern_block_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, E
         .finish()
 }
 
+// TODO: Massively duplicated!!!
 fn extern_block_member_function<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExternBlockMemberFunction> {
     sequence!(pm, pt, {
         spt    = point;
-        header = trait_impl_function_header;
-        _      = literal(";");
-    }, |_, pt| ExternBlockMemberFunction { extent: ex(spt, pt), header })
+        visibility        = optional(visibility);
+        _                 = literal("fn");
+        ws                = whitespace;
+        name              = ident;
+        ws                = optional_whitespace(ws);
+        arguments         = extern_block_function_arglist;
+        ws                = optional_whitespace(ws);
+        (return_type, ws) = concat_whitespace(ws, optional(function_return_type));
+        ws                = optional_whitespace(ws);
+        (wheres, ws)      = concat_whitespace(ws, optional(where_clause));
+        _                 = literal(";");
+    }, |_, pt| {
+        ExternBlockMemberFunction {
+            extent: ex(spt, pt),
+            visibility,
+            name,
+            arguments,
+            return_type,
+            wheres: wheres.unwrap_or_else(Vec::new),
+            whitespace: ws,
+        }
+    })
+}
+
+fn extern_block_function_arglist<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, Vec<ExternBlockMemberFunctionArgument>>
+{
+    sequence!(pm, pt, {
+        _    = literal("(");
+        _x   = optional_whitespace(Vec::new());
+        args = zero_or_more_tailed_values(",", extern_block_function_argument);
+        _x   = optional_whitespace(_x);
+        _    = literal(")");
+    }, move |_, _| args)
+}
+
+fn extern_block_function_argument<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, ExternBlockMemberFunctionArgument>
+{
+    pm.alternate(pt)
+        .one(map(extern_block_function_argument_named, ExternBlockMemberFunctionArgument::Named))
+        .one(map(extern_block_function_argument_variadic, ExternBlockMemberFunctionArgument::Variadic))
+        .finish()
+}
+
+fn extern_block_function_argument_named<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, ExternBlockMemberFunctionArgumentNamed>
+{
+    sequence!(pm, pt, {
+        spt  = point;
+        name = pattern;
+        ws   = optional_whitespace(Vec::new());
+        _    = literal(":");
+        ws   = optional_whitespace(ws);
+        typ  = typ;
+    }, |_, pt| ExternBlockMemberFunctionArgumentNamed {
+        extent: ex(spt, pt),
+        name,
+        typ,
+        whitespace: ws,
+    })
+}
+
+fn extern_block_function_argument_variadic<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, ExternBlockMemberFunctionArgumentVariadic>
+{
+    sequence!(pm, pt, {
+        spt  = point;
+        _    = literal("...");
+    }, |_, pt| ExternBlockMemberFunctionArgumentVariadic { extent: ex(spt, pt) })
 }
 
 fn p_use<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Use> {
@@ -5309,6 +5407,12 @@ mod test {
     fn item_extern_block_with_fn() {
         let p = qp(item, r#"extern { fn foo(bar: u8) -> bool; }"#);
         assert_eq!(unwrap_progress(p).extent(), (0, 35))
+    }
+
+    #[test]
+    fn item_extern_block_with_variadic_fn() {
+        let p = qp(item, r#"extern { fn foo(bar: u8, ...) -> bool; }"#);
+        assert_eq!(unwrap_progress(p).extent(), (0, 40))
     }
 
     #[test]
