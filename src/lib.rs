@@ -1346,6 +1346,7 @@ impl Pattern {
 #[derive(Debug, Visit, Decompose)]
 pub enum PatternKind {
     Byte(PatternByte),
+    ByteString(PatternByteString),
     Character(PatternCharacter),
     Ident(PatternIdent), // TODO: split into ident and enumtuple
     Number(PatternNumber),
@@ -1362,15 +1363,16 @@ impl PatternKind {
         use PatternKind::*;
 
         match *self {
-            Byte(PatternByte { extent, .. })           |
-            Character(PatternCharacter { extent, .. }) |
-            Ident(PatternIdent { extent, .. })         |
-            Number(PatternNumber { extent, .. })       |
-            Range(PatternRange { extent, .. })         |
-            Reference(PatternReference { extent, .. }) |
-            String(PatternString { extent, .. })       |
-            Struct(PatternStruct { extent, .. })       |
-            Tuple(PatternTuple { extent, .. })         => extent,
+            Byte(PatternByte { extent, .. })             |
+            ByteString(PatternByteString { extent, .. }) |
+            Character(PatternCharacter { extent, .. })   |
+            Ident(PatternIdent { extent, .. })           |
+            Number(PatternNumber { extent, .. })         |
+            Range(PatternRange { extent, .. })           |
+            Reference(PatternReference { extent, .. })   |
+            String(PatternString { extent, .. })         |
+            Struct(PatternStruct { extent, .. })         |
+            Tuple(PatternTuple { extent, .. })           => extent,
         }
     }
 }
@@ -1440,6 +1442,12 @@ pub struct PatternByte {
 pub struct PatternCharacter {
     extent: Extent,
     value: Character,
+}
+
+#[derive(Debug, Visit)]
+pub struct PatternByteString {
+    extent: Extent,
+    value: ByteString,
 }
 
 #[derive(Debug, Visit)]
@@ -1811,6 +1819,7 @@ pub trait Visitor {
     fn visit_pattern_name(&mut self, &PatternName) {}
     fn visit_pattern_kind(&mut self, &PatternKind) {}
     fn visit_pattern_byte(&mut self, &PatternByte) {}
+    fn visit_pattern_byte_string(&mut self, &PatternByteString) {}
     fn visit_pattern_character(&mut self, &PatternCharacter) {}
     fn visit_pattern_ident(&mut self, &PatternIdent) {}
     fn visit_pattern_number(&mut self, &PatternNumber) {}
@@ -1971,6 +1980,7 @@ pub trait Visitor {
     fn exit_pattern_name(&mut self, &PatternName) {}
     fn exit_pattern_kind(&mut self, &PatternKind) {}
     fn exit_pattern_byte(&mut self, &PatternByte) {}
+    fn exit_pattern_byte_string(&mut self, &PatternByteString) {}
     fn exit_pattern_character(&mut self, &PatternCharacter) {}
     fn exit_pattern_ident(&mut self, &PatternIdent) {}
     fn exit_pattern_number(&mut self, &PatternNumber) {}
@@ -4023,6 +4033,7 @@ fn pattern_kind<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternK
         .one(map(pattern_byte, PatternKind::Byte))
         .one(map(pattern_number, PatternKind::Number))
         .one(map(pattern_reference, PatternKind::Reference))
+        .one(map(pattern_byte_string, PatternKind::ByteString))
         .one(map(pattern_string, PatternKind::String))
         .one(map(pattern_struct, PatternKind::Struct))
         .one(map(pattern_tuple, PatternKind::Tuple))
@@ -4124,6 +4135,10 @@ fn pattern_byte<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternB
 
 fn pattern_char<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternCharacter> {
     character_literal(pm, pt).map(|value| PatternCharacter { extent: value.extent, value })
+}
+
+fn pattern_byte_string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternByteString> {
+    expr_byte_string(pm, pt).map(|value| PatternByteString { extent: value.extent, value })
 }
 
 fn pattern_string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternString> {
@@ -6657,6 +6672,12 @@ mod test {
     fn pattern_with_char_literal() {
         let p = qp(pattern, "'a'");
         assert_eq!(unwrap_progress(p).extent(), (0, 3))
+    }
+
+    #[test]
+    fn pattern_with_byte_string_literal() {
+        let p = qp(pattern, r#"b"hello""#);
+        assert_eq!(unwrap_progress(p).extent(), (0, 8))
     }
 
     #[test]
