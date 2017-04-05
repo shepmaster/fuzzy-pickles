@@ -4046,6 +4046,7 @@ fn expr_tail_slice<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expre
 
 fn expr_tail_try_operator<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExpressionTail> {
     sequence!(pm, pt, {
+        _x    = optional_whitespace(Vec::new());
         _     = literal("?");
     }, |_, _| ExpressionTail::TryOperator)
 }
@@ -6529,6 +6530,12 @@ mod test {
     fn expr_try_operator() {
         let p = qp(expression, "foo?");
         assert_eq!(unwrap_progress(p).extent(), (0, 4))
+    }
+
+    #[test]
+    fn expr_try_operator_all_space() {
+        let p = qp(expression, "foo ?");
+        assert_eq!(unwrap_progress(p).extent(), (0, 5))
     }
 
     #[test]
