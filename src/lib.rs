@@ -1323,8 +1323,17 @@ enum ExpressionTail {
 #[derive(Debug, Visit)]
 pub struct Pattern {
     extent: Extent,
-    name: Option<Ident>,
+    name: Option<PatternName>,
     kind: PatternKind,
+}
+
+#[derive(Debug, Visit)]
+pub struct PatternName {
+    extent: Extent,
+    is_ref: Option<Extent>,
+    is_mut: Option<Extent>,
+    name: Ident,
+    whitespace: Vec<Whitespace>,
 }
 
 impl Pattern {
@@ -1790,6 +1799,7 @@ pub trait Visitor {
     fn visit_path_component(&mut self, &PathComponent) {}
     fn visit_pathed_ident(&mut self, &PathedIdent) {}
     fn visit_pattern(&mut self, &Pattern) {}
+    fn visit_pattern_name(&mut self, &PatternName) {}
     fn visit_pattern_kind(&mut self, &PatternKind) {}
     fn visit_pattern_character(&mut self, &PatternCharacter) {}
     fn visit_pattern_ident(&mut self, &PatternIdent) {}
@@ -1948,6 +1958,7 @@ pub trait Visitor {
     fn exit_path_component(&mut self, &PathComponent) {}
     fn exit_pathed_ident(&mut self, &PathedIdent) {}
     fn exit_pattern(&mut self, &Pattern) {}
+    fn exit_pattern_name(&mut self, &PatternName) {}
     fn exit_pattern_kind(&mut self, &PatternKind) {}
     fn exit_pattern_character(&mut self, &PatternCharacter) {}
     fn exit_pattern_ident(&mut self, &PatternIdent) {}
@@ -3981,13 +3992,16 @@ fn pattern<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Pattern> {
     }, |_, pt| Pattern { extent: ex(spt, pt), name, kind })
 }
 
-fn pattern_name<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ident> {
+fn pattern_name<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternName> {
     sequence!(pm, pt, {
-        name = ident;
-        _x   = optional_whitespace(Vec::new());
-        _    = literal("@");
-        _x   = optional_whitespace(_x);
-    }, |_, _| name)
+        spt    = point;
+        is_ref = optional(pattern_ident_is_ref);
+        is_mut = optional(pattern_ident_is_mut);
+        name   = ident;
+        ws     = optional_whitespace(Vec::new());
+        _      = literal("@");
+        ws     = optional_whitespace(ws);
+    }, |_, _| PatternName { extent: ex(spt, pt), is_ref, is_mut, name, whitespace: ws })
 }
 
 fn pattern_kind<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternKind> {
@@ -6651,6 +6665,12 @@ mod test {
     fn pattern_with_named_subpattern() {
         let p = unwrap_progress(qp(pattern, "a @ 1"));
         assert_eq!(p.extent(), (0, 5));
+    }
+
+    #[test]
+    fn pattern_with_named_subpattern_qualifiers() {
+        let p = unwrap_progress(qp(pattern, "ref mut a @ 1"));
+        assert_eq!(p.extent(), (0, 13));
     }
 
     #[test]
