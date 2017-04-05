@@ -1320,8 +1320,31 @@ enum ExpressionTail {
     TryOperator,
 }
 
+#[derive(Debug, Visit)]
+pub struct Pattern {
+    extent: Extent,
+    name: Option<PatternName>,
+    kind: PatternKind,
+}
+
+#[derive(Debug, Visit)]
+pub struct PatternName {
+    extent: Extent,
+    is_ref: Option<Extent>,
+    is_mut: Option<Extent>,
+    name: Ident,
+    whitespace: Vec<Whitespace>,
+}
+
+impl Pattern {
+    #[allow(dead_code)]
+    fn extent(&self) -> Extent {
+        self.extent
+    }
+}
+
 #[derive(Debug, Visit, Decompose)]
-pub enum Pattern {
+pub enum PatternKind {
     Character(PatternCharacter),
     Ident(PatternIdent), // TODO: split into ident and enumtuple
     Number(PatternNumber),
@@ -1332,18 +1355,20 @@ pub enum Pattern {
     Tuple(PatternTuple),
 }
 
-impl Pattern {
+impl PatternKind {
     #[allow(dead_code)]
     fn extent(&self) -> Extent {
+        use PatternKind::*;
+
         match *self {
-            Pattern::Character(PatternCharacter { extent, .. }) |
-            Pattern::Ident(PatternIdent { extent, .. })         |
-            Pattern::Number(PatternNumber { extent, .. })       |
-            Pattern::Range(PatternRange { extent, .. })         |
-            Pattern::Reference(PatternReference { extent, .. }) |
-            Pattern::String(PatternString { extent, .. })       |
-            Pattern::Struct(PatternStruct { extent, .. })       |
-            Pattern::Tuple(PatternTuple { extent, .. })         => extent,
+            Character(PatternCharacter { extent, .. }) |
+            Ident(PatternIdent { extent, .. })         |
+            Number(PatternNumber { extent, .. })       |
+            Range(PatternRange { extent, .. })         |
+            Reference(PatternReference { extent, .. }) |
+            String(PatternString { extent, .. })       |
+            Struct(PatternStruct { extent, .. })       |
+            Tuple(PatternTuple { extent, .. })         => extent,
         }
     }
 }
@@ -1774,6 +1799,8 @@ pub trait Visitor {
     fn visit_path_component(&mut self, &PathComponent) {}
     fn visit_pathed_ident(&mut self, &PathedIdent) {}
     fn visit_pattern(&mut self, &Pattern) {}
+    fn visit_pattern_name(&mut self, &PatternName) {}
+    fn visit_pattern_kind(&mut self, &PatternKind) {}
     fn visit_pattern_character(&mut self, &PatternCharacter) {}
     fn visit_pattern_ident(&mut self, &PatternIdent) {}
     fn visit_pattern_number(&mut self, &PatternNumber) {}
@@ -1931,6 +1958,8 @@ pub trait Visitor {
     fn exit_path_component(&mut self, &PathComponent) {}
     fn exit_pathed_ident(&mut self, &PathedIdent) {}
     fn exit_pattern(&mut self, &Pattern) {}
+    fn exit_pattern_name(&mut self, &PatternName) {}
+    fn exit_pattern_kind(&mut self, &PatternKind) {}
     fn exit_pattern_character(&mut self, &PatternCharacter) {}
     fn exit_pattern_ident(&mut self, &PatternIdent) {}
     fn exit_pattern_number(&mut self, &PatternNumber) {}
@@ -3956,17 +3985,37 @@ fn turbofish<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Turbofish> 
 }
 
 fn pattern<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Pattern> {
+    sequence!(pm, pt, {
+        spt  = point;
+        name = optional(pattern_name);
+        kind = pattern_kind;
+    }, |_, pt| Pattern { extent: ex(spt, pt), name, kind })
+}
+
+fn pattern_name<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternName> {
+    sequence!(pm, pt, {
+        spt    = point;
+        is_ref = optional(pattern_ident_is_ref);
+        is_mut = optional(pattern_ident_is_mut);
+        name   = ident;
+        ws     = optional_whitespace(Vec::new());
+        _      = literal("@");
+        ws     = optional_whitespace(ws);
+    }, |_, _| PatternName { extent: ex(spt, pt), is_ref, is_mut, name, whitespace: ws })
+}
+
+fn pattern_kind<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternKind> {
     pm.alternate(pt)
         // Must precede character and number as it contains them
-        .one(map(pattern_range, Pattern::Range))
-        .one(map(pattern_char, Pattern::Character))
-        .one(map(pattern_number, Pattern::Number))
-        .one(map(pattern_reference, Pattern::Reference))
-        .one(map(pattern_string, Pattern::String))
-        .one(map(pattern_struct, Pattern::Struct))
-        .one(map(pattern_tuple, Pattern::Tuple))
+        .one(map(pattern_range, PatternKind::Range))
+        .one(map(pattern_char, PatternKind::Character))
+        .one(map(pattern_number, PatternKind::Number))
+        .one(map(pattern_reference, PatternKind::Reference))
+        .one(map(pattern_string, PatternKind::String))
+        .one(map(pattern_struct, PatternKind::Struct))
+        .one(map(pattern_tuple, PatternKind::Tuple))
         // Must be last, otherwise it collides with struct names
-        .one(map(pattern_ident, Pattern::Ident))
+        .one(map(pattern_ident, PatternKind::Ident))
         .finish()
 }
 
@@ -6608,8 +6657,20 @@ mod test {
     #[test]
     fn pattern_with_reference_mutable() {
         let p = unwrap_progress(qp(pattern, "&mut ()"));
-        assert!(p.is_reference());
+        assert!(p.kind.is_reference());
         assert_eq!(p.extent(), (0, 7));
+    }
+
+    #[test]
+    fn pattern_with_named_subpattern() {
+        let p = unwrap_progress(qp(pattern, "a @ 1"));
+        assert_eq!(p.extent(), (0, 5));
+    }
+
+    #[test]
+    fn pattern_with_named_subpattern_qualifiers() {
+        let p = unwrap_progress(qp(pattern, "ref mut a @ 1"));
+        assert_eq!(p.extent(), (0, 13));
     }
 
     #[test]
