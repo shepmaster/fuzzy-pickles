@@ -1345,6 +1345,8 @@ impl Pattern {
 
 #[derive(Debug, Visit, Decompose)]
 pub enum PatternKind {
+    Byte(PatternByte),
+    ByteString(PatternByteString),
     Character(PatternCharacter),
     Ident(PatternIdent), // TODO: split into ident and enumtuple
     Number(PatternNumber),
@@ -1361,14 +1363,16 @@ impl PatternKind {
         use PatternKind::*;
 
         match *self {
-            Character(PatternCharacter { extent, .. }) |
-            Ident(PatternIdent { extent, .. })         |
-            Number(PatternNumber { extent, .. })       |
-            Range(PatternRange { extent, .. })         |
-            Reference(PatternReference { extent, .. }) |
-            String(PatternString { extent, .. })       |
-            Struct(PatternStruct { extent, .. })       |
-            Tuple(PatternTuple { extent, .. })         => extent,
+            Byte(PatternByte { extent, .. })             |
+            ByteString(PatternByteString { extent, .. }) |
+            Character(PatternCharacter { extent, .. })   |
+            Ident(PatternIdent { extent, .. })           |
+            Number(PatternNumber { extent, .. })         |
+            Range(PatternRange { extent, .. })           |
+            Reference(PatternReference { extent, .. })   |
+            String(PatternString { extent, .. })         |
+            Struct(PatternStruct { extent, .. })         |
+            Tuple(PatternTuple { extent, .. })           => extent,
         }
     }
 }
@@ -1429,9 +1433,21 @@ pub struct PatternWildcard {
 }
 
 #[derive(Debug, Visit)]
+pub struct PatternByte {
+    extent: Extent,
+    value: Byte,
+}
+
+#[derive(Debug, Visit)]
 pub struct PatternCharacter {
     extent: Extent,
     value: Character,
+}
+
+#[derive(Debug, Visit)]
+pub struct PatternByteString {
+    extent: Extent,
+    value: ByteString,
 }
 
 #[derive(Debug, Visit)]
@@ -1456,6 +1472,7 @@ pub struct PatternRange {
 
 #[derive(Debug, Decompose)]
 pub enum PatternRangeComponent {
+    Byte(Byte),
     Character(Character),
     Number(Number),
 }
@@ -1801,6 +1818,8 @@ pub trait Visitor {
     fn visit_pattern(&mut self, &Pattern) {}
     fn visit_pattern_name(&mut self, &PatternName) {}
     fn visit_pattern_kind(&mut self, &PatternKind) {}
+    fn visit_pattern_byte(&mut self, &PatternByte) {}
+    fn visit_pattern_byte_string(&mut self, &PatternByteString) {}
     fn visit_pattern_character(&mut self, &PatternCharacter) {}
     fn visit_pattern_ident(&mut self, &PatternIdent) {}
     fn visit_pattern_number(&mut self, &PatternNumber) {}
@@ -1960,6 +1979,8 @@ pub trait Visitor {
     fn exit_pattern(&mut self, &Pattern) {}
     fn exit_pattern_name(&mut self, &PatternName) {}
     fn exit_pattern_kind(&mut self, &PatternKind) {}
+    fn exit_pattern_byte(&mut self, &PatternByte) {}
+    fn exit_pattern_byte_string(&mut self, &PatternByteString) {}
     fn exit_pattern_character(&mut self, &PatternCharacter) {}
     fn exit_pattern_ident(&mut self, &PatternIdent) {}
     fn exit_pattern_number(&mut self, &PatternNumber) {}
@@ -4009,8 +4030,10 @@ fn pattern_kind<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternK
         // Must precede character and number as it contains them
         .one(map(pattern_range, PatternKind::Range))
         .one(map(pattern_char, PatternKind::Character))
+        .one(map(pattern_byte, PatternKind::Byte))
         .one(map(pattern_number, PatternKind::Number))
         .one(map(pattern_reference, PatternKind::Reference))
+        .one(map(pattern_byte_string, PatternKind::ByteString))
         .one(map(pattern_string, PatternKind::String))
         .one(map(pattern_struct, PatternKind::Struct))
         .one(map(pattern_tuple, PatternKind::Tuple))
@@ -4106,8 +4129,16 @@ fn pattern_struct_field_long<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
     }, |_, pt| PatternStructFieldLong { extent: ex(spt, pt), name, pattern, whitespace: ws })
 }
 
+fn pattern_byte<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternByte> {
+    expr_byte(pm, pt).map(|value| PatternByte { extent: value.extent, value })
+}
+
 fn pattern_char<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternCharacter> {
     character_literal(pm, pt).map(|value| PatternCharacter { extent: value.extent, value })
+}
+
+fn pattern_byte_string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternByteString> {
+    expr_byte_string(pm, pt).map(|value| PatternByteString { extent: value.extent, value })
 }
 
 fn pattern_string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternString> {
@@ -4154,6 +4185,7 @@ fn pattern_range<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Pattern
 fn pattern_range_component<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternRangeComponent> {
     pm.alternate(pt)
         .one(map(character_literal, PatternRangeComponent::Character))
+        .one(map(expr_byte, PatternRangeComponent::Byte))
         .one(map(number_literal, PatternRangeComponent::Number))
         .finish()
 }
@@ -6631,9 +6663,21 @@ mod test {
     }
 
     #[test]
+    fn pattern_with_byte_literal() {
+        let p = qp(pattern, "b'a'");
+        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+    }
+
+    #[test]
     fn pattern_with_char_literal() {
         let p = qp(pattern, "'a'");
         assert_eq!(unwrap_progress(p).extent(), (0, 3))
+    }
+
+    #[test]
+    fn pattern_with_byte_string_literal() {
+        let p = qp(pattern, r#"b"hello""#);
+        assert_eq!(unwrap_progress(p).extent(), (0, 8))
     }
 
     #[test]
@@ -6683,6 +6727,12 @@ mod test {
     fn pattern_with_character_range() {
         let p = qp(pattern, "'a'...'z'");
         assert_eq!(unwrap_progress(p).extent(), (0, 9))
+    }
+
+    #[test]
+    fn pattern_with_byte_range() {
+        let p = qp(pattern, "b'a'...b'z'");
+        assert_eq!(unwrap_progress(p).extent(), (0, 11))
     }
 
     #[test]
