@@ -49,6 +49,7 @@ pub enum Token<'s> {
     TriplePeriod(&'s str),
     Caret(&'s str),
 
+    Byte(&'s str),
     Ident(&'s str),
     Digits(&'s str),
     Whitespace(&'s str),
@@ -70,6 +71,7 @@ impl<'s> Token<'s> {
             At(s)            |
             Backslash(s)     |
             Bang(s)          |
+            Byte(s)          |
             Caret(s)         |
             CaretEquals(s)   |
             Character(s)     |
@@ -166,7 +168,6 @@ enum Error {
     ExpectedDigits,
     ExpectedWhitespace,
     ExpectedComment,
-    MultiCodepointCharacter,
     UnterminatedRawString,
 }
 
@@ -217,9 +218,11 @@ impl<'s> Iterator for Tokens<'s> {
 fn single_token<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token<'s>> {
     pm.alternate(pt)
         .one(comment_or_doc_comment)
-        .one(char_or_lifetime)
+        .one(map(character, Token::Character))
         .one(map(string, Token::String))
         .one(map(raw_string, Token::RawString))
+        .one(map(byte, Token::Byte))
+        .one(map(lifetime, Token::Lifetime))
         .one(map(literal("->"), Token::ThinArrow))
         .one(map(literal("=>"), Token::ThickArrow))
         .one(map(literal("+="), Token::PlusEquals))
@@ -372,32 +375,49 @@ fn raw_string_tail<'s>(hashes: usize) -> impl Fn(&mut Master<'s>, Point<'s>) ->
     }
 }
 
-fn char_or_lifetime<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token<'s>> {
-    if pt.s.starts_with("'") {
-        let pt2 = Point {
-            s: &pt.s[1..],
-            offset: pt.offset + 1,
-        };
+fn byte<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+    sequence!(pm, pt, {
+        spt = point;
+        _   = literal("b");
+        _   = character;
+    }, |_, pt| spt.to(pt))
+}
 
-        let mut ci = pt2.s.chars();
-        if let Some(c) = ci.next() {
-            if Some('\'') == ci.next() {
-                return pt.consume_to(Some(2 + c.len_utf8()))
-                    .map(Token::Character)
-                    .map_err(|_| Error::MultiCodepointCharacter)
-            }
+fn character<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+    sequence!(pm, pt, {
+        spt = point;
+        _   = literal("'");
+        _   = character_char;
+        _   = literal("'");
+    }, |_, pt| spt.to(pt))
+}
+
+fn character_char<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+    let res = |i| {
+        let (head, tail) = pt.s.split_at(i);
+        let pt = Point { s: tail, offset: pt.offset + i };
+        Progress::success(pt, head)
+    };
+
+    let mut escaped = false;
+    for (i, c) in pt.s.char_indices() {
+        match (escaped, c) {
+            (true, _) => escaped = false,
+            (false, '\\') => escaped = true,
+            (false, '\'') => return res(i),
+            (false, _) => { /* Next char */ },
         }
-
-        let (pt2, _name) = try_parse!(ident(pm, pt2).map_err(|_| Error::MultiCodepointCharacter));
-
-        if pt2.s.starts_with(r#"'"#) {
-            Progress::failure(pt, Error::MultiCodepointCharacter)
-        } else {
-            Progress::success(pt2, Token::Lifetime(pt.to(pt2)))
-        }
-    } else {
-        Progress::failure(pt, Error::Literal("'"))
     }
+
+    res(pt.s.len())
+}
+
+fn lifetime<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+    sequence!(pm, pt, {
+        spt = point;
+        _   = literal("'");
+        _   = ident;
+    }, |_, pt| spt.to(pt))
 }
 
 fn literal<'s>(expected: &'static str) -> impl Fn(&mut Master<'s>, Point<'s>) ->
@@ -415,11 +435,20 @@ mod test {
     }
 
     #[test]
-    fn can_tokenize_raw_strings() {
+    fn raw_string() {
         let toks = tok(r###"r#"inner"#"###);
         match toks[0] {
             Token::RawString(s) => assert_eq!(s, r###"r#"inner"#"###),
             _ => panic!("Not a raw string"),
+        }
+    }
+
+    #[test]
+    fn byte() {
+        let toks = tok(r#"b'a'"#);
+        match toks[0] {
+            Token::Byte(s) => assert_eq!(s, r#"b'a'"#),
+            _ => panic!("Not a byte"),
         }
     }
 }
