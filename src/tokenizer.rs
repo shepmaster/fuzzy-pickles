@@ -55,6 +55,7 @@ pub enum Token<'s> {
     DocComment(&'s str),
     Comment(&'s str),
     String(&'s str),
+    RawString(&'s str),
     Character(&'s str),
     Lifetime(&'s str),
 }
@@ -100,6 +101,7 @@ impl<'s> Token<'s> {
             Plus(s)          |
             PlusEquals(s)    |
             QuestionMark(s)  |
+            RawString(s)     |
             RightAngle(s)    |
             RightCurly(s)    |
             RightParen(s)    |
@@ -165,6 +167,7 @@ enum Error {
     ExpectedWhitespace,
     ExpectedComment,
     MultiCodepointCharacter,
+    UnterminatedRawString,
 }
 
 impl peresil::Recoverable for Error {
@@ -216,6 +219,7 @@ fn single_token<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token<'s
         .one(comment_or_doc_comment)
         .one(char_or_lifetime)
         .one(map(string, Token::String))
+        .one(map(raw_string, Token::RawString))
         .one(map(literal("->"), Token::ThinArrow))
         .one(map(literal("=>"), Token::ThickArrow))
         .one(map(literal("+="), Token::PlusEquals))
@@ -337,6 +341,37 @@ fn str_char<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
     res(pt.s.len())
 }
 
+fn raw_string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+    sequence!(pm, pt, {
+        spt = point;
+        _   = literal("r");
+        h   = zero_or_more(literal("#"));
+        _   = literal(r#"""#);
+        _   = raw_string_tail(h.len());
+    }, |_, pt| spt.to(pt))
+}
+
+fn raw_string_tail<'s>(hashes: usize) -> impl Fn(&mut Master<'s>, Point<'s>) ->
+    Progress<'s, &'s str>
+{
+    let mut s = r#"""#.to_string();
+    for _ in 0..hashes { s.push('#') };
+
+    move |_, pt| {
+        match pt.s.find(&s) {
+            Some(end) => {
+                let (str_content, quote_tail) = pt.s.split_at(end);
+                let (_quotes, tail) = quote_tail.split_at(s.len());
+                let pt = Point { s: tail, offset: pt.offset + end + s.len() };
+                Progress::success(pt, str_content)
+            }
+            None => {
+                Progress::failure(pt, Error::UnterminatedRawString)
+            }
+        }
+    }
+}
+
 fn char_or_lifetime<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token<'s>> {
     if pt.s.starts_with("'") {
         let pt2 = Point {
@@ -369,4 +404,22 @@ fn literal<'s>(expected: &'static str) -> impl Fn(&mut Master<'s>, Point<'s>) ->
     Progress<'s, &'s str>
 {
     move |_, pt| pt.consume_literal(expected).map_err(|_| Error::Literal(expected))
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn tok<'s>(s: &'s str) -> Vec<Token<'s>> {
+        Tokens::new(s).collect()
+    }
+
+    #[test]
+    fn can_tokenize_raw_strings() {
+        let toks = tok(r###"r#"inner"#"###);
+        match toks[0] {
+            Token::RawString(s) => assert_eq!(s, r###"r#"inner"#"###),
+            _ => panic!("Not a raw string"),
+        }
+    }
 }
