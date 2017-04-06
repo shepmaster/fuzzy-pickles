@@ -2526,23 +2526,54 @@ fn function_qualifier_extern<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
     }, |_, _| (is_extern, abi))
 }
 
-// TODO: We should support whitespace before the `!`
 fn macro_rules<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MacroRules> {
     sequence!(pm, pt, {
         spt  = point;
-        _    = literal("macro_rules!");
-        ws   = append_whitespace(Vec::new());
+        _    = literal("macro_rules");
+        ws   = optional_whitespace(Vec::new());
+        _    = literal("!");
+        ws   = optional_whitespace(ws);
         name = ident;
-        ws   = append_whitespace(ws);
-        _    = literal("{");
-        body = parse_nested_tokens_until(Token::is_left_curly, Token::is_right_curly);
-        _    = literal("}");
+        ws   = optional_whitespace(ws);
+        body = macro_rules_body;
     }, |_, pt| MacroRules {
         extent: ex(spt, pt),
         name,
         body,
         whitespace: ws,
     })
+}
+
+fn macro_rules_body<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+    pm.alternate(pt)
+        .one(macro_rules_body_curly)
+        .one(macro_rules_body_square)
+        .one(macro_rules_body_paren)
+        .finish()
+}
+
+fn macro_rules_body_curly<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+    sequence!(pm, pt, {
+        _    = literal("{");
+        body = parse_nested_tokens_until(Token::is_left_curly, Token::is_right_curly);
+        _    = literal("}");
+    }, |_, _| body)
+}
+
+fn macro_rules_body_square<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+    sequence!(pm, pt, {
+        _    = literal("[");
+        body = parse_nested_tokens_until(Token::is_left_square, Token::is_right_square);
+        _    = literal("]");
+    }, |_, _| body)
+}
+
+fn macro_rules_body_paren<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+    sequence!(pm, pt, {
+        _    = literal("(");
+        body = parse_nested_tokens_until(Token::is_left_paren, Token::is_right_paren);
+        _    = literal(")");
+    }, |_, _| body)
 }
 
 fn ident<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ident> {
@@ -5412,9 +5443,27 @@ mod test {
     }
 
     #[test]
-    fn item_macro_rules() {
-        let p = qp(macro_rules, "macro_rules! foo { }");
-        assert_eq!(unwrap_progress(p).extent, (0, 20))
+    fn item_macro_rules_curly() {
+        let p = qp(macro_rules, "macro_rules!foo{}");
+        assert_eq!(unwrap_progress(p).extent, (0, 17))
+    }
+
+    #[test]
+    fn item_macro_rules_square() {
+        let p = qp(macro_rules, "macro_rules!foo[]");
+        assert_eq!(unwrap_progress(p).extent, (0, 17))
+    }
+
+    #[test]
+    fn item_macro_rules_paren() {
+        let p = qp(macro_rules, "macro_rules!foo()");
+        assert_eq!(unwrap_progress(p).extent, (0, 17))
+    }
+
+    #[test]
+    fn item_macro_rules_all_space() {
+        let p = qp(macro_rules, "macro_rules ! foo { }");
+        assert_eq!(unwrap_progress(p).extent, (0, 21))
     }
 
     #[test]
