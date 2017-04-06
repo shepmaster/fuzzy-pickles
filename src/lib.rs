@@ -3362,7 +3362,7 @@ fn expr_match<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Match> {
         spt  = point;
         _    = literal("match");
         ws   = append_whitespace(Vec::new());
-        head = expression;
+        head = disallow_struct_literals(expression);
         ws   = optional_whitespace(ws);
         _    = literal("{");
         arms = zero_or_more_implicitly_tailed_values(",", match_arm);
@@ -6137,6 +6137,12 @@ mod test {
     fn expr_match_expr_trailing_comma_and_whitespace() {
         let p = qp(expression, "match 1 { 1 => 2, _ => 3, }");
         assert_eq!(unwrap_progress(p).extent(), (0, 27))
+    }
+
+    #[test]
+    fn expr_match_head_followed_by_block() {
+        let p = qp(expression, "match foo {}");
+        assert_eq!(unwrap_progress(p).extent(), (0, 12))
     }
 
     #[test]
