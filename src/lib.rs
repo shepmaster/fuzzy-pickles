@@ -8,9 +8,13 @@ extern crate peresil;
 
 extern crate unicode_xid;
 
+pub mod tokenizer;
+
 use std::collections::BTreeSet;
 use unicode_xid::UnicodeXID;
 use peresil::combinators::*;
+
+use tokenizer::{Token, Tokens};
 
 // define what you want to parse; likely a string
 // create an error type
@@ -2107,26 +2111,32 @@ fn parse_until<'s>(p: &'static str) -> impl Fn(&mut Master<'s>, Point<'s>) -> Pr
     }
 }
 
-fn parse_nested_until<'s>(open: char, close: char) -> impl Fn(&mut Master<'s>, Point<'s>) -> Progress<'s, Extent> {
-    move |_, pt| {
+fn parse_nested_tokens_until<'s, O, C>(is_open: O, is_close: C) ->
+    impl Fn(&mut Master<'s>, Point<'s>) -> Progress<'s, Extent>
+    where O: Fn(&Token<'s>) -> bool,
+          C: Fn(&Token<'s>) -> bool,
+{
+    move |_, spt| {
+        let mut bytes: usize = 0;
         let mut depth: usize = 0;
-        let spt = pt;
 
-        let val = |len| {
-            let pt = Point { s: &pt.s[len..], offset: pt.offset + len };
-            Progress::success(pt, ex(spt, pt))
-        };
-
-        for (i, c) in pt.s.char_indices() {
-            if c == close && depth == 0 {
-                return val(i);
-            } else if c == close {
-                depth -= 1;
-            } else if c == open {
+        for token in Tokens::new(spt.s) {
+            if is_open(&token) {
                 depth += 1;
+            } else if is_close(&token) {
+                if depth == 0 {
+                    break;
+                } else {
+                    depth -= 1;
+                }
             }
+
+            bytes += token.data().len();
         }
-        val(pt.s.len())
+
+        let pt = Point { s: &spt.s[bytes..], offset: spt.offset + bytes };
+
+        Progress::success(pt, ex(spt, pt))
     }
 }
 
@@ -2525,7 +2535,7 @@ fn macro_rules<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MacroRule
         name = ident;
         ws   = append_whitespace(ws);
         _    = literal("{");
-        body = parse_nested_until('{', '}');
+        body = parse_nested_tokens_until(Token::is_left_curly, Token::is_right_curly);
         _    = literal("}");
     }, |_, pt| MacroRules {
         extent: ex(spt, pt),
@@ -3019,7 +3029,7 @@ fn expr_macro_call_args<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, 
 fn expr_macro_call_paren<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
         _    = literal("(");
-        args = parse_nested_until('(', ')');
+        args = parse_nested_tokens_until(Token::is_left_paren, Token::is_right_paren);
         _    = literal(")");
     }, |_, _| args)
 }
@@ -3027,7 +3037,7 @@ fn expr_macro_call_paren<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s,
 fn expr_macro_call_square<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
         _    = literal("[");
-        args = parse_nested_until('[', ']');
+        args = parse_nested_tokens_until(Token::is_left_square, Token::is_right_square);
         _    = literal("]");
     }, |_, _| args)
 }
@@ -3035,7 +3045,7 @@ fn expr_macro_call_square<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s
 fn expr_macro_call_curly<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
         _    = literal("{");
-        args = parse_nested_until('{', '}');
+        args = parse_nested_tokens_until(Token::is_left_curly, Token::is_right_curly);
         _    = literal("}");
     }, |_, _| args)
 }
@@ -3062,7 +3072,7 @@ fn item_macro_call_args<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, 
 fn item_macro_call_paren<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
         _    = literal("(");
-        args = parse_nested_until('(', ')');
+        args = parse_nested_tokens_until(Token::is_left_paren, Token::is_right_paren);
         _    = literal(")");
         _    = literal(";");
     }, |_, _| args)
@@ -3071,7 +3081,7 @@ fn item_macro_call_paren<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s,
 fn item_macro_call_square<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
         _    = literal("[");
-        args = parse_nested_until('[', ']');
+        args = parse_nested_tokens_until(Token::is_left_square, Token::is_right_square);
         _    = literal("]");
         _    = literal(";");
     }, |_, _| args)
@@ -3080,7 +3090,7 @@ fn item_macro_call_square<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s
 fn item_macro_call_curly<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
         _    = literal("{");
-        args = parse_nested_until('{', '}');
+        args = parse_nested_tokens_until(Token::is_left_curly, Token::is_right_curly);
         _    = literal("}");
     }, |_, _| args)
 }
@@ -4704,7 +4714,7 @@ fn attribute<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Attribute> 
         _             = literal("#");
         is_containing = optional(ext(literal("!")));
         _             = literal("[");
-        text          = parse_nested_until('[', ']');
+        text          = parse_nested_tokens_until(Token::is_left_square, Token::is_right_square);
         _             = literal("]");
     }, |_, pt| Attribute { extent: ex(spt, pt), is_containing, text })
 }
@@ -6266,6 +6276,12 @@ mod test {
     fn expr_macro_call_with_nested_parens() {
         let p = qp(expression, "foo!(())");
         assert_eq!(unwrap_progress(p).extent(), (0, 8))
+    }
+
+    #[test]
+    fn expr_macro_call_with_quoted_parens() {
+        let p = qp(expression, r#"foo!("(")"#);
+        assert_eq!(unwrap_progress(p).extent(), (0, 9))
     }
 
     #[test]
