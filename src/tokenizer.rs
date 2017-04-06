@@ -49,15 +49,19 @@ pub enum Token<'s> {
     TriplePeriod(&'s str),
     Caret(&'s str),
 
+    Character(&'s str),
+    String(&'s str),
+    StringRaw(&'s str),
+
     Byte(&'s str),
+    ByteString(&'s str),
+    ByteStringRaw(&'s str),
+
     Ident(&'s str),
     Digits(&'s str),
     Whitespace(&'s str),
     DocComment(&'s str),
     Comment(&'s str),
-    String(&'s str),
-    RawString(&'s str),
-    Character(&'s str),
     Lifetime(&'s str),
 }
 
@@ -72,6 +76,8 @@ impl<'s> Token<'s> {
             Backslash(s)     |
             Bang(s)          |
             Byte(s)          |
+            ByteString(s)    |
+            ByteStringRaw(s) |
             Caret(s)         |
             CaretEquals(s)   |
             Character(s)     |
@@ -103,7 +109,6 @@ impl<'s> Token<'s> {
             Plus(s)          |
             PlusEquals(s)    |
             QuestionMark(s)  |
-            RawString(s)     |
             RightAngle(s)    |
             RightCurly(s)    |
             RightParen(s)    |
@@ -111,6 +116,7 @@ impl<'s> Token<'s> {
             Semicolon(s)     |
             Slash(s)         |
             String(s)        |
+            StringRaw(s)     |
             ThickArrow(s)    |
             ThinArrow(s)     |
             TimesEquals(s)   |
@@ -220,8 +226,10 @@ fn single_token<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token<'s
         .one(comment_or_doc_comment)
         .one(map(character, Token::Character))
         .one(map(string, Token::String))
-        .one(map(raw_string, Token::RawString))
+        .one(map(string_raw, Token::StringRaw))
         .one(map(byte, Token::Byte))
+        .one(map(byte_string, Token::ByteString))
+        .one(map(byte_string_raw, Token::ByteStringRaw))
         .one(map(lifetime, Token::Lifetime))
         .one(map(literal("->"), Token::ThinArrow))
         .one(map(literal("=>"), Token::ThickArrow))
@@ -315,16 +323,45 @@ fn comment_or_doc_comment<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'
     }
 }
 
+fn character<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+    sequence!(pm, pt, {
+        spt = point;
+        _   = literal("'");
+        _   = character_char;
+        _   = literal("'");
+    }, |_, pt| spt.to(pt))
+}
+
+fn character_char<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+    let res = |i| {
+        let (head, tail) = pt.s.split_at(i);
+        let pt = Point { s: tail, offset: pt.offset + i };
+        Progress::success(pt, head)
+    };
+
+    let mut escaped = false;
+    for (i, c) in pt.s.char_indices() {
+        match (escaped, c) {
+            (true, _) => escaped = false,
+            (false, '\\') => escaped = true,
+            (false, '\'') => return res(i),
+            (false, _) => { /* Next char */ },
+        }
+    }
+
+    res(pt.s.len())
+}
+
 fn string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
     sequence!(pm, pt, {
         spt = point;
         _   = literal("\"");
-        _   = str_char;
+        _   = string_char;
         _   = literal("\"");
     }, |_, pt| spt.to(pt))
 }
 
-fn str_char<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+fn string_char<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
     let res = |i| {
         let (head, tail) = pt.s.split_at(i);
         let pt = Point { s: tail, offset: pt.offset + i };
@@ -344,7 +381,7 @@ fn str_char<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
     res(pt.s.len())
 }
 
-fn raw_string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+fn string_raw<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
     sequence!(pm, pt, {
         spt = point;
         _   = literal("r");
@@ -383,33 +420,20 @@ fn byte<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
     }, |_, pt| spt.to(pt))
 }
 
-fn character<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+fn byte_string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
     sequence!(pm, pt, {
         spt = point;
-        _   = literal("'");
-        _   = character_char;
-        _   = literal("'");
+        _   = literal("b");
+        _   = string;
     }, |_, pt| spt.to(pt))
 }
 
-fn character_char<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
-    let res = |i| {
-        let (head, tail) = pt.s.split_at(i);
-        let pt = Point { s: tail, offset: pt.offset + i };
-        Progress::success(pt, head)
-    };
-
-    let mut escaped = false;
-    for (i, c) in pt.s.char_indices() {
-        match (escaped, c) {
-            (true, _) => escaped = false,
-            (false, '\\') => escaped = true,
-            (false, '\'') => return res(i),
-            (false, _) => { /* Next char */ },
-        }
-    }
-
-    res(pt.s.len())
+fn byte_string_raw<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+    sequence!(pm, pt, {
+        spt = point;
+        _   = literal("b");
+        _   = string_raw;
+    }, |_, pt| spt.to(pt))
 }
 
 fn lifetime<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
@@ -435,10 +459,10 @@ mod test {
     }
 
     #[test]
-    fn raw_string() {
+    fn string_raw() {
         let toks = tok(r###"r#"inner"#"###);
         match toks[0] {
-            Token::RawString(s) => assert_eq!(s, r###"r#"inner"#"###),
+            Token::StringRaw(s) => assert_eq!(s, r###"r#"inner"#"###),
             _ => panic!("Not a raw string"),
         }
     }
@@ -449,6 +473,24 @@ mod test {
         match toks[0] {
             Token::Byte(s) => assert_eq!(s, r#"b'a'"#),
             _ => panic!("Not a byte"),
+        }
+    }
+
+    #[test]
+    fn byte_string() {
+        let toks = tok(r#"b"abc""#);
+        match toks[0] {
+            Token::ByteString(s) => assert_eq!(s, r#"b"abc""#),
+            _ => panic!("Not a byte string"),
+        }
+    }
+
+    #[test]
+    fn byte_string_raw() {
+        let toks = tok(r#"br"abc""#);
+        match toks[0] {
+            Token::ByteStringRaw(s) => assert_eq!(s, r#"br"abc""#),
+            _ => panic!("Not a raw byte string: {:?}", toks[0]),
         }
     }
 }
