@@ -1158,6 +1158,7 @@ pub struct Match {
 #[derive(Debug, Visit)]
 pub struct MatchArm {
     extent: Extent,
+    attributes: Vec<Attribute>,
     pattern: Vec<Pattern>,
     guard: Option<Expression>,
     hand: MatchHand,
@@ -3377,17 +3378,18 @@ fn expr_match<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Match> {
 
 fn match_arm<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MatchArm> {
     sequence!(pm, pt, {
-        spt     = point;
-        ws      = optional_whitespace(Vec::new());
-        pattern = one_or_more_tailed_values("|", pattern);
-        ws      = optional_whitespace(ws);
-        guard   = optional(match_arm_guard);
-        ws      = optional_whitespace(ws);
-        _       = literal("=>");
-        ws      = optional_whitespace(ws);
-        hand    = match_arm_hand;
-        ws      = optional_whitespace(ws);
-    }, |_, pt| MatchArm { extent: ex(spt, pt), pattern, guard, hand, whitespace: ws })
+        spt        = point;
+        ws         = optional_whitespace(Vec::new());
+        attributes = zero_or_more(struct_defn_field_attr);
+        pattern    = one_or_more_tailed_values("|", pattern);
+        ws         = optional_whitespace(ws);
+        guard      = optional(match_arm_guard);
+        ws         = optional_whitespace(ws);
+        _          = literal("=>");
+        ws         = optional_whitespace(ws);
+        hand       = match_arm_hand;
+        ws         = optional_whitespace(ws);
+    }, |_, pt| MatchArm { extent: ex(spt, pt), attributes, pattern, guard, hand, whitespace: ws })
 }
 
 fn match_arm_guard<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
@@ -6943,6 +6945,12 @@ mod test {
     fn match_arm_with_guard() {
         let p = qp(match_arm, "a if a > 2 => 1");
         assert_eq!(unwrap_progress(p).extent, (0, 15))
+    }
+
+    #[test]
+    fn match_arm_with_attribute() {
+        let p = qp(match_arm, "#[cfg(cool)] _ => 1");
+        assert_eq!(unwrap_progress(p).extent, (0, 19))
     }
 
     #[test]
