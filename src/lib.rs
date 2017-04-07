@@ -39,6 +39,7 @@ pub enum Error {
     Literal(&'static str),
     ExpectedIdentifier,
     ExpectedNumber,
+    ExpectedKeyword,
     UnterminatedRawString,
 }
 
@@ -2403,6 +2404,26 @@ fn concat_whitespace<'s, F, T>
     }
 }
 
+// TODO: generic enough to move to library?
+pub fn not<P, E, S, F, T>
+    (parser: F, error: E)
+     -> impl FnOnce(&mut peresil::ParseMaster<P, E, S>, P) -> peresil::Progress<P, (), E>
+    where F: FnOnce(&mut peresil::ParseMaster<P, E, S>, P) -> peresil::Progress<P, T, E>,
+          P: peresil::Point,
+          E: peresil::Recoverable,
+{
+    move |pm, pt| {
+        match parser(pm, pt) {
+            peresil::Progress { status: peresil::Status::Success(_), .. } => {
+                peresil::Progress::failure(pt, error)
+            }
+            peresil::Progress { status: peresil::Status::Failure(_), .. } => {
+                peresil::Progress::success(pt, ())
+            }
+        }
+    }
+}
+
 // --------------------------------------------------
 
 fn item<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Item> {
@@ -2427,6 +2448,18 @@ fn item<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Item> {
 
 fn literal<'s>(expected: &'static str) -> impl Fn(&mut Master<'s>, Point<'s>) -> Progress<'s, &'s str> {
     move |_pm, pt| pt.consume_literal(expected).map_err(|_| Error::Literal(expected))
+}
+
+fn keyword<'s>(kw: &'static str) ->
+    impl Fn(&mut Master<'s>, Point<'s>) -> Progress<'s, &'s str>
+{
+    move |pm, pt| {
+        sequence!(pm, pt, {
+            spt = point;
+            _   = literal(kw);
+            _   = not(ident, Error::ExpectedKeyword); // This is a hack; should be ident continuation
+        }, |_, pt| spt.to(pt))
+    }
 }
 
 fn comment<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Comment> {
@@ -2472,7 +2505,7 @@ fn function_header<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Funct
         spt               = point;
         visibility        = optional(visibility);
         qualifiers        = function_qualifiers;
-        _                 = literal("fn");
+        _                 = keyword("fn");
         ws                = whitespace;
         name              = ident;
         ws                = optional_whitespace(ws);
@@ -2515,14 +2548,14 @@ fn function_qualifiers<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, F
 
 fn function_qualifier_const<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
-        is_const = ext(literal("const"));
+        is_const = ext(keyword("const"));
         _x        = whitespace;
     }, |_, _| is_const)
 }
 
 fn function_qualifier_unsafe<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
-        is_unsafe = ext(literal("unsafe"));
+        is_unsafe = ext(keyword("unsafe"));
         _x        = whitespace;
     }, |_, _| is_unsafe)
 }
@@ -2531,7 +2564,7 @@ fn function_qualifier_extern<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
     Progress<'s, (Extent, Option<String>)>
 {
     sequence!(pm, pt, {
-        is_extern = ext(literal("extern"));
+        is_extern = ext(keyword("extern"));
         _x        = whitespace;
         abi       = optional(string_literal);
         _x        = optional_whitespace(_x);
@@ -2741,7 +2774,7 @@ fn self_argument_qualifier<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
 
 fn self_argument_mut<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
-        is_mut = ext(literal("mut"));
+        is_mut = ext(keyword("mut"));
         _x     = optional_whitespace(Vec::new());
     }, |_, _| is_mut)
 }
@@ -2766,7 +2799,7 @@ fn function_return_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, 
 
 fn where_clause<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, (Vec<Where>, Vec<Whitespace>)> {
     sequence!(pm, pt, {
-        _  = literal("where");
+        _  = keyword("where");
         ws = whitespace;
         w  = one_or_more_tailed_values(",", where_clause_item);
     }, |_, _| (w, ws))
@@ -3099,7 +3132,7 @@ fn item_macro_call_curly<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s,
 fn expr_let<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Let> {
     sequence!(pm, pt, {
         spt         = point;
-        _           = literal("let");
+        _           = keyword("let");
         ws          = whitespace;
         pattern     = pattern;
         ws          = optional_whitespace(ws);
@@ -3135,7 +3168,7 @@ fn expr_let_rhs<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, (Express
 fn expr_if<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, If> {
     sequence!(pm, pt, {
         spt               = point;
-        _                 = literal("if");
+        _                 = keyword("if");
         ws                = whitespace;
         (condition, body) = expr_followed_by_block;
         more              = zero_or_more(expr_if_else_if);
@@ -3153,7 +3186,7 @@ fn expr_if<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, If> {
 fn expr_if_else_if<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, If> {
     sequence!(pm, pt, {
         _x   = optional(whitespace);
-        _    = literal("else");
+        _    = keyword("else");
         _x   = optional(whitespace);
         tail = expr_if;
     }, |_, _| tail)
@@ -3162,7 +3195,7 @@ fn expr_if_else_if<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, If> {
 fn expr_if_else_end<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, (Block, Vec<Whitespace>)> {
     sequence!(pm, pt, {
         ws        = optional_whitespace(Vec::new());
-        _         = literal("else");
+        _         = keyword("else");
         ws        = optional_whitespace(ws);
         else_body = block;
     }, |_, _| (else_body, ws))
@@ -3222,11 +3255,11 @@ fn expr_for_loop<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ForLoop
     sequence!(pm, pt, {
         spt          = point;
         label        = optional(loop_label);
-        _            = literal("for");
+        _            = keyword("for");
         ws           = append_whitespace(Vec::new());
         pattern      = pattern;
         ws           = append_whitespace(ws);
-        _            = literal("in");
+        _            = keyword("in");
         ws           = append_whitespace(ws);
         (iter, body) = expr_followed_by_block;
     }, |_, pt| ForLoop {
@@ -3252,7 +3285,7 @@ fn expr_loop<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Loop> {
     sequence!(pm, pt, {
         spt   = point;
         label = optional(loop_label);
-        _     = literal("loop");
+        _     = keyword("loop");
         ws    = optional_whitespace(Vec::new());
         body  = block;
     }, |_, pt| Loop { extent: ex(spt, pt), label, body: Box::new(body), whitespace: ws })
@@ -3261,9 +3294,9 @@ fn expr_loop<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Loop> {
 fn expr_if_let<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, IfLet> {
     sequence!(pm, pt, {
         spt           = point;
-        _             = literal("if");
+        _             = keyword("if");
         ws            = whitespace;
-        _             = literal("let");
+        _             = keyword("let");
         ws            = append_whitespace(ws);
         pattern       = pattern;
         ws            = optional_whitespace(ws);
@@ -3283,7 +3316,7 @@ fn expr_while<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, While> {
     sequence!(pm, pt, {
         spt           = point;
         label         = optional(loop_label);
-        _             = literal("while");
+        _             = keyword("while");
         ws            = whitespace;
         (value, body) = expr_followed_by_block;
     }, |_, pt| While {
@@ -3299,9 +3332,9 @@ fn expr_while_let<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, WhileL
     sequence!(pm, pt, {
         spt           = point;
         label         = optional(loop_label);
-        _             = literal("while");
+        _             = keyword("while");
         ws            = whitespace;
-        _             = literal("let");
+        _             = keyword("let");
         ws            = append_whitespace(ws);
         pattern       = pattern;
         ws            = optional_whitespace(ws);
@@ -3330,7 +3363,7 @@ impl ImplicitSeparator for MatchArm {
 fn expr_match<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Match> {
     sequence!(pm, pt, {
         spt  = point;
-        _    = literal("match");
+        _    = keyword("match");
         ws   = append_whitespace(Vec::new());
         head = disallow_struct_literals(expression);
         ws   = optional_whitespace(ws);
@@ -3358,7 +3391,7 @@ fn match_arm<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MatchArm> {
 
 fn match_arm_guard<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
     sequence!(pm, pt, {
-        _     = literal("if");
+        _     = keyword("if");
         _x    = whitespace;
         guard = allow_struct_literals(expression);
     }, |_, _| guard)
@@ -3569,7 +3602,7 @@ fn expr_byte_string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Byte
 fn expr_closure<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Closure> {
     sequence!(pm, pt, {
         spt                 = point;
-        mov                 = optional(literal("move"));
+        mov                 = optional(keyword("move"));
         ws                  = optional_whitespace(Vec::new());
         _                   = literal("|");
         ws                  = optional_whitespace(ws);
@@ -3635,7 +3668,7 @@ fn expr_closure_return_inferred<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progr
 fn expr_return<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Return> {
     sequence!(pm, pt, {
         spt   = point;
-        _     = literal("return");
+        _     = keyword("return");
         ws    = optional_whitespace(Vec::new());
         value = optional(expression);
     }, |_, pt| Return {
@@ -3648,7 +3681,7 @@ fn expr_return<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Return> {
 fn expr_continue<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Continue> {
     sequence!(pm, pt, {
         spt   = point;
-        _     = literal("continue");
+        _     = keyword("continue");
         ws    = optional_whitespace(Vec::new());
         label = optional(lifetime);
     }, |_, pt| Continue { extent: ex(spt, pt), label, whitespace: ws })
@@ -3657,7 +3690,7 @@ fn expr_continue<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Continu
 fn expr_break<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Break> {
     sequence!(pm, pt, {
         spt   = point;
-        _     = literal("break");
+        _     = keyword("break");
         ws    = optional_whitespace(Vec::new());
         label = optional(lifetime);
     }, |_, pt| Break { extent: ex(spt, pt), label, whitespace: ws })
@@ -3670,7 +3703,7 @@ fn expr_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Box<Block>
 fn expr_unsafe_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, UnsafeBlock> {
     sequence!(pm, pt, {
         spt   = point;
-        _     = literal("unsafe");
+        _     = keyword("unsafe");
         ws    = optional_whitespace(Vec::new());
         body = block;
     }, |_, pt| UnsafeBlock { extent: ex(spt, pt), body: Box::new(body), whitespace: ws })
@@ -3801,7 +3834,7 @@ fn expr_reference<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Refere
         spt     = point;
         _       = literal("&");
         ws      = optional_whitespace(Vec::new());
-        mutable = optional(ext(literal("mut")));
+        mutable = optional(ext(keyword("mut")));
         value   = expression;
     }, |_, pt| Reference {
         extent: ex(spt, pt),
@@ -3848,7 +3881,7 @@ fn expr_unary_op<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, UnaryOp
 fn expr_box<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExpressionBox> {
     sequence!(pm, pt, {
         spt   = point;
-        _     = literal("box");
+        _     = keyword("box");
         ws    = whitespace;
         value = expression;
     }, |_, pt| ExpressionBox {
@@ -3959,7 +3992,7 @@ fn expression_tail<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expre
 fn expr_tail_as_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExpressionTail> {
     sequence!(pm, pt, {
         ws  = whitespace;
-        _   = literal("as");
+        _   = keyword("as");
         ws  = append_whitespace(ws);
         typ = typ;
     }, |_, _| ExpressionTail::AsType { typ, whitespace: ws })
@@ -4153,14 +4186,14 @@ fn pattern_ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Pattern
 
 fn pattern_ident_is_mut<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
-        mutable = ext(literal("mut"));
+        mutable = ext(keyword("mut"));
         _x      = whitespace;
     }, |_, _| mutable)
 }
 
 fn pattern_ident_is_ref<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
-        mutable = ext(literal("ref"));
+        mutable = ext(keyword("ref"));
         _x      = whitespace;
     }, |_, _| mutable)
 }
@@ -4265,7 +4298,7 @@ fn pattern_reference<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Pat
 
 fn pattern_reference_mut<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, (Extent, Vec<Whitespace>)> {
     sequence!(pm, pt, {
-        is_mut  = ext(literal("mut"));
+        is_mut  = ext(keyword("mut"));
         ws      = whitespace;
     }, |_, _| (is_mut, ws))
 }
@@ -4293,7 +4326,7 @@ fn p_struct<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Struct> {
     sequence!(pm, pt, {
         spt            = point;
         visibility     = optional(visibility);
-        _              = literal("struct");
+        _              = keyword("struct");
         ws             = whitespace;
         name           = ident;
         ws             = optional_whitespace(ws);
@@ -4413,7 +4446,7 @@ fn p_enum<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Enum> {
     sequence!(pm, pt, {
         spt        = point;
         visibility = optional(visibility);
-        _          = literal("enum");
+        _          = keyword("enum");
         ws         = whitespace;
         name       = ident;
         ws         = optional_whitespace(ws);
@@ -4465,7 +4498,7 @@ fn p_trait<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Trait> {
         spt          = point;
         visibility   = optional(visibility);
         is_unsafe    = optional(p_trait_unsafe);
-        _            = literal("trait");
+        _            = keyword("trait");
         ws           = whitespace;
         name         = ident;
         ws           = optional_whitespace(ws);
@@ -4495,7 +4528,7 @@ fn p_trait<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Trait> {
 
 fn p_trait_unsafe<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
-        ex = ext(literal("unsafe"));
+        ex = ext(keyword("unsafe"));
         _x = whitespace;
     }, |_, _| ex)
 }
@@ -4522,7 +4555,7 @@ fn trait_member_function<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s,
 fn trait_member_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TraitMemberType> {
     sequence!(pm, pt, {
         spt    = point;
-        _      = literal("type");
+        _      = keyword("type");
         ws     = whitespace;
         name   = ident;
         bounds = optional(generic_declaration_type_bounds);
@@ -4534,7 +4567,7 @@ fn trait_member_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Tra
 fn visibility<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Visibility> {
     sequence!(pm, pt, {
         spt       = point;
-        _         = literal("pub");
+        _         = keyword("pub");
         ws        = optional_whitespace(Vec::new());
         qualifier = optional(visibility_qualifier);
         ws        = optional_whitespace(ws);
@@ -4557,7 +4590,7 @@ fn visibility_qualifier_kind<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
     Progress<'s, VisibilityQualifier>
 {
     pm.alternate(pt)
-        .one(map(literal("crate"), |_| VisibilityQualifier::Crate))
+        .one(map(keyword("crate"), |_| VisibilityQualifier::Crate))
         .one(map(path, VisibilityQualifier::Path))
         .finish()
 }
@@ -4568,7 +4601,7 @@ fn trait_impl_function_header<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progres
         spt               = point;
         visibility        = optional(visibility);
         qualifiers        = function_qualifiers;
-        _                 = literal("fn");
+        _                 = keyword("fn");
         ws                = whitespace;
         name              = ident;
         generics          = optional(generic_declarations);
@@ -4630,7 +4663,7 @@ fn p_impl<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Impl> {
     sequence!(pm, pt, {
         spt              = point;
         (is_unsafe, ws)  = concat_whitespace(Vec::new(), optional(p_impl_unsafe));
-        _                = literal("impl");
+        _                = keyword("impl");
         generics         = optional(generic_declarations);
         ws               = append_whitespace(ws);
         of_trait         = optional(p_impl_of_trait);
@@ -4657,7 +4690,7 @@ fn p_impl<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Impl> {
 
 fn p_impl_unsafe<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, (Extent, Vec<Whitespace>)> {
     sequence!(pm, pt, {
-        us = ext(literal("unsafe"));
+        us = ext(keyword("unsafe"));
         ws = whitespace;
     }, |_, _| (us, ws))
 }
@@ -4669,7 +4702,7 @@ fn p_impl_of_trait<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplO
         ws          = optional_whitespace(Vec::new());
         trait_name  = typ;
         ws          = append_whitespace(ws);
-        _           = literal("for");
+        _           = keyword("for");
         ws          = append_whitespace(ws);
     }, |_, pt| ImplOfTrait { extent: ex(spt, pt), is_negative, trait_name, whitespace: ws })
 }
@@ -4695,7 +4728,7 @@ fn impl_function<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplFun
 fn impl_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplType> {
     sequence!(pm, pt, {
         spt  = point;
-        _    = literal("type");
+        _    = keyword("type");
         ws   = whitespace;
         name = ident;
         ws   = optional_whitespace(ws);
@@ -4724,7 +4757,7 @@ fn p_const<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Const> {
     sequence!(pm, pt, {
         spt        = point;
         visibility = optional(visibility);
-        _          = literal("const");
+        _          = keyword("const");
         ws         = whitespace;
         name       = ident;
         ws         = optional_whitespace(ws);
@@ -4743,9 +4776,9 @@ fn p_static<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Static> {
     sequence!(pm, pt, {
         spt        = point;
         visibility = optional(visibility);
-        _          = literal("static");
+        _          = keyword("static");
         ws         = whitespace;
-        is_mut     = optional(ext(literal("mut")));
+        is_mut     = optional(ext(keyword("mut")));
         ws         = optional_whitespace(ws);
         name       = ident;
         ws         = optional_whitespace(ws);
@@ -4764,9 +4797,9 @@ fn extern_crate<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Crate> {
     sequence!(pm, pt, {
         spt        = point;
         visibility = optional(visibility);
-        _          = literal("extern");
+        _          = keyword("extern");
         ws         = whitespace;
-        _          = literal("crate");
+        _          = keyword("crate");
         ws         = append_whitespace(ws);
         name       = ident;
         rename     = optional(extern_crate_rename);
@@ -4778,7 +4811,7 @@ fn extern_crate<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Crate> {
 fn extern_crate_rename<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ident> {
     sequence!(pm, pt, {
         _x   = whitespace;
-        _    = literal("as");
+        _    = keyword("as");
         _x   = whitespace;
         name = ident;
     }, |_, _| name)
@@ -4787,7 +4820,7 @@ fn extern_crate_rename<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, I
 fn extern_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExternBlock> {
     sequence!(pm, pt, {
         spt     = point;
-        _       = literal("extern");
+        _       = keyword("extern");
         abi     = optional(extern_block_abi);
         ws      = optional_whitespace(Vec::new());
         _       = literal("{");
@@ -4816,7 +4849,7 @@ fn extern_block_member_function<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progr
     sequence!(pm, pt, {
         spt    = point;
         visibility        = optional(visibility);
-        _                 = literal("fn");
+        _                 = keyword("fn");
         ws                = whitespace;
         name              = ident;
         ws                = optional_whitespace(ws);
@@ -4891,7 +4924,7 @@ fn p_use<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Use> {
     sequence!(pm, pt, {
         spt        = point;
         visibility = optional(visibility);
-        _          = literal("use");
+        _          = keyword("use");
         ws         = whitespace;
         _          = optional(literal("::"));
         ws         = optional_whitespace(ws);
@@ -4932,7 +4965,7 @@ fn use_tail_ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, UseTai
 fn use_tail_ident_rename<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ident> {
     sequence!(pm, pt, {
         _x   = whitespace;
-        _    = literal("as");
+        _    = keyword("as");
         _x   = append_whitespace(_x);
         name = ident;
     }, |_, _| name)
@@ -4960,7 +4993,7 @@ fn type_alias<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeAlias>
     sequence!(pm, pt, {
         spt        = point;
         visibility = optional(visibility);
-        _          = literal("type");
+        _          = keyword("type");
         ws         = whitespace;
         name       = typ;
         ws         = optional_whitespace(ws);
@@ -4976,7 +5009,7 @@ fn module<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Module> {
     sequence!(pm, pt, {
         spt        = point;
         visibility = optional(visibility);
-        _          = literal("mod");
+        _          = keyword("mod");
         ws         = whitespace;
         name       = ident;
         ws         = optional_whitespace(ws);
@@ -5027,7 +5060,7 @@ fn typ_reference_kind<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ty
         ws       = optional_whitespace(Vec::new());
         lifetime = optional(lifetime);
         ws       = optional_whitespace(ws);
-        mutable  = optional(ext(literal("mut")));
+        mutable  = optional(ext(keyword("mut")));
         ws       = optional_whitespace(ws);
     }, |_, pt| TypeReferenceKind { extent: ex(spt, pt), lifetime, mutable, whitespace: ws })
 }
@@ -5045,8 +5078,8 @@ fn typ_pointer<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypePoint
 
 fn typ_pointer_kind<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypePointerKind> {
     pm.alternate(pt)
-        .one(map(literal("const"), |_| TypePointerKind::Const))
-        .one(map(literal("mut"), |_| TypePointerKind::Mutable))
+        .one(map(keyword("const"), |_| TypePointerKind::Const))
+        .one(map(keyword("mut"), |_| TypePointerKind::Mutable))
         .finish()
 }
 
@@ -5066,7 +5099,7 @@ fn typ_higher_ranked_trait_bounds<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
 {
     sequence!(pm, pt, {
         spt       = point;
-        _         = literal("for");
+        _         = keyword("for");
         ws        = optional_whitespace(Vec::new());
         _         = literal("<");
         ws        = optional_whitespace(ws);
@@ -5091,7 +5124,7 @@ fn typ_higher_ranked_trait_bounds_child<'s>(pm: &mut Master<'s>, pt: Point<'s>) 
 fn typ_impl_trait<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeImplTrait> {
     sequence!(pm, pt, {
         spt  = point;
-        _    = literal("impl");
+        _    = keyword("impl");
         ws   = whitespace;
         name = typ_named;
     }, |_, pt| TypeImplTrait { extent: ex(spt, pt), name, whitespace: ws })
@@ -5178,7 +5211,7 @@ fn disambiguation_core_to_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
 {
     sequence!(pm, pt, {
         ws        = whitespace;
-        _         = literal("as");
+        _         = keyword("as");
         ws        = append_whitespace(ws);
         to_type   = typ_named;
     }, |_, _| (to_type, ws))
@@ -5281,7 +5314,7 @@ fn typ_function<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeFunc
     sequence!(pm, pt, {
         spt               = point;
         qualifiers        = function_qualifiers;
-        _                 = literal("fn");
+        _                 = keyword("fn");
         ws                = optional_whitespace(Vec::new());
         arguments         = trait_impl_function_arglist; // TODO: shouldn't allow `self`
         ws                = optional_whitespace(ws);
@@ -5307,7 +5340,7 @@ fn lifetime<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Lifetime> {
 // TODO: Should this be an enum?
 fn ident_or_static<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ident> {
     pm.alternate(pt)
-        .one(map(ext(literal("static")), |extent| Ident { extent }))
+        .one(map(ext(keyword("static")), |extent| Ident { extent }))
         .one(ident)
         .finish()
 }
@@ -6376,6 +6409,12 @@ mod test {
     }
 
     #[test]
+    fn expr_value_starts_with_keyword() {
+        let p = qp(expression, "continuez");
+        assert_eq!(unwrap_progress(p).extent(), (0, 9));
+    }
+
+    #[test]
     fn expr_closure() {
         let p = qp(expression, "|a| a");
         assert_eq!(unwrap_progress(p).extent(), (0, 5))
@@ -7213,6 +7252,12 @@ mod test {
     fn ident_can_not_be_keyword() {
         let p = qp(ident, "for");
         assert_eq!(unwrap_progress_err(p), (0, vec![Error::ExpectedIdentifier]))
+    }
+
+    #[test]
+    fn ident_can_have_keyword_substring() {
+        let p = qp(ident, "form");
+        assert_eq!(unwrap_progress(p).extent, (0, 4))
     }
 
     #[test]
