@@ -793,8 +793,7 @@ pub struct Parenthetical {
 
 #[derive(Debug, Visit, Decompose)]
 pub enum Statement {
-    Explicit(Expression),
-    Implicit(Expression),
+    Expression(Expression),
     Item(Item),
 }
 
@@ -803,8 +802,7 @@ impl Statement {
     pub fn extent(&self) -> Extent {
         use Statement::*;
         match *self {
-            Explicit(ref e) |
-            Implicit(ref e) => e.extent(),
+            Expression(ref e) => e.extent(),
             Item(ref i) => i.extent(),
         }
     }
@@ -2204,6 +2202,7 @@ trait ImplicitSeparator {
 struct Tailed<T> {
     values: Vec<T>,
     separator_count: usize,
+    last_had_separator: bool,
 }
 
 impl<T> Default for Tailed<T> {
@@ -2211,6 +2210,7 @@ impl<T> Default for Tailed<T> {
         Tailed {
             values: Vec::new(),
             separator_count: 0,
+            last_had_separator: false,
         }
     }
 }
@@ -2231,12 +2231,14 @@ fn zero_or_more_tailed_append<'s, F, T>(append_to: Tailed<T>, sep: &'static str,
                 }
                 TailedState::ValueOnly(pt, v) => {
                     tailed.values.push(v);
+                    tailed.last_had_separator = false;
                     return Progress::success(pt, tailed);
                 }
                 TailedState::ValueAndSeparator(pt2, v) => {
                     pt = pt2;
                     tailed.values.push(v);
                     tailed.separator_count += 1;
+                    tailed.last_had_separator = true;
                 }
             }
         }
@@ -2263,7 +2265,8 @@ fn zero_or_more_tailed_values_append<'s, A, F, T>(append_to: A, sep: &'static st
           F: Fn(&mut Master<'s>, Point<'s>) -> Progress<'s, T>
 {
     let append_to = append_to.into();
-    let tailed = Tailed { values: append_to, separator_count: 0 }; // TODO: separator_count?
+    // TODO: How do we reset separator_count and last_had_separator?
+    let tailed = Tailed { values: append_to, ..Tailed::default() };
     map(zero_or_more_tailed_append(tailed, sep, f), |t| t.values)
 }
 
@@ -2316,11 +2319,13 @@ fn zero_or_more_implicitly_tailed_append<'s, F, T>(append_to: Tailed<T>, sep: &'
                         tailed.values.push(v);
                         return Progress::success(pt2, tailed);
                     }
+                    tailed.last_had_separator = false;
                 }
                 TailedState::ValueAndSeparator(pt2, v) => {
                     pt = pt2;
                     tailed.values.push(v);
                     tailed.separator_count += 1;
+                    tailed.last_had_separator = true;
                 }
             }
         }
@@ -2333,6 +2338,16 @@ fn zero_or_more_implicitly_tailed_values<'s, F, T>(sep: &'static str, f: F) ->
           T: ImplicitSeparator
 {
     map(zero_or_more_implicitly_tailed_append(Tailed::default(), sep, f), |t| t.values)
+}
+
+fn zero_or_more_implicitly_tailed_values_terminated<'s, F, T>(sep: &'static str, f: F) ->
+    impl FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, (Vec<T>, bool)>
+    where F: Fn(&mut Master<'s>, Point<'s>) -> Progress<'s, T>,
+          T: ImplicitSeparator
+{
+    map(zero_or_more_implicitly_tailed_append(Tailed::default(), sep, f), |t| {
+        (t.values, t.last_had_separator)
+    })
 }
 
 fn one_or_more_tailed<'s, F, T>(sep: &'static str, f: F) ->
@@ -2882,17 +2897,18 @@ fn trait_bound_relaxed<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, T
 
 fn block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Block> {
     sequence!(pm, pt, {
-        spt       = point;
-        _         = literal("{");
-        ws        = optional_whitespace(Vec::new());
-        mut stmts = zero_or_more(statement);
-        mut expr  = allow_struct_literals(optional(expression));
-        ws        = optional_whitespace(ws);
-        _         = literal("}");
+        spt               = point;
+        _                 = literal("{");
+        ws                = optional_whitespace(Vec::new());
+        (mut stmts, term) = zero_or_more_implicitly_tailed_values_terminated(";", statement);
+        ws                = optional_whitespace(ws);
+        _                 = literal("}");
     }, |_, pt| {
-        if expr.is_none() && stmts.last().map_or(false, Statement::is_implicit) {
-            expr = stmts.pop().and_then(Statement::into_implicit);
-        }
+        let expr = if !term && stmts.last().map_or(false, Statement::is_expression) {
+            stmts.pop().and_then(Statement::into_expression)
+        } else {
+            None
+        };
 
         Block {
             extent: ex(spt, pt),
@@ -2913,37 +2929,29 @@ fn statement<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Statement> 
 
 fn statement_inner<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Statement> {
     pm.alternate(pt)
-        .one(explicit_statement)
-        .one(implicit_statement)
+        .one(map(expression, Statement::Expression))
         .one(map(item, Statement::Item))
         .finish()
 }
 
-fn explicit_statement<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Statement> {
-    sequence!(pm, pt, {
-        expr = allow_struct_literals(expression);
-        _  = literal(";");
-    }, |_, _| Statement::Explicit(expr))
-}
-
 // idea: trait w/associated types to avoid redefin fn types?
 
-fn implicit_statement<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Statement> {
-    expression_ending_in_brace(pm, pt).map(Statement::Implicit)
-}
-
-fn expression_ending_in_brace<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
-    pm.alternate(pt)
-        .one(map(expr_if, Expression::If))
-        .one(map(expr_if_let, Expression::IfLet))
-        .one(map(expr_for_loop, Expression::ForLoop))
-        .one(map(expr_loop, Expression::Loop))
-        .one(map(expr_while, Expression::While))
-        .one(map(expr_while_let, Expression::WhileLet))
-        .one(map(expr_match, Expression::Match))
-        .one(map(expr_unsafe_block, Expression::UnsafeBlock))
-        .one(map(expr_block, Expression::Block))
-        .finish()
+impl ImplicitSeparator for Statement {
+    fn is_implicit_separator(&self) -> bool {
+        match *self {
+            Statement::Expression(Expression::If(_))          |
+            Statement::Expression(Expression::IfLet(_))       |
+            Statement::Expression(Expression::ForLoop(_))     |
+            Statement::Expression(Expression::Loop(_))        |
+            Statement::Expression(Expression::While(_))       |
+            Statement::Expression(Expression::WhileLet(_))    |
+            Statement::Expression(Expression::Match(_))       |
+            Statement::Expression(Expression::UnsafeBlock(_)) |
+            Statement::Expression(Expression::Block(_))       |
+            Statement::Item(_)                                => true,
+            Statement::Expression(_) => false,
+        }
+    }
 }
 
 fn expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
@@ -2951,7 +2959,15 @@ fn expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression
     let (pt, _) = try_parse!(optional(whitespace)(pm, pt));
     let (pt, mut expression) = try_parse!({
         pm.alternate(pt)
-            .one(expression_ending_in_brace)
+            .one(map(expr_if, Expression::If))
+            .one(map(expr_if_let, Expression::IfLet))
+            .one(map(expr_for_loop, Expression::ForLoop))
+            .one(map(expr_loop, Expression::Loop))
+            .one(map(expr_while, Expression::While))
+            .one(map(expr_while_let, Expression::WhileLet))
+            .one(map(expr_match, Expression::Match))
+            .one(map(expr_unsafe_block, Expression::UnsafeBlock))
+            .one(map(expr_block, Expression::Block))
             .one(map(expr_macro_call, Expression::MacroCall))
             .one(map(expr_let, Expression::Let))
             .one(expr_tuple_or_parenthetical)
@@ -3424,7 +3440,7 @@ fn expr_tuple_or_parenthetical<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progre
     }, move |_, pt| {
         let extent = ex(spt, pt);
         let values = values;
-        let Tailed { mut values, separator_count } = values;
+        let Tailed { mut values, separator_count, .. } = values;
         match (values.len(), separator_count) {
             (1, 0) => Expression::Parenthetical(Parenthetical {
                 extent,
@@ -5927,7 +5943,7 @@ mod test {
     #[test]
     fn statement_match_no_semicolon() {
         let p = qp(statement, "match a { _ => () }");
-        assert_eq!(unwrap_progress(p).into_implicit().unwrap().extent(), (0, 19))
+        assert_eq!(unwrap_progress(p).into_expression().unwrap().extent(), (0, 19))
     }
 
     #[test]
@@ -5940,6 +5956,12 @@ mod test {
     fn statement_any_item() {
         let p = qp(statement, "struct Foo {}");
         assert_eq!(unwrap_progress(p).extent(), (0, 13))
+    }
+
+    #[test]
+    fn statement_braced_expression_followed_by_method() {
+        let p = qp(statement, "match 1 { _ => 1u8 }.count_ones()");
+        assert_eq!(unwrap_progress(p).extent(), (0, 33))
     }
 
     #[test]
