@@ -149,7 +149,6 @@ pub enum Item {
     Function(Function),
     Impl(Impl),
     MacroCall(MacroCall),
-    MacroRules(MacroRules),
     Module(Module),
     Static(Static),
     Struct(Struct),
@@ -171,7 +170,6 @@ impl Item {
             Item::Function(Function { extent, .. })       |
             Item::Impl(Impl { extent, .. })               |
             Item::MacroCall(MacroCall { extent, .. })     |
-            Item::MacroRules(MacroRules { extent, .. })   |
             Item::Module(Module { extent, .. })           |
             Item::Static(Static { extent, .. })           |
             Item::Struct(Struct { extent, .. })           |
@@ -313,14 +311,6 @@ pub struct GenericDeclarationType {
 pub enum GenericDeclarationTypeAddition {
     Bounds(TraitBounds),
     Default(Type),
-}
-
-#[derive(Debug, Visit)]
-pub struct MacroRules {
-    extent: Extent,
-    name: Ident,
-    body: Extent,
-    whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, Visit, Decompose)]
@@ -897,6 +887,7 @@ impl Expression {
 pub struct MacroCall {
     extent: Extent,
     name: Ident,
+    arg: Option<Ident>,
     args: Extent,
 }
 
@@ -1809,7 +1800,6 @@ pub trait Visitor {
     fn visit_lifetime(&mut self, &Lifetime) {}
     fn visit_loop(&mut self, &Loop) {}
     fn visit_macro_call(&mut self, &MacroCall) {}
-    fn visit_macro_rules(&mut self, &MacroRules) {}
     fn visit_match(&mut self, &Match) {}
     fn visit_match_arm(&mut self, &MatchArm) {}
     fn visit_match_hand(&mut self, &MatchHand) {}
@@ -1971,7 +1961,6 @@ pub trait Visitor {
     fn exit_lifetime(&mut self, &Lifetime) {}
     fn exit_loop(&mut self, &Loop) {}
     fn exit_macro_call(&mut self, &MacroCall) {}
-    fn exit_macro_rules(&mut self, &MacroRules) {}
     fn exit_match(&mut self, &Match) {}
     fn exit_match_arm(&mut self, &MatchArm) {}
     fn exit_match_hand(&mut self, &MatchHand) {}
@@ -2415,7 +2404,6 @@ fn item<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Item> {
         .one(map(extern_block, Item::ExternBlock))
         .one(map(function, Item::Function))
         .one(map(item_macro_call, Item::MacroCall))
-        .one(map(macro_rules, Item::MacroRules))
         .one(map(module, Item::Module))
         .one(map(p_enum, Item::Enum))
         .one(map(p_impl, Item::Impl))
@@ -2539,56 +2527,6 @@ fn function_qualifier_extern<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
         abi       = optional(string_literal);
         _x        = optional_whitespace(_x);
     }, |_, _| (is_extern, abi))
-}
-
-fn macro_rules<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MacroRules> {
-    sequence!(pm, pt, {
-        spt  = point;
-        _    = literal("macro_rules");
-        ws   = optional_whitespace(Vec::new());
-        _    = literal("!");
-        ws   = optional_whitespace(ws);
-        name = ident;
-        ws   = optional_whitespace(ws);
-        body = macro_rules_body;
-    }, |_, pt| MacroRules {
-        extent: ex(spt, pt),
-        name,
-        body,
-        whitespace: ws,
-    })
-}
-
-fn macro_rules_body<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
-    pm.alternate(pt)
-        .one(macro_rules_body_curly)
-        .one(macro_rules_body_square)
-        .one(macro_rules_body_paren)
-        .finish()
-}
-
-fn macro_rules_body_curly<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
-    sequence!(pm, pt, {
-        _    = literal("{");
-        body = parse_nested_tokens_until(Token::is_left_curly, Token::is_right_curly);
-        _    = literal("}");
-    }, |_, _| body)
-}
-
-fn macro_rules_body_square<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
-    sequence!(pm, pt, {
-        _    = literal("[");
-        body = parse_nested_tokens_until(Token::is_left_square, Token::is_right_square);
-        _    = literal("]");
-    }, |_, _| body)
-}
-
-fn macro_rules_body_paren<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
-    sequence!(pm, pt, {
-        _    = literal("(");
-        body = parse_nested_tokens_until(Token::is_left_paren, Token::is_right_paren);
-        _    = literal(")");
-    }, |_, _| body)
 }
 
 fn ident<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ident> {
@@ -3061,8 +2999,10 @@ fn expr_macro_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Macro
         name = ident;
         _    = literal("!");
         _x   = optional_whitespace(Vec::new());
+        arg  = optional(ident);
+        _x   = optional_whitespace(_x);
         args = expr_macro_call_args;
-    }, |_, pt| MacroCall { extent: ex(spt, pt), name, args })
+    }, |_, pt| MacroCall { extent: ex(spt, pt), name, arg, args })
 }
 
 fn expr_macro_call_args<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
@@ -3104,8 +3044,10 @@ fn item_macro_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Macro
         name = ident;
         _    = literal("!");
         _x   = optional_whitespace(Vec::new());
+        arg  = optional(ident);
+        _x   = optional_whitespace(_x);
         args = item_macro_call_args;
-    }, |_, pt| MacroCall { extent: ex(spt, pt), name, args })
+    }, |_, pt| MacroCall { extent: ex(spt, pt), name, arg, args })
 }
 
 fn item_macro_call_args<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
@@ -5459,30 +5401,6 @@ mod test {
     }
 
     #[test]
-    fn item_macro_rules_curly() {
-        let p = qp(macro_rules, "macro_rules!foo{}");
-        assert_eq!(unwrap_progress(p).extent, (0, 17))
-    }
-
-    #[test]
-    fn item_macro_rules_square() {
-        let p = qp(macro_rules, "macro_rules!foo[]");
-        assert_eq!(unwrap_progress(p).extent, (0, 17))
-    }
-
-    #[test]
-    fn item_macro_rules_paren() {
-        let p = qp(macro_rules, "macro_rules!foo()");
-        assert_eq!(unwrap_progress(p).extent, (0, 17))
-    }
-
-    #[test]
-    fn item_macro_rules_all_space() {
-        let p = qp(macro_rules, "macro_rules ! foo { }");
-        assert_eq!(unwrap_progress(p).extent, (0, 21))
-    }
-
-    #[test]
     fn item_macro_call_with_parens() {
         let p = qp(item, "foo!();");
         assert_eq!(unwrap_progress(p).extent(), (0, 7))
@@ -5498,6 +5416,12 @@ mod test {
     fn item_macro_call_with_curly_braces() {
         let p = qp(item, "foo! { }");
         assert_eq!(unwrap_progress(p).extent(), (0, 8))
+    }
+
+    #[test]
+    fn item_macro_call_with_ident() {
+        let p = qp(item, "macro_rules! name { }");
+        assert_eq!(unwrap_progress(p).extent(), (0, 21))
     }
 
     #[test]
@@ -6371,6 +6295,12 @@ mod test {
     fn expr_macro_call_with_curly_brackets() {
         let p = qp(expression, "foo! { }");
         assert_eq!(unwrap_progress(p).extent(), (0, 8))
+    }
+
+    #[test]
+    fn expr_macro_call_with_ident() {
+        let p = qp(expression, "macro_rules! foo { }");
+        assert_eq!(unwrap_progress(p).extent(), (0, 20))
     }
 
     #[test]
