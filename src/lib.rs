@@ -888,7 +888,14 @@ pub struct MacroCall {
     extent: Extent,
     name: Ident,
     arg: Option<Ident>,
-    args: Extent,
+    args: MacroCallArgs,
+}
+
+#[derive(Debug, Visit, Decompose)]
+pub enum MacroCallArgs {
+    Paren(Extent),
+    Curly(Extent),
+    Square(Extent),
 }
 
 #[derive(Debug, Visit)]
@@ -1800,6 +1807,7 @@ pub trait Visitor {
     fn visit_lifetime(&mut self, &Lifetime) {}
     fn visit_loop(&mut self, &Loop) {}
     fn visit_macro_call(&mut self, &MacroCall) {}
+    fn visit_macro_call_args(&mut self, &MacroCallArgs) {}
     fn visit_match(&mut self, &Match) {}
     fn visit_match_arm(&mut self, &MatchArm) {}
     fn visit_match_hand(&mut self, &MatchHand) {}
@@ -1961,6 +1969,7 @@ pub trait Visitor {
     fn exit_lifetime(&mut self, &Lifetime) {}
     fn exit_loop(&mut self, &Loop) {}
     fn exit_macro_call(&mut self, &MacroCall) {}
+    fn exit_macro_call_args(&mut self, &MacroCallArgs) {}
     fn exit_match(&mut self, &Match) {}
     fn exit_match_arm(&mut self, &MatchArm) {}
     fn exit_match_hand(&mut self, &MatchHand) {}
@@ -2886,7 +2895,9 @@ impl ImplicitSeparator for Statement {
             Statement::Expression(Expression::Match(_))       |
             Statement::Expression(Expression::UnsafeBlock(_)) |
             Statement::Expression(Expression::Block(_))       |
+            Statement::Expression(Expression::MacroCall(MacroCall { args: MacroCallArgs::Curly(_), .. })) |
             Statement::Item(_)                                => true,
+
             Statement::Expression(_) => false,
         }
     }
@@ -3005,11 +3016,11 @@ fn expr_macro_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Macro
     }, |_, pt| MacroCall { extent: ex(spt, pt), name, arg, args })
 }
 
-fn expr_macro_call_args<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+fn expr_macro_call_args<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MacroCallArgs> {
     pm.alternate(pt)
-        .one(expr_macro_call_paren)
-        .one(expr_macro_call_square)
-        .one(expr_macro_call_curly)
+        .one(map(expr_macro_call_paren, MacroCallArgs::Paren))
+        .one(map(expr_macro_call_square, MacroCallArgs::Square))
+        .one(map(expr_macro_call_curly, MacroCallArgs::Curly))
         .finish()
 }
 
@@ -3038,6 +3049,7 @@ fn expr_macro_call_curly<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s,
 }
 
 // TODO: There's a good amount of duplication here; revisit and DRY up
+// Mostly in the required ; for paren and square...
 fn item_macro_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MacroCall> {
     sequence!(pm, pt, {
         spt  = point;
@@ -3050,11 +3062,11 @@ fn item_macro_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Macro
     }, |_, pt| MacroCall { extent: ex(spt, pt), name, arg, args })
 }
 
-fn item_macro_call_args<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+fn item_macro_call_args<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MacroCallArgs> {
     pm.alternate(pt)
-        .one(item_macro_call_paren)
-        .one(item_macro_call_square)
-        .one(item_macro_call_curly)
+        .one(map(item_macro_call_paren, MacroCallArgs::Paren))
+        .one(map(item_macro_call_square, MacroCallArgs::Square))
+        .one(map(item_macro_call_curly, MacroCallArgs::Curly))
         .finish()
 }
 
@@ -5854,6 +5866,12 @@ mod test {
     fn fn_with_unsafe_qualifier() {
         let p = qp(function_header, "unsafe fn foo()");
         assert_eq!(unwrap_progress(p).extent, (0, 15))
+    }
+
+    #[test]
+    fn block_with_multiple_implicit_statement_macro_calls() {
+        let p = qp(block, "{ a! {} b! {} }");
+        assert_eq!(unwrap_progress(p).extent, (0, 15));
     }
 
     #[test]
