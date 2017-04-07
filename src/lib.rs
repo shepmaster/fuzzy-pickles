@@ -1158,8 +1158,14 @@ pub struct MatchArm {
     extent: Extent,
     pattern: Vec<Pattern>,
     guard: Option<Expression>,
-    body: Expression,
+    hand: MatchHand,
     whitespace: Vec<Whitespace>,
+}
+
+#[derive(Debug, Visit, Decompose)]
+pub enum MatchHand {
+    Brace(Expression),
+    Expression(Expression),
 }
 
 #[derive(Debug, Visit)]
@@ -1804,6 +1810,7 @@ pub trait Visitor {
     fn visit_macro_rules(&mut self, &MacroRules) {}
     fn visit_match(&mut self, &Match) {}
     fn visit_match_arm(&mut self, &MatchArm) {}
+    fn visit_match_hand(&mut self, &MatchHand) {}
     fn visit_module(&mut self, &Module) {}
     fn visit_named_argument(&mut self, &NamedArgument) {}
     fn visit_number(&mut self, &Number) {}
@@ -1965,6 +1972,7 @@ pub trait Visitor {
     fn exit_macro_rules(&mut self, &MacroRules) {}
     fn exit_match(&mut self, &Match) {}
     fn exit_match_arm(&mut self, &MatchArm) {}
+    fn exit_match_hand(&mut self, &MatchHand) {}
     fn exit_module(&mut self, &Module) {}
     fn exit_named_argument(&mut self, &NamedArgument) {}
     fn exit_number(&mut self, &Number) {}
@@ -2178,10 +2186,23 @@ fn parse_tailed<'s, F, T>(sep: &'static str, f: F, pm: &mut Master<'s>, pt: Poin
     }
 }
 
-#[derive(Debug, Default)]
+trait ImplicitSeparator {
+    fn is_implicit_separator(&self) -> bool;
+}
+
+#[derive(Debug)]
 struct Tailed<T> {
     values: Vec<T>,
     separator_count: usize,
+}
+
+impl<T> Default for Tailed<T> {
+    fn default() -> Self {
+        Tailed {
+            values: Vec::new(),
+            separator_count: 0,
+        }
+    }
 }
 
 // Look for an expression that is followed by a separator. Each time
@@ -2216,8 +2237,7 @@ fn zero_or_more_tailed<'s, F, T>(sep: &'static str, f: F) ->
     impl FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, Tailed<T>>
     where F: Fn(&mut Master<'s>, Point<'s>) -> Progress<'s, T>
 {
-    let tailed = Tailed { values: Vec::new(), separator_count: 0 };
-    zero_or_more_tailed_append(tailed, sep, f)
+    zero_or_more_tailed_append(Tailed::default(), sep, f)
 }
 
 fn zero_or_more_tailed_values<'s, F, T>(sep: &'static str, f: F) ->
@@ -2265,12 +2285,52 @@ fn zero_or_more_tailed_values_resume<'s, F, T>(sep: &'static str, f: F) ->
     }
 }
 
+fn zero_or_more_implicitly_tailed_append<'s, F, T>(append_to: Tailed<T>, sep: &'static str, f: F) ->
+    impl FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, Tailed<T>>
+    where F: Fn(&mut Master<'s>, Point<'s>) -> Progress<'s, T>,
+          T: ImplicitSeparator,
+{
+    move |pm, mut pt| {
+        let mut tailed = append_to;
+        loop {
+            match parse_tailed(sep, &f, pm, pt) {
+                TailedState::Nothing(pt, _) => {
+                    return Progress::success(pt, tailed);
+                }
+                TailedState::ValueOnly(pt2, v) => {
+                    if v.is_implicit_separator() {
+                        pt = pt2;
+                        tailed.values.push(v);
+                        tailed.separator_count += 1;
+                    } else {
+                        tailed.values.push(v);
+                        return Progress::success(pt2, tailed);
+                    }
+                }
+                TailedState::ValueAndSeparator(pt2, v) => {
+                    pt = pt2;
+                    tailed.values.push(v);
+                    tailed.separator_count += 1;
+                }
+            }
+        }
+    }
+}
+
+fn zero_or_more_implicitly_tailed_values<'s, F, T>(sep: &'static str, f: F) ->
+    impl FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, Vec<T>>
+    where F: Fn(&mut Master<'s>, Point<'s>) -> Progress<'s, T>,
+          T: ImplicitSeparator
+{
+    map(zero_or_more_implicitly_tailed_append(Tailed::default(), sep, f), |t| t.values)
+}
+
 fn one_or_more_tailed<'s, F, T>(sep: &'static str, f: F) ->
     impl FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, Tailed<T>>
     where F: Fn(&mut Master<'s>, Point<'s>) -> Progress<'s, T>
 {
     move |pm, pt| {
-        let mut tailed = Tailed { values: Vec::new(), separator_count: 0 };
+        let mut tailed = Tailed::default();
 
         match parse_tailed(sep, &f, pm, pt) {
             TailedState::Nothing(pt, f) => {
@@ -3247,6 +3307,15 @@ fn expr_while_let<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, WhileL
     })
 }
 
+impl ImplicitSeparator for MatchArm {
+    fn is_implicit_separator(&self) -> bool {
+        match self.hand {
+            MatchHand::Brace(..) => true,
+            MatchHand::Expression(..) => false,
+        }
+    }
+}
+
 fn expr_match<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Match> {
     sequence!(pm, pt, {
         spt  = point;
@@ -3255,7 +3324,8 @@ fn expr_match<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Match> {
         head = expression;
         ws   = optional_whitespace(ws);
         _    = literal("{");
-        arms = zero_or_more(match_arm);
+        arms = zero_or_more_implicitly_tailed_values(",", match_arm);
+        ws   = optional_whitespace(ws);
         _    = literal("}");
     }, |_, pt| Match { extent: ex(spt, pt), head: Box::new(head), arms, whitespace: ws })
 }
@@ -3270,11 +3340,9 @@ fn match_arm<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MatchArm> {
         ws      = optional_whitespace(ws);
         _       = literal("=>");
         ws      = optional_whitespace(ws);
-        body    = allow_struct_literals(expression);
+        hand    = match_arm_hand;
         ws      = optional_whitespace(ws);
-        _       = optional(literal(","));
-        ws      = optional_whitespace(ws);
-    }, |_, pt| MatchArm { extent: ex(spt, pt), pattern, guard, body, whitespace: ws })
+    }, |_, pt| MatchArm { extent: ex(spt, pt), pattern, guard, hand, whitespace: ws })
 }
 
 fn match_arm_guard<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
@@ -3283,6 +3351,25 @@ fn match_arm_guard<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expre
         _x    = whitespace;
         guard = allow_struct_literals(expression);
     }, |_, _| guard)
+}
+
+fn match_arm_hand<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MatchHand> {
+    pm.alternate(pt)
+        .one(map(match_arm_hand_brace, MatchHand::Brace))
+        .one(map(match_arm_hand_expression, MatchHand::Expression))
+        .finish()
+}
+
+fn match_arm_hand_expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
+    sequence!(pm, pt, {
+        body = allow_struct_literals(expression);
+    }, |_, _| body)
+}
+
+fn match_arm_hand_brace<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
+    sequence!(pm, pt, {
+        body = allow_struct_literals(expr_block);
+    }, |_, _| Expression::Block(body))
 }
 
 fn expr_tuple_or_parenthetical<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
@@ -5976,6 +6063,20 @@ mod test {
     fn expr_match() {
         let p = qp(expression, "match foo { _ => () }");
         assert_eq!(unwrap_progress(p).extent(), (0, 21))
+    }
+
+    #[test]
+    fn expr_match_brace_with_no_comma_followed_by_tuple_isnt_a_function_call() {
+        // `_ => {} (_,)` is unambigous from a function call
+        // `{foo}(arg)`. We must check blocks specifically.
+        let p = qp(expression, "match (1,) { (1,) => {} (_,) => {} }");
+        assert_eq!(unwrap_progress(p).extent(), (0, 36))
+    }
+
+    #[test]
+    fn expr_match_expr_trailing_comma_and_whitespace() {
+        let p = qp(expression, "match 1 { 1 => 2, _ => 3, }");
+        assert_eq!(unwrap_progress(p).extent(), (0, 27))
     }
 
     #[test]
