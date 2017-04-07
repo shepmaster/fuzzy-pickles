@@ -174,6 +174,7 @@ enum Error {
     ExpectedDigits,
     ExpectedWhitespace,
     ExpectedComment,
+    ExpectedCharacter,
     UnterminatedRawString,
 }
 
@@ -332,24 +333,33 @@ fn character<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
     }, |_, pt| spt.to(pt))
 }
 
-fn character_char<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
-    let res = |i| {
-        let (head, tail) = pt.s.split_at(i);
-        let pt = Point { s: tail, offset: pt.offset + i };
-        Progress::success(pt, head)
-    };
+fn character_char<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+    pm.alternate(pt)
+        .one(escaped_char)
+        .one(single_char)
+        .finish()
+}
 
-    let mut escaped = false;
-    for (i, c) in pt.s.char_indices() {
-        match (escaped, c) {
-            (true, _) => escaped = false,
-            (false, '\\') => escaped = true,
-            (false, '\'') => return res(i),
-            (false, _) => { /* Next char */ },
+fn escaped_char<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+    sequence!(pm, pt, {
+        spt = point;
+        _   = literal("\\");
+        _   = single_char;
+    }, |_, pt| spt.to(pt))
+}
+
+fn single_char<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+    match pt.s.char_indices().next() {
+        Some((_, c)) => {
+            let i = c.len_utf8();
+            let (head, tail) = pt.s.split_at(i);
+            let pt = Point { s: tail, offset: pt.offset + i };
+            Progress::success(pt, head)
+        }
+        None => {
+            Progress::failure(pt, Error::ExpectedCharacter)
         }
     }
-
-    res(pt.s.len())
 }
 
 fn string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
@@ -459,6 +469,41 @@ mod test {
     }
 
     #[test]
+    fn character() {
+        let toks = tok("'a'");
+        match toks[0] {
+            Token::Character(s) => assert_eq!(s, "'a'"),
+            _ => panic!("Not a character: {:?}", toks[0]),
+        }
+    }
+
+    #[test]
+    fn character_escaped() {
+        let toks = tok(r#"'\\'"#);
+        match toks[0] {
+            Token::Character(s) => assert_eq!(s, r#"'\\'"#),
+            _ => panic!("Not a character: {:?}", toks[0]),
+        }
+    }
+
+    #[test]
+    fn character_limited_to_single() {
+        let toks = tok("impl<'a> Foo<'a> for Bar<'a> { }");
+        match toks[2] {
+            Token::Lifetime(s) => assert_eq!(s, "'a"),
+            _ => panic!("Not a lifetime"),
+        }
+        match toks[7] {
+            Token::Lifetime(s) => assert_eq!(s, "'a"),
+            _ => panic!("Not a lifetime"),
+        }
+        match toks[14] {
+            Token::Lifetime(s) => assert_eq!(s, "'a"),
+            _ => panic!("Not a lifetime"),
+        }
+    }
+
+    #[test]
     fn string_raw() {
         let toks = tok(r###"r#"inner"#"###);
         match toks[0] {
@@ -472,7 +517,7 @@ mod test {
         let toks = tok(r#"b'a'"#);
         match toks[0] {
             Token::Byte(s) => assert_eq!(s, r#"b'a'"#),
-            _ => panic!("Not a byte"),
+            _ => panic!("Not a byte: {:?}", toks[0]),
         }
     }
 
