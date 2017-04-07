@@ -618,6 +618,7 @@ pub struct Enum {
     visibility: Option<Visibility>,
     name: Ident,
     generics: Option<GenericDeclarations>,
+    wheres: Vec<Where>,
     variants: Vec<EnumVariant>,
     whitespace: Vec<Whitespace>,
 }
@@ -4444,24 +4445,27 @@ fn struct_defn_field_attr<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s
 
 fn p_enum<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Enum> {
     sequence!(pm, pt, {
-        spt        = point;
-        visibility = optional(visibility);
-        _          = keyword("enum");
-        ws         = whitespace;
-        name       = ident;
-        ws         = optional_whitespace(ws);
-        generics   = optional(generic_declarations);
-        ws         = optional_whitespace(ws);
-        _          = literal("{");
-        ws         = optional_whitespace(ws);
-        variants   = zero_or_more_tailed_values(",", enum_variant);
-        ws         = optional_whitespace(ws);
-        _          = literal("}");
+        spt          = point;
+        visibility   = optional(visibility);
+        _            = keyword("enum");
+        ws           = whitespace;
+        name         = ident;
+        ws           = optional_whitespace(ws);
+        generics     = optional(generic_declarations);
+        ws           = optional_whitespace(ws);
+        (wheres, ws) = concat_whitespace(ws, optional(where_clause));
+        ws           = optional_whitespace(ws);
+        _            = literal("{");
+        ws           = optional_whitespace(ws);
+        variants     = zero_or_more_tailed_values(",", enum_variant);
+        ws           = optional_whitespace(ws);
+        _            = literal("}");
     }, |_, pt| Enum {
         extent: ex(spt, pt),
         visibility,
         name,
         generics,
+        wheres: wheres.unwrap_or_else(Vec::new),
         variants,
         whitespace: ws,
     })
@@ -5755,6 +5759,12 @@ mod test {
     fn enum_with_discriminant() {
         let p = qp(p_enum, "enum Foo { A = 1, B = 2 }");
         assert_eq!(unwrap_progress(p).extent, (0, 25))
+    }
+
+    #[test]
+    fn enum_with_where_clause() {
+        let p = qp(p_enum, "enum Foo<A> where A: Bar { Z }");
+        assert_eq!(unwrap_progress(p).extent, (0, 30))
     }
 
     #[test]
