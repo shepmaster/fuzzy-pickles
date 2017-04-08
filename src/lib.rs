@@ -780,6 +780,7 @@ pub struct Parenthetical {
 pub enum Statement {
     Expression(Expression),
     Item(Item),
+    Empty(Extent),
 }
 
 impl Statement {
@@ -789,6 +790,7 @@ impl Statement {
         match *self {
             Expression(ref e) => e.extent(),
             Item(ref i) => i.extent(),
+            Empty(e) => e,
         }
     }
 }
@@ -2449,6 +2451,26 @@ pub fn not<P, E, S, F, T>
     }
 }
 
+// TODO: generic enough to move to library?
+pub fn peek<P, E, S, F, T>
+    (parser: F)
+     -> impl FnOnce(&mut peresil::ParseMaster<P, E, S>, P) -> peresil::Progress<P, T, E>
+    where F: FnOnce(&mut peresil::ParseMaster<P, E, S>, P) -> peresil::Progress<P, T, E>,
+          P: peresil::Point,
+          E: peresil::Recoverable,
+{
+    move |pm, pt| {
+        match parser(pm, pt) {
+            peresil::Progress { status: peresil::Status::Success(val), .. } => {
+                peresil::Progress::success(pt, val)
+            }
+            peresil::Progress { status: peresil::Status::Failure(f), .. } => {
+                peresil::Progress::failure(pt, f)
+            }
+        }
+    }
+}
+
 // --------------------------------------------------
 
 fn item<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Item> {
@@ -2928,7 +2950,15 @@ fn statement_inner<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, State
     pm.alternate(pt)
         .one(map(expression, Statement::Expression))
         .one(map(item, Statement::Item))
+        .one(map(statement_empty, Statement::Empty))
         .finish()
+}
+
+fn statement_empty<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+    sequence!(pm, pt, {
+        spt = point;
+        _   = peek(literal(";"));
+    }, |_, pt| ex(spt, pt))
 }
 
 // idea: trait w/associated types to avoid redefin fn types?
@@ -2949,6 +2979,7 @@ impl ImplicitSeparator for Statement {
             Statement::Item(_)                                => true,
 
             Statement::Expression(_) => false,
+            Statement::Empty(_) => false,
         }
     }
 }
@@ -6005,6 +6036,12 @@ mod test {
         let p = unwrap_progress(p);
         assert!(p.statements.is_empty());
         assert_eq!(p.expression.unwrap().extent(), (2, 9));
+    }
+
+    #[test]
+    fn block_with_multiple_empty_statements() {
+        let p = qp(block, "{ ; ; ; }");
+        assert_eq!(unwrap_progress(p).extent, (0, 9));
     }
 
     #[test]
