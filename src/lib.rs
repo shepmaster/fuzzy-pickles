@@ -1593,7 +1593,18 @@ pub struct ExternBlock {
 pub enum ExternBlockMember {
     Attribute(Attribute),
     Function(ExternBlockMemberFunction),
+    Static(ExternBlockMemberStatic),
     Whitespace(Vec<Whitespace>),
+}
+
+#[derive(Debug, Visit)]
+pub struct ExternBlockMemberStatic {
+    extent: Extent,
+    visibility: Option<Visibility>,
+    is_mut: Option<Extent>,
+    name: Ident,
+    typ: Type,
+    whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, Visit)]
@@ -1786,6 +1797,7 @@ pub trait Visitor {
     fn visit_extern_block_member_function_argument(&mut self, &ExternBlockMemberFunctionArgument) {}
     fn visit_extern_block_member_function_argument_named(&mut self, &ExternBlockMemberFunctionArgumentNamed) {}
     fn visit_extern_block_member_function_argument_variadic(&mut self, &ExternBlockMemberFunctionArgumentVariadic) {}
+    fn visit_extern_block_member_static(&mut self, &ExternBlockMemberStatic) {}
     fn visit_field_access(&mut self, &FieldAccess) {}
     fn visit_file(&mut self, &File) {}
     fn visit_for_loop(&mut self, &ForLoop) {}
@@ -1948,6 +1960,7 @@ pub trait Visitor {
     fn exit_extern_block_member_function_argument(&mut self, &ExternBlockMemberFunctionArgument) {}
     fn exit_extern_block_member_function_argument_named(&mut self, &ExternBlockMemberFunctionArgumentNamed) {}
     fn exit_extern_block_member_function_argument_variadic(&mut self, &ExternBlockMemberFunctionArgumentVariadic) {}
+    fn exit_extern_block_member_static(&mut self, &ExternBlockMemberStatic) {}
     fn exit_field_access(&mut self, &FieldAccess) {}
     fn exit_file(&mut self, &File) {}
     fn exit_for_loop(&mut self, &ForLoop) {}
@@ -4849,10 +4862,31 @@ fn extern_block_abi<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Stri
 fn extern_block_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExternBlockMember> {
     pm.alternate(pt)
         .one(map(attribute, ExternBlockMember::Attribute))
+        .one(map(extern_block_static, ExternBlockMember::Static))
         .one(map(extern_block_member_function, ExternBlockMember::Function))
         .one(map(whitespace, ExternBlockMember::Whitespace))
         .finish()
 }
+
+// TODO: very similar to regular statics; DRY
+fn extern_block_static<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExternBlockMemberStatic> {
+    sequence!(pm, pt, {
+        spt        = point;
+        visibility = optional(visibility);
+        _          = keyword("static");
+        ws         = whitespace;
+        is_mut     = optional(ext(keyword("mut")));
+        ws         = optional_whitespace(ws);
+        name       = ident;
+        ws         = optional_whitespace(ws);
+        _          = literal(":");
+        ws         = optional_whitespace(ws);
+        typ        = typ;
+        ws         = optional_whitespace(ws);
+        _          = literal(";");
+    }, |_, pt| ExternBlockMemberStatic { extent: ex(spt, pt), visibility, is_mut, name, typ, whitespace: ws })
+}
+
 
 // TODO: Massively duplicated!!!
 fn extern_block_member_function<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExternBlockMemberFunction> {
@@ -5675,6 +5709,18 @@ mod test {
     fn item_extern_block_with_attribute() {
         let p = qp(item, r#"extern { #[wow] }"#);
         assert_eq!(unwrap_progress(p).extent(), (0, 17))
+    }
+
+    #[test]
+    fn item_extern_block_with_static() {
+        let p = qp(item, r#"extern { static FOO: u32; }"#);
+        assert_eq!(unwrap_progress(p).extent(), (0, 27))
+    }
+
+    #[test]
+    fn item_extern_block_with_static_and_qualifiers() {
+        let p = qp(item, r#"extern { pub static mut FOO: u32; }"#);
+        assert_eq!(unwrap_progress(p).extent(), (0, 35))
     }
 
     #[test]
