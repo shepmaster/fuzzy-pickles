@@ -4699,7 +4699,7 @@ fn p_impl<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Impl> {
         (is_unsafe, ws)  = concat_whitespace(Vec::new(), optional(p_impl_unsafe));
         _                = keyword("impl");
         generics         = optional(generic_declarations);
-        ws               = append_whitespace(ws);
+        ws               = optional_whitespace(ws);
         of_trait         = optional(p_impl_of_trait);
         type_name        = typ;
         ws               = optional_whitespace(ws);
@@ -4735,7 +4735,7 @@ fn p_impl_of_trait<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplO
         is_negative = optional(ext(literal("!")));
         ws          = optional_whitespace(Vec::new());
         trait_name  = typ;
-        ws          = append_whitespace(ws);
+        ws          = optional_whitespace(ws);
         _           = keyword("for");
         ws          = append_whitespace(ws);
     }, |_, pt| ImplOfTrait { extent: ex(spt, pt), is_negative, trait_name, whitespace: ws })
@@ -5757,6 +5757,12 @@ mod test {
     fn impl_with_generics() {
         let p = qp(p_impl, "impl<'a, T> Foo<'a, T> for Bar<'a, T> {}");
         assert_eq!(unwrap_progress(p).extent, (0, 40))
+    }
+
+    #[test]
+    fn impl_with_generics_no_space() {
+        let p = qp(p_impl, "impl<'a,T>Foo<'a,T>for Bar<'a,T>{}");
+        assert_eq!(unwrap_progress(p).extent, (0, 34))
     }
 
     #[test]
