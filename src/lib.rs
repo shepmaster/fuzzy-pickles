@@ -99,15 +99,15 @@ pub fn parse_rust_file(file: &str) -> Result<File, ErrorDetail> {
     let mut items = Vec::new();
 
     loop {
-        let next_pt;
+        if pt.s.is_empty() { break }
 
         let item = item(&mut pm, pt);
         let item = pm.finish(item);
 
-        match item.status {
+        let next_pt = match item.status {
             peresil::Status::Success(s) => {
                 items.push(s);
-                next_pt = item.point;
+                item.point
             },
             peresil::Status::Failure(e) => {
                 return Err(ErrorDetail {
@@ -115,15 +115,13 @@ pub fn parse_rust_file(file: &str) -> Result<File, ErrorDetail> {
                     errors: e.into_iter().collect(),
                 })
             },
-        }
+        };
 
         if next_pt.offset <= pt.offset {
             let end = std::cmp::min(pt.offset + 10, file.len());
             panic!("Could not make progress: {}...", &file[pt.offset..end]);
         }
         pt = next_pt;
-
-        if pt.s.is_empty() { break }
     }
 
     Ok(File { items: items })
