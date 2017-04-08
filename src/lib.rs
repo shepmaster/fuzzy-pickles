@@ -3044,8 +3044,9 @@ fn expr_macro_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Macro
     sequence!(pm, pt, {
         spt  = point;
         name = ident;
-        _    = literal("!");
         _x   = optional_whitespace(Vec::new());
+        _    = literal("!");
+        _x   = optional_whitespace(_x);
         arg  = optional(ident);
         _x   = optional_whitespace(_x);
         args = expr_macro_call_args;
@@ -3090,8 +3091,9 @@ fn item_macro_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Macro
     sequence!(pm, pt, {
         spt  = point;
         name = ident;
-        _    = literal("!");
         _x   = optional_whitespace(Vec::new());
+        _    = literal("!");
+        _x   = optional_whitespace(_x);
         arg  = optional(ident);
         _x   = optional_whitespace(_x);
         args = item_macro_call_args;
@@ -3111,6 +3113,7 @@ fn item_macro_call_paren<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s,
         _    = literal("(");
         args = parse_nested_tokens_until(Token::is_left_paren, Token::is_right_paren);
         _    = literal(")");
+        _x   = optional_whitespace(Vec::new());
         _    = literal(";");
     }, |_, _| args)
 }
@@ -3120,6 +3123,7 @@ fn item_macro_call_square<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s
         _    = literal("[");
         args = parse_nested_tokens_until(Token::is_left_square, Token::is_right_square);
         _    = literal("]");
+        _x   = optional_whitespace(Vec::new());
         _    = literal(";");
     }, |_, _| args)
 }
@@ -5478,6 +5482,12 @@ mod test {
     }
 
     #[test]
+    fn item_macro_call_all_space() {
+        let p = qp(item, "foo ! bar [ ] ;");
+        assert_eq!(unwrap_progress(p).extent(), (0, 15))
+    }
+
+    #[test]
     fn item_mod() {
         let p = qp(module, "mod foo { }");
         assert_eq!(unwrap_progress(p).extent, (0, 11))
@@ -6372,6 +6382,12 @@ mod test {
     fn expr_macro_call_with_ident() {
         let p = qp(expression, "macro_rules! foo { }");
         assert_eq!(unwrap_progress(p).extent(), (0, 20))
+    }
+
+    #[test]
+    fn expr_macro_call_all_space() {
+        let p = qp(expression, "foo ! bar { }");
+        assert_eq!(unwrap_progress(p).extent(), (0, 13))
     }
 
     #[test]
