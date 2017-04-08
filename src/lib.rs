@@ -1555,6 +1555,7 @@ pub enum ImplMember {
     Attribute(Attribute),
     Function(ImplFunction),
     Type(ImplType),
+    MacroCall(MacroCall),
     Whitespace(Vec<Whitespace>),
 }
 
@@ -4718,6 +4719,7 @@ fn impl_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplMembe
         .one(map(attribute, ImplMember::Attribute))
         .one(map(impl_function, ImplMember::Function))
         .one(map(impl_type, ImplMember::Type))
+        .one(map(item_macro_call, ImplMember::MacroCall))
         .one(map(whitespace, ImplMember::Whitespace))
         .finish()
 }
@@ -5719,6 +5721,12 @@ mod test {
     fn impl_with_unsafe() {
         let p = qp(p_impl, "unsafe impl Foo {}");
         assert_eq!(unwrap_progress(p).extent, (0, 18))
+    }
+
+    #[test]
+    fn impl_with_macro_call() {
+        let p = qp(p_impl, "impl Foo { bar!(); }");
+        assert_eq!(unwrap_progress(p).extent, (0, 20))
     }
 
     #[test]
