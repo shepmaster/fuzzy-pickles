@@ -4053,9 +4053,9 @@ fn expression_tail<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expre
 
 fn expr_tail_as_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExpressionTail> {
     sequence!(pm, pt, {
-        ws  = whitespace;
+        ws  = optional_whitespace(Vec::new());
         _   = keyword("as");
-        ws  = append_whitespace(ws);
+        ws  = optional_whitespace(ws);
         typ = typ;
     }, |_, _| ExpressionTail::AsType { typ, whitespace: ws })
 }
@@ -6745,6 +6745,12 @@ mod test {
     fn expr_as_type_of_value() {
         let p = qp(expression, "bits as u64");
         assert_eq!(unwrap_progress(p).extent(), (0, 11))
+    }
+
+    #[test]
+    fn expr_as_no_space() {
+        let p = qp(expression, "(42)as u8");
+        assert_eq!(unwrap_progress(p).extent(), (0, 9))
     }
 
     #[test]
