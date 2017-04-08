@@ -303,13 +303,8 @@ pub struct GenericDeclarationType {
     extent: Extent,
     attributes: Vec<Attribute>,
     name: Ident,
-    bounds: Option<GenericDeclarationTypeAddition>,
-}
-
-#[derive(Debug, Visit, Decompose)]
-pub enum GenericDeclarationTypeAddition {
-    Bounds(TraitBounds),
-    Default(Type),
+    bounds: Option<TraitBounds>,
+    default: Option<Type>,
 }
 
 #[derive(Debug, Visit, Decompose)]
@@ -1822,7 +1817,6 @@ pub trait Visitor {
     fn visit_function_qualifiers(&mut self, &FunctionQualifiers) {}
     fn visit_generic_declaration_lifetime(&mut self, &GenericDeclarationLifetime) {}
     fn visit_generic_declaration_type(&mut self, &GenericDeclarationType) {}
-    fn visit_generic_declaration_type_addition(&mut self, &GenericDeclarationTypeAddition) {}
     fn visit_generic_declarations(&mut self, &GenericDeclarations) {}
     fn visit_ident(&mut self, &Ident) {}
     fn visit_if(&mut self, &If) {}
@@ -1986,7 +1980,6 @@ pub trait Visitor {
     fn exit_function_qualifiers(&mut self, &FunctionQualifiers) {}
     fn exit_generic_declaration_lifetime(&mut self, &GenericDeclarationLifetime) {}
     fn exit_generic_declaration_type(&mut self, &GenericDeclarationType) {}
-    fn exit_generic_declaration_type_addition(&mut self, &GenericDeclarationTypeAddition) {}
     fn exit_generic_declarations(&mut self, &GenericDeclarations) {}
     fn exit_ident(&mut self, &Ident) {}
     fn exit_if(&mut self, &If) {}
@@ -2713,17 +2706,9 @@ fn generic_declaration_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<
         attributes = zero_or_more(struct_defn_field_attr);
         name       = ident;
         // Over-permissive; allows interleaving trait bounds and default types
-        bounds     = optional(generic_declaration_type_addition);
-    }, |_, pt| GenericDeclarationType { extent: ex(spt, pt), attributes, name, bounds })
-}
-
-fn generic_declaration_type_addition<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
-    Progress<'s, GenericDeclarationTypeAddition>
-{
-    pm.alternate(pt)
-        .one(map(generic_declaration_type_bounds, GenericDeclarationTypeAddition::Bounds))
-        .one(map(generic_declaration_type_default, GenericDeclarationTypeAddition::Default))
-        .finish()
+        bounds     = optional(generic_declaration_type_bounds);
+        default    = optional(generic_declaration_type_default);
+    }, |_, pt| GenericDeclarationType { extent: ex(spt, pt), attributes, name, bounds, default })
 }
 
 fn generic_declaration_type_bounds<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TraitBounds> {
@@ -7407,6 +7392,12 @@ mod test {
     fn generic_declarations_with_default_types() {
         let p = qp(generic_declarations, "<A = Bar>");
         assert_eq!(unwrap_progress(p).extent, (0, 9))
+    }
+
+    #[test]
+    fn generic_declarations_with_type_bounds_and_default_types() {
+        let p = qp(generic_declarations, "<A: Foo = Bar>");
+        assert_eq!(unwrap_progress(p).extent, (0, 14))
     }
 
     #[test]
