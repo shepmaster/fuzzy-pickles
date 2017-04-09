@@ -2,72 +2,74 @@ use unicode_xid::UnicodeXID;
 use peresil;
 use peresil::combinators::*;
 
+use super::{Extent, ex, split_point_at_non_zero_offset};
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Token<'s> {
-    LeftSquare(&'s str),
-    RightSquare(&'s str),
-    LeftParen(&'s str),
-    RightParen(&'s str),
-    LeftAngle(&'s str),
-    RightAngle(&'s str),
-    LeftCurly(&'s str),
-    RightCurly(&'s str),
+pub enum Token {
+    LeftSquare(Extent),
+    RightSquare(Extent),
+    LeftParen(Extent),
+    RightParen(Extent),
+    LeftAngle(Extent),
+    RightAngle(Extent),
+    LeftCurly(Extent),
+    RightCurly(Extent),
 
     // TODO: Decide how to name the foo-equals tokens.
     // Should they match (e.g. caret and caret-equals)?
     // Should they infer any meaning (e.g. xor)
-    Ampersand(&'s str),
-    Asterisk(&'s str),
-    At(&'s str),
-    Backslash(&'s str),
-    Bang(&'s str),
-    CaretEquals(&'s str),
-    Colon(&'s str),
-    Comma(&'s str),
-    DivideEquals(&'s str),
-    Dollar(&'s str),
-    DoubleColon(&'s str),
-    DoubleEquals(&'s str),
-    DoublePeriod(&'s str),
-    DoublePipe(&'s str),
-    Equals(&'s str),
-    Hash(&'s str),
-    Minus(&'s str),
-    MinusEquals(&'s str),
-    Percent(&'s str),
-    PercentEquals(&'s str),
-    Period(&'s str),
-    Pipe(&'s str),
-    Plus(&'s str),
-    PlusEquals(&'s str),
-    QuestionMark(&'s str),
-    Semicolon(&'s str),
-    Slash(&'s str),
-    Tilde(&'s str),
-    ThickArrow(&'s str),
-    ThinArrow(&'s str),
-    TimesEquals(&'s str),
-    TriplePeriod(&'s str),
-    Caret(&'s str),
+    Ampersand(Extent),
+    Asterisk(Extent),
+    At(Extent),
+    Backslash(Extent),
+    Bang(Extent),
+    CaretEquals(Extent),
+    Colon(Extent),
+    Comma(Extent),
+    DivideEquals(Extent),
+    Dollar(Extent),
+    DoubleColon(Extent),
+    DoubleEquals(Extent),
+    DoublePeriod(Extent),
+    DoublePipe(Extent),
+    Equals(Extent),
+    Hash(Extent),
+    Minus(Extent),
+    MinusEquals(Extent),
+    Percent(Extent),
+    PercentEquals(Extent),
+    Period(Extent),
+    Pipe(Extent),
+    Plus(Extent),
+    PlusEquals(Extent),
+    QuestionMark(Extent),
+    Semicolon(Extent),
+    Slash(Extent),
+    Tilde(Extent),
+    ThickArrow(Extent),
+    ThinArrow(Extent),
+    TimesEquals(Extent),
+    TriplePeriod(Extent),
+    Caret(Extent),
 
-    Character(&'s str),
-    String(&'s str),
-    StringRaw(&'s str),
+    Character(Extent),
+    String(Extent),
+    StringRaw(Extent),
 
-    Byte(&'s str),
-    ByteString(&'s str),
-    ByteStringRaw(&'s str),
+    Byte(Extent),
+    ByteString(Extent),
+    ByteStringRaw(Extent),
 
-    Ident(&'s str),
-    Digits(&'s str),
-    Whitespace(&'s str),
-    DocComment(&'s str),
-    Comment(&'s str),
-    Lifetime(&'s str),
+    Ident(Extent),
+    Digits(Extent),
+    Whitespace(Extent),
+    DocComment(Extent),
+    Comment(Extent),
+    Lifetime(Extent),
 }
 
-impl<'s> Token<'s> {
-    pub fn data(&self) -> &'s str {
+impl Token {
+    pub fn extent(&self) -> Extent {
         use self::Token::*;
 
         match *self {
@@ -204,7 +206,7 @@ impl<'s> Tokens<'s> {
 }
 
 impl<'s> Iterator for Tokens<'s> {
-    type Item = Token<'s>;
+    type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
         match single_token(&mut self.pm, self.pt) {
@@ -225,7 +227,7 @@ impl<'s> Iterator for Tokens<'s> {
     }
 }
 
-fn single_token<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token<'s>> {
+fn single_token<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token> {
     pm.alternate(pt)
         .one(comment_or_doc_comment)
         .one(map(character, Token::Character))
@@ -282,7 +284,7 @@ fn single_token<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token<'s
         .finish()
 }
 
-fn ident<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+fn ident<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     let mut ci = pt.s.chars();
     let mut idx = 0;
 
@@ -294,47 +296,47 @@ fn ident<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
         }
     }
 
-    let idx = if idx == 0 { None } else { Some(idx) };
-    pt.consume_to(idx).map_err(|_| Error::ExpectedIdent)
+    split_point_at_non_zero_offset(pt, idx, Error::ExpectedIdent).map(|(_, e)| e)
 }
 
-fn digits<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+fn digits<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     let ci = pt.s.chars();
     let idx = ci.take_while(|c| c.is_digit(10)).map(|c| c.len_utf8()).sum();
 
-    let idx = if idx == 0 { None } else { Some(idx) };
-    pt.consume_to(idx).map_err(|_| Error::ExpectedDigits)
+    split_point_at_non_zero_offset(pt, idx, Error::ExpectedDigits).map(|(_, e)| e)
 }
 
-fn whitespace<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+fn whitespace<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     let ci = pt.s.chars();
     let idx = ci.take_while(|&c| {
         c == ' ' || c == '\t' || c == '\r' || c == '\n'
     }).map(|c| c.len_utf8()).sum();
 
-    let idx = if idx == 0 { None } else { Some(idx) };
-    pt.consume_to(idx).map_err(|_| Error::ExpectedWhitespace)
+    split_point_at_non_zero_offset(pt, idx, Error::ExpectedWhitespace).map(|(_, e)| e)
 }
 
-fn comment_or_doc_comment<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token<'s>> {
+fn comment_or_doc_comment<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token> {
+    let spt = pt;
     if pt.s.starts_with("///") && !pt.s[3..].starts_with("/") {
         let eol = pt.s.find("\n").unwrap_or(pt.s.len());
-        pt.consume_to(Some(eol)).map(Token::DocComment).map_err(|_| Error::ExpectedComment)
+        let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
+        Progress::success(pt, Token::DocComment(ex(spt, pt)))
     } else if pt.s.starts_with("//") {
         let eol = pt.s.find("\n").unwrap_or(pt.s.len());
-        pt.consume_to(Some(eol)).map(Token::Comment).map_err(|_| Error::ExpectedComment)
+        let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
+        Progress::success(pt, Token::Comment(ex(spt, pt)))
     } else {
         Progress::failure(pt, Error::ExpectedComment)
     }
 }
 
-fn character<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+fn character<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
         spt = point;
         _   = literal("'");
         _   = character_char;
         _   = literal("'");
-    }, |_, pt| spt.to(pt))
+    }, |_, pt| ex(spt, pt))
 }
 
 fn character_char<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
@@ -352,7 +354,7 @@ fn escaped_char<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str>
     }, |_, pt| spt.to(pt))
 }
 
-fn escaped_char_code<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+fn escaped_char_code<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     pm.alternate(pt)
         .one(literal("n"))
         .one(literal("r"))
@@ -366,21 +368,21 @@ fn escaped_char_code<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s
         .finish()
 }
 
-fn escaped_char_hex<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+fn escaped_char_hex<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
         spt = point;
         _   = literal("x");
         _   = hex_string;
-    }, |_, pt| spt.to(pt))
+    }, |_, pt| ex(spt, pt))
 }
 
-fn escaped_char_unicode<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+fn escaped_char_unicode<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
         spt = point;
         _   = literal("u{");
         _   = hex_string;
         _   = literal("}");
-    }, |_, pt| spt.to(pt))
+    }, |_, pt| ex(spt, pt))
 }
 
 fn hex_string<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
@@ -405,13 +407,13 @@ fn single_char<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str>
     }
 }
 
-fn string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+fn string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
         spt = point;
         _   = literal("\"");
         _   = string_char;
         _   = literal("\"");
-    }, |_, pt| spt.to(pt))
+    }, |_, pt| ex(spt, pt))
 }
 
 fn string_char<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
@@ -434,14 +436,14 @@ fn string_char<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str>
     res(pt.s.len())
 }
 
-fn string_raw<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+fn string_raw<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
         spt = point;
         _   = literal("r");
         h   = zero_or_more(literal("#"));
         _   = literal(r#"""#);
         _   = raw_string_tail(h.len());
-    }, |_, pt| spt.to(pt))
+    }, |_, pt| ex(spt, pt))
 }
 
 fn raw_string_tail<'s>(hashes: usize) -> impl Fn(&mut Master<'s>, Point<'s>) ->
@@ -465,49 +467,52 @@ fn raw_string_tail<'s>(hashes: usize) -> impl Fn(&mut Master<'s>, Point<'s>) ->
     }
 }
 
-fn byte<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+fn byte<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
         spt = point;
         _   = literal("b");
         _   = character;
-    }, |_, pt| spt.to(pt))
+    }, |_, pt| ex(spt, pt))
 }
 
-fn byte_string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+fn byte_string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
         spt = point;
         _   = literal("b");
         _   = string;
-    }, |_, pt| spt.to(pt))
+    }, |_, pt| ex(spt, pt))
 }
 
-fn byte_string_raw<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+fn byte_string_raw<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
         spt = point;
         _   = literal("b");
         _   = string_raw;
-    }, |_, pt| spt.to(pt))
+    }, |_, pt| ex(spt, pt))
 }
 
-fn lifetime<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+fn lifetime<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
         spt = point;
         _   = literal("'");
         _   = ident;
-    }, |_, pt| spt.to(pt))
+    }, |_, pt| ex(spt, pt))
 }
 
-fn literal<'s>(expected: &'static str) -> impl Fn(&mut Master<'s>, Point<'s>) ->
-    Progress<'s, &'s str>
+fn literal<'s>(expected: &'static str) ->
+    impl Fn(&mut Master<'s>, Point<'s>) -> Progress<'s, Extent>
 {
-    move |_, pt| pt.consume_literal(expected).map_err(|_| Error::Literal(expected))
+    move |_, spt| {
+        let (pt, _) = try_parse!(spt.consume_literal(expected).map_err(|_| Error::Literal(expected)));
+        Progress::success(pt, ex(spt, pt))
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
 
-    fn tok<'s>(s: &'s str) -> Vec<Token<'s>> {
+    fn tok(s: &str) -> Vec<Token> {
         Tokens::new(s).collect()
     }
 
@@ -515,7 +520,7 @@ mod test {
     fn character() {
         let toks = tok("'a'");
         match toks[0] {
-            Token::Character(s) => assert_eq!(s, "'a'"),
+            Token::Character(s) => assert_eq!(s, (0, 3)),
             _ => panic!("Not a character: {:?}", toks[0]),
         }
     }
@@ -524,7 +529,7 @@ mod test {
     fn character_escaped() {
         let toks = tok(r#"'\\'"#);
         match toks[0] {
-            Token::Character(s) => assert_eq!(s, r#"'\\'"#),
+            Token::Character(s) => assert_eq!(s, (0, 4)),
             _ => panic!("Not a character: {:?}", toks[0]),
         }
     }
@@ -533,7 +538,7 @@ mod test {
     fn character_escaped_hex() {
         let toks = tok(r#"'\x41'"#);
         match toks[0] {
-            Token::Character(s) => assert_eq!(s, r#"'\x41'"#),
+            Token::Character(s) => assert_eq!(s, (0, 6)),
             _ => panic!("Not a character: {:?}", toks[0]),
         }
     }
@@ -542,7 +547,7 @@ mod test {
     fn character_escaped_unicode() {
         let toks = tok(r#"'\u{1F63B}'"#);
         match toks[0] {
-            Token::Character(s) => assert_eq!(s, r#"'\u{1F63B}'"#),
+            Token::Character(s) => assert_eq!(s, (0, 11)),
             _ => panic!("Not a character: {:?}", toks[0]),
         }
     }
@@ -551,15 +556,15 @@ mod test {
     fn character_limited_to_single() {
         let toks = tok("impl<'a> Foo<'a> for Bar<'a> { }");
         match toks[2] {
-            Token::Lifetime(s) => assert_eq!(s, "'a"),
+            Token::Lifetime(s) => assert_eq!(s, (5, 7)),
             _ => panic!("Not a lifetime"),
         }
         match toks[7] {
-            Token::Lifetime(s) => assert_eq!(s, "'a"),
+            Token::Lifetime(s) => assert_eq!(s, (13, 15)),
             _ => panic!("Not a lifetime"),
         }
         match toks[14] {
-            Token::Lifetime(s) => assert_eq!(s, "'a"),
+            Token::Lifetime(s) => assert_eq!(s, (25, 27)),
             _ => panic!("Not a lifetime"),
         }
     }
@@ -568,7 +573,7 @@ mod test {
     fn string_raw() {
         let toks = tok(r###"r#"inner"#"###);
         match toks[0] {
-            Token::StringRaw(s) => assert_eq!(s, r###"r#"inner"#"###),
+            Token::StringRaw(s) => assert_eq!(s, (0, 10)),
             _ => panic!("Not a raw string"),
         }
     }
@@ -577,7 +582,7 @@ mod test {
     fn byte() {
         let toks = tok(r#"b'a'"#);
         match toks[0] {
-            Token::Byte(s) => assert_eq!(s, r#"b'a'"#),
+            Token::Byte(s) => assert_eq!(s, (0, 4)),
             _ => panic!("Not a byte: {:?}", toks[0]),
         }
     }
@@ -586,7 +591,7 @@ mod test {
     fn byte_string() {
         let toks = tok(r#"b"abc""#);
         match toks[0] {
-            Token::ByteString(s) => assert_eq!(s, r#"b"abc""#),
+            Token::ByteString(s) => assert_eq!(s, (0, 6)),
             _ => panic!("Not a byte string"),
         }
     }
@@ -595,7 +600,7 @@ mod test {
     fn byte_string_raw() {
         let toks = tok(r#"br"abc""#);
         match toks[0] {
-            Token::ByteStringRaw(s) => assert_eq!(s, r#"br"abc""#),
+            Token::ByteStringRaw(s) => assert_eq!(s, (0, 7)),
             _ => panic!("Not a raw byte string: {:?}", toks[0]),
         }
     }
@@ -604,7 +609,7 @@ mod test {
     fn tilde_is_a_token_even_though_unused() {
         let toks = tok("~");
         match toks[0] {
-            Token::Tilde(s) => assert_eq!(s, "~"),
+            Token::Tilde(s) => assert_eq!(s, (0, 1)),
             _ => panic!("Not a tilde: {:?}", toks[0]),
         }
     }
