@@ -52,6 +52,40 @@ pub enum Token {
     TriplePeriod(Extent),
     Caret(Extent),
 
+    // Keywords
+    As(Extent),
+    Box(Extent),
+    Break(Extent),
+    Const(Extent),
+    Continue(Extent),
+    Crate(Extent),
+    Else(Extent),
+    Enum(Extent),
+    Extern(Extent),
+    Fn(Extent),
+    For(Extent),
+    If(Extent),
+    Impl(Extent),
+    In(Extent),
+    Let(Extent),
+    Loop(Extent),
+    Match(Extent),
+    Mod(Extent),
+    Move(Extent),
+    Mut(Extent),
+    Pub(Extent),
+    Ref(Extent),
+    Return(Extent),
+    Static(Extent),
+    Struct(Extent),
+    Trait(Extent),
+    Type(Extent),
+    Use(Extent),
+    Unsafe(Extent),
+    Where(Extent),
+    While(Extent),
+
+    //
     Character(Extent),
     String(Extent),
     StringRaw(Extent),
@@ -74,10 +108,13 @@ impl Token {
 
         match *self {
             Ampersand(s)     |
+            As(s)            |
             Asterisk(s)      |
             At(s)            |
             Backslash(s)     |
             Bang(s)          |
+            Box(s)           |
+            Break(s)         |
             Byte(s)          |
             ByteString(s)    |
             ByteStringRaw(s) |
@@ -87,6 +124,9 @@ impl Token {
             Colon(s)         |
             Comma(s)         |
             Comment(s)       |
+            Const(s)         |
+            Continue(s)      |
+            Crate(s)         |
             Digits(s)        |
             DivideEquals(s)  |
             DocComment(s)    |
@@ -95,36 +135,61 @@ impl Token {
             DoubleEquals(s)  |
             DoublePeriod(s)  |
             DoublePipe(s)    |
+            Else(s)          |
+            Enum(s)          |
             Equals(s)        |
+            Extern(s)        |
+            Fn(s)            |
+            For(s)           |
             Hash(s)          |
             Ident(s)         |
+            If(s)            |
+            Impl(s)          |
+            In(s)            |
             LeftAngle(s)     |
             LeftCurly(s)     |
             LeftParen(s)     |
             LeftSquare(s)    |
+            Let(s)           |
             Lifetime(s)      |
+            Loop(s)          |
+            Match(s)         |
             Minus(s)         |
             MinusEquals(s)   |
+            Mod(s)           |
+            Move(s)          |
+            Mut(s)           |
             Percent(s)       |
             PercentEquals(s) |
             Period(s)        |
             Pipe(s)          |
             Plus(s)          |
             PlusEquals(s)    |
+            Pub(s)           |
             QuestionMark(s)  |
+            Ref(s)           |
+            Return(s)        |
             RightAngle(s)    |
             RightCurly(s)    |
             RightParen(s)    |
             RightSquare(s)   |
             Semicolon(s)     |
             Slash(s)         |
+            Static(s)        |
             String(s)        |
             StringRaw(s)     |
-            Tilde(s)         |
+            Struct(s)        |
             ThickArrow(s)    |
             ThinArrow(s)     |
+            Tilde(s)         |
             TimesEquals(s)   |
+            Trait(s)         |
             TriplePeriod(s)  |
+            Type(s)          |
+            Unsafe(s)        |
+            Use(s)           |
+            Where(s)         |
+            While(s)         |
             Whitespace(s)    => s
         }
     }
@@ -237,6 +302,37 @@ fn single_token<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token> {
         .one(map(literal("$"), Token::Dollar))
         .one(map(literal("/"), Token::Slash))
         .one(map(literal(r#"\"#), Token::Backslash))
+        .one(map(literal("as"), Token::As))
+        .one(map(literal("box"), Token::Box))
+        .one(map(literal("break"), Token::Break))
+        .one(map(literal("const"), Token::Const))
+        .one(map(literal("continue"), Token::Continue))
+        .one(map(literal("crate"), Token::Crate))
+        .one(map(literal("else"), Token::Else))
+        .one(map(literal("enum"), Token::Enum))
+        .one(map(literal("extern"), Token::Extern))
+        .one(map(literal("fn"), Token::Fn))
+        .one(map(literal("for"), Token::For))
+        .one(map(literal("if"), Token::If))
+        .one(map(literal("impl"), Token::Impl))
+        .one(map(literal("in"), Token::In))
+        .one(map(literal("let"), Token::Let))
+        .one(map(literal("loop"), Token::Loop))
+        .one(map(literal("match"), Token::Match))
+        .one(map(literal("mod"), Token::Mod))
+        .one(map(literal("move"), Token::Move))
+        .one(map(literal("mut"), Token::Mut))
+        .one(map(literal("pub"), Token::Pub))
+        .one(map(literal("ref"), Token::Ref))
+        .one(map(literal("return"), Token::Return))
+        .one(map(literal("static"), Token::Static))
+        .one(map(literal("struct"), Token::Struct))
+        .one(map(literal("trait"), Token::Trait))
+        .one(map(literal("type"), Token::Type))
+        .one(map(literal("use"), Token::Use))
+        .one(map(literal("unsafe"), Token::Unsafe))
+        .one(map(literal("where"), Token::Where))
+        .one(map(literal("while"), Token::While))
         .one(map(ident, Token::Ident))
         .one(map(digits, Token::Digits))
         .one(map(whitespace, Token::Whitespace))
