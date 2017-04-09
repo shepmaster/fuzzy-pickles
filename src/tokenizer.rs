@@ -43,6 +43,7 @@ pub enum Token<'s> {
     QuestionMark(&'s str),
     Semicolon(&'s str),
     Slash(&'s str),
+    Tilde(&'s str),
     ThickArrow(&'s str),
     ThinArrow(&'s str),
     TimesEquals(&'s str),
@@ -117,6 +118,7 @@ impl<'s> Token<'s> {
             Slash(s)         |
             String(s)        |
             StringRaw(s)     |
+            Tilde(s)         |
             ThickArrow(s)    |
             ThinArrow(s)     |
             TimesEquals(s)   |
@@ -250,6 +252,7 @@ fn single_token<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token<'s
         .one(map(literal("#"), Token::Hash))
         .one(map(literal("^"), Token::Caret))
         .one(map(literal("!"), Token::Bang))
+        .one(map(literal("~"), Token::Tilde))
         .one(map(literal("["), Token::LeftSquare))
         .one(map(literal("]"), Token::RightSquare))
         .one(map(literal("("), Token::LeftParen))
@@ -594,6 +597,15 @@ mod test {
         match toks[0] {
             Token::ByteStringRaw(s) => assert_eq!(s, r#"br"abc""#),
             _ => panic!("Not a raw byte string: {:?}", toks[0]),
+        }
+    }
+
+    #[test]
+    fn tilde_is_a_token_even_though_unused() {
+        let toks = tok("~");
+        match toks[0] {
+            Token::Tilde(s) => assert_eq!(s, "~"),
+            _ => panic!("Not a tilde: {:?}", toks[0]),
         }
     }
 }
