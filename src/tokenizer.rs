@@ -172,6 +172,7 @@ enum Error {
     Literal(&'static str),
     ExpectedIdent,
     ExpectedDigits,
+    ExpectedHex,
     ExpectedWhitespace,
     ExpectedComment,
     ExpectedCharacter,
@@ -344,8 +345,47 @@ fn escaped_char<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str>
     sequence!(pm, pt, {
         spt = point;
         _   = literal("\\");
-        _   = single_char;
+        _   = escaped_char_code;
     }, |_, pt| spt.to(pt))
+}
+
+fn escaped_char_code<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+    pm.alternate(pt)
+        .one(literal("n"))
+        .one(literal("r"))
+        .one(literal("t"))
+        .one(literal("\\"))
+        .one(literal("'"))
+        .one(literal("\""))
+        .one(literal("0"))
+        .one(escaped_char_hex)
+        .one(escaped_char_unicode)
+        .finish()
+}
+
+fn escaped_char_hex<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+    sequence!(pm, pt, {
+        spt = point;
+        _   = literal("x");
+        _   = hex_string;
+    }, |_, pt| spt.to(pt))
+}
+
+fn escaped_char_unicode<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+    sequence!(pm, pt, {
+        spt = point;
+        _   = literal("u{");
+        _   = hex_string;
+        _   = literal("}");
+    }, |_, pt| spt.to(pt))
+}
+
+fn hex_string<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
+    let ci = pt.s.chars();
+    let idx = ci.take_while(|c| c.is_digit(16)).map(|c| c.len_utf8()).sum();
+
+    let idx = if idx == 0 { None } else { Some(idx) };
+    pt.consume_to(idx).map_err(|_| Error::ExpectedHex)
 }
 
 fn single_char<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
@@ -482,6 +522,24 @@ mod test {
         let toks = tok(r#"'\\'"#);
         match toks[0] {
             Token::Character(s) => assert_eq!(s, r#"'\\'"#),
+            _ => panic!("Not a character: {:?}", toks[0]),
+        }
+    }
+
+    #[test]
+    fn character_escaped_hex() {
+        let toks = tok(r#"'\x41'"#);
+        match toks[0] {
+            Token::Character(s) => assert_eq!(s, r#"'\x41'"#),
+            _ => panic!("Not a character: {:?}", toks[0]),
+        }
+    }
+
+    #[test]
+    fn character_escaped_unicode() {
+        let toks = tok(r#"'\u{1F63B}'"#);
+        match toks[0] {
+            Token::Character(s) => assert_eq!(s, r#"'\u{1F63B}'"#),
             _ => panic!("Not a character: {:?}", toks[0]),
         }
     }
