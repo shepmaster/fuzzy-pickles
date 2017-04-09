@@ -6,51 +6,64 @@ use super::{Extent, ex, split_point_at_non_zero_offset};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Decompose)]
 pub enum Token {
-    LeftSquare(Extent),
-    RightSquare(Extent),
-    LeftParen(Extent),
-    RightParen(Extent),
+    // Paired delimiters
     LeftAngle(Extent),
-    RightAngle(Extent),
     LeftCurly(Extent),
+    LeftParen(Extent),
+    LeftSquare(Extent),
+    RightAngle(Extent),
     RightCurly(Extent),
+    RightParen(Extent),
+    RightSquare(Extent),
 
+    // Symbols
+    //
     // TODO: Decide how to name the foo-equals tokens.
     // Should they match (e.g. caret and caret-equals)?
     // Should they infer any meaning (e.g. xor)
     Ampersand(Extent),
+    AmpersandEquals(Extent),
     Asterisk(Extent),
     At(Extent),
     Backslash(Extent),
     Bang(Extent),
+    Caret(Extent),
     CaretEquals(Extent),
     Colon(Extent),
     Comma(Extent),
     DivideEquals(Extent),
     Dollar(Extent),
+    DoubleAmpersand(Extent),
     DoubleColon(Extent),
     DoubleEquals(Extent),
+    DoubleLeftAngle(Extent),
     DoublePeriod(Extent),
     DoublePipe(Extent),
+    DoubleRightAngle(Extent),
     Equals(Extent),
+    GreaterThanOrEquals(Extent),
     Hash(Extent),
+    LessThanOrEquals(Extent),
     Minus(Extent),
     MinusEquals(Extent),
+    NotEqual(Extent),
     Percent(Extent),
     PercentEquals(Extent),
     Period(Extent),
     Pipe(Extent),
+    PipeEquals(Extent),
     Plus(Extent),
     PlusEquals(Extent),
     QuestionMark(Extent),
     Semicolon(Extent),
+    ShiftLeftEquals(Extent),
+    ShiftRightEquals(Extent),
     Slash(Extent),
-    Tilde(Extent),
     ThickArrow(Extent),
     ThinArrow(Extent),
+    Tilde(Extent),
     TimesEquals(Extent),
     TriplePeriod(Extent),
-    Caret(Extent),
 
     // Keywords
     As(Extent),
@@ -85,15 +98,15 @@ pub enum Token {
     Where(Extent),
     While(Extent),
 
-    //
+    // String-like
     Character(Extent),
     String(Extent),
     StringRaw(Extent),
-
     Byte(Extent),
     ByteString(Extent),
     ByteStringRaw(Extent),
 
+    // Other
     Ident(Extent),
     Digits(Extent),
     Whitespace(Extent),
@@ -107,90 +120,100 @@ impl Token {
         use self::Token::*;
 
         match *self {
-            Ampersand(s)     |
-            As(s)            |
-            Asterisk(s)      |
-            At(s)            |
-            Backslash(s)     |
-            Bang(s)          |
-            Box(s)           |
-            Break(s)         |
-            Byte(s)          |
-            ByteString(s)    |
-            ByteStringRaw(s) |
-            Caret(s)         |
-            CaretEquals(s)   |
-            Character(s)     |
-            Colon(s)         |
-            Comma(s)         |
-            Comment(s)       |
-            Const(s)         |
-            Continue(s)      |
-            Crate(s)         |
-            Digits(s)        |
-            DivideEquals(s)  |
-            DocComment(s)    |
-            Dollar(s)        |
-            DoubleColon(s)   |
-            DoubleEquals(s)  |
-            DoublePeriod(s)  |
-            DoublePipe(s)    |
-            Else(s)          |
-            Enum(s)          |
-            Equals(s)        |
-            Extern(s)        |
-            Fn(s)            |
-            For(s)           |
-            Hash(s)          |
-            Ident(s)         |
-            If(s)            |
-            Impl(s)          |
-            In(s)            |
-            LeftAngle(s)     |
-            LeftCurly(s)     |
-            LeftParen(s)     |
-            LeftSquare(s)    |
-            Let(s)           |
-            Lifetime(s)      |
-            Loop(s)          |
-            Match(s)         |
-            Minus(s)         |
-            MinusEquals(s)   |
-            Mod(s)           |
-            Move(s)          |
-            Mut(s)           |
-            Percent(s)       |
-            PercentEquals(s) |
-            Period(s)        |
-            Pipe(s)          |
-            Plus(s)          |
-            PlusEquals(s)    |
-            Pub(s)           |
-            QuestionMark(s)  |
-            Ref(s)           |
-            Return(s)        |
-            RightAngle(s)    |
-            RightCurly(s)    |
-            RightParen(s)    |
-            RightSquare(s)   |
-            Semicolon(s)     |
-            Slash(s)         |
-            Static(s)        |
-            String(s)        |
-            StringRaw(s)     |
-            Struct(s)        |
-            ThickArrow(s)    |
-            ThinArrow(s)     |
-            Tilde(s)         |
-            TimesEquals(s)   |
-            Trait(s)         |
-            TriplePeriod(s)  |
-            Type(s)          |
-            Unsafe(s)        |
-            Use(s)           |
-            Where(s)         |
-            While(s)         |
-            Whitespace(s)    => s
+            Ampersand(s)           |
+            AmpersandEquals(s)     |
+            As(s)                  |
+            Asterisk(s)            |
+            At(s)                  |
+            Backslash(s)           |
+            Bang(s)                |
+            Box(s)                 |
+            Break(s)               |
+            Byte(s)                |
+            ByteString(s)          |
+            ByteStringRaw(s)       |
+            Caret(s)               |
+            CaretEquals(s)         |
+            Character(s)           |
+            Colon(s)               |
+            Comma(s)               |
+            Comment(s)             |
+            Const(s)               |
+            Continue(s)            |
+            Crate(s)               |
+            Digits(s)              |
+            DivideEquals(s)        |
+            DocComment(s)          |
+            Dollar(s)              |
+            DoubleAmpersand(s)     |
+            DoubleColon(s)         |
+            DoubleEquals(s)        |
+            DoubleLeftAngle(s)     |
+            DoublePeriod(s)        |
+            DoublePipe(s)          |
+            DoubleRightAngle(s)    |
+            Else(s)                |
+            Enum(s)                |
+            Equals(s)              |
+            Extern(s)              |
+            Fn(s)                  |
+            For(s)                 |
+            GreaterThanOrEquals(s) |
+            Hash(s)                |
+            Ident(s)               |
+            If(s)                  |
+            Impl(s)                |
+            In(s)                  |
+            LeftAngle(s)           |
+            LeftCurly(s)           |
+            LeftParen(s)           |
+            LeftSquare(s)          |
+            LessThanOrEquals(s)    |
+            Let(s)                 |
+            Lifetime(s)            |
+            Loop(s)                |
+            Match(s)               |
+            Minus(s)               |
+            MinusEquals(s)         |
+            Mod(s)                 |
+            Move(s)                |
+            Mut(s)                 |
+            NotEqual(s)            |
+            Percent(s)             |
+            PercentEquals(s)       |
+            Period(s)              |
+            Pipe(s)                |
+            PipeEquals(s)          |
+            Plus(s)                |
+            PlusEquals(s)          |
+            Pub(s)                 |
+            QuestionMark(s)        |
+            Ref(s)                 |
+            Return(s)              |
+            RightAngle(s)          |
+            RightCurly(s)          |
+            RightParen(s)          |
+            RightSquare(s)         |
+            Semicolon(s)           |
+            ShiftLeftEquals(s)     |
+            ShiftRightEquals(s)    |
+            Slash(s)               |
+            Static(s)              |
+            String(s)              |
+            StringRaw(s)           |
+            Struct(s)              |
+            ThickArrow(s)          |
+            ThinArrow(s)           |
+            Tilde(s)               |
+            TimesEquals(s)         |
+            Trait(s)               |
+            TriplePeriod(s)        |
+            Type(s)                |
+            Unsafe(s)              |
+            Use(s)                 |
+            Where(s)               |
+            While(s)               |
+            Whitespace(s)          => s
         }
     }
 }
@@ -261,47 +284,67 @@ fn single_token<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token> {
         .one(map(byte_string, Token::ByteString))
         .one(map(byte_string_raw, Token::ByteStringRaw))
         .one(map(lifetime, Token::Lifetime))
-        .one(map(literal("->"), Token::ThinArrow))
-        .one(map(literal("=>"), Token::ThickArrow))
+
+        // Symbols; longest first
+        .one(map(literal(">>="), Token::ShiftRightEquals))
+        .one(map(literal("<<="), Token::ShiftLeftEquals))
+        .one(map(literal("..."), Token::TriplePeriod))
+
+        // Symbols - 2 character
+        .one(map(literal("!="), Token::NotEqual))
+        .one(map(literal("%="), Token::PercentEquals))
+        .one(map(literal("&&"), Token::DoubleAmpersand))
+        .one(map(literal("&="), Token::AmpersandEquals))
+        .one(map(literal("*="), Token::TimesEquals))
         .one(map(literal("+="), Token::PlusEquals))
         .one(map(literal("-="), Token::MinusEquals))
-        .one(map(literal("*="), Token::TimesEquals))
+        .one(map(literal("->"), Token::ThinArrow))
         .one(map(literal("/="), Token::DivideEquals))
-        .one(map(literal("%="), Token::PercentEquals))
-        .one(map(literal("^="), Token::CaretEquals))
+        .one(map(literal("<<"), Token::DoubleLeftAngle))
+        .one(map(literal("<="), Token::LessThanOrEquals))
         .one(map(literal("=="), Token::DoubleEquals))
-        .one(map(literal("="), Token::Equals))
-        .one(map(literal("+"), Token::Plus))
-        .one(map(literal("-"), Token::Minus))
-        .one(map(literal("@"), Token::At))
-        .one(map(literal("%"), Token::Percent))
-        .one(map(literal("#"), Token::Hash))
-        .one(map(literal("^"), Token::Caret))
+        .one(map(literal("=>"), Token::ThickArrow))
+        .one(map(literal(">="), Token::GreaterThanOrEquals))
+        .one(map(literal(">>"), Token::DoubleRightAngle))
+        .one(map(literal("^="), Token::CaretEquals))
+        .one(map(literal("|="), Token::PipeEquals))
+        .one(map(literal(".."), Token::DoublePeriod))
+        .one(map(literal("::"), Token::DoubleColon))
+        .one(map(literal("||"), Token::DoublePipe))
+
+        // Symbols - 1 character
         .one(map(literal("!"), Token::Bang))
+        .one(map(literal("#"), Token::Hash))
+        .one(map(literal("$"), Token::Dollar))
+        .one(map(literal("%"), Token::Percent))
+        .one(map(literal("&"), Token::Ampersand))
+        .one(map(literal("*"), Token::Asterisk))
+        .one(map(literal("+"), Token::Plus))
+        .one(map(literal(","), Token::Comma))
+        .one(map(literal("-"), Token::Minus))
+        .one(map(literal("."), Token::Period))
+        .one(map(literal("/"), Token::Slash))
+        .one(map(literal(":"), Token::Colon))
+        .one(map(literal(";"), Token::Semicolon))
+        .one(map(literal("="), Token::Equals))
+        .one(map(literal("?"), Token::QuestionMark))
+        .one(map(literal("@"), Token::At))
+        .one(map(literal("^"), Token::Caret))
+        .one(map(literal("|"), Token::Pipe))
         .one(map(literal("~"), Token::Tilde))
-        .one(map(literal("["), Token::LeftSquare))
-        .one(map(literal("]"), Token::RightSquare))
+        .one(map(literal(r#"\"#), Token::Backslash))
+
+        // Paired delimiters
         .one(map(literal("("), Token::LeftParen))
         .one(map(literal(")"), Token::RightParen))
         .one(map(literal("<"), Token::LeftAngle))
         .one(map(literal(">"), Token::RightAngle))
+        .one(map(literal("["), Token::LeftSquare))
+        .one(map(literal("]"), Token::RightSquare))
         .one(map(literal("{"), Token::LeftCurly))
         .one(map(literal("}"), Token::RightCurly))
-        .one(map(literal(";"), Token::Semicolon))
-        .one(map(literal("::"), Token::DoubleColon))
-        .one(map(literal(":"), Token::Colon))
-        .one(map(literal("||"), Token::DoublePipe))
-        .one(map(literal("|"), Token::Pipe))
-        .one(map(literal("*"), Token::Asterisk))
-        .one(map(literal("&"), Token::Ampersand))
-        .one(map(literal(","), Token::Comma))
-        .one(map(literal("..."), Token::TriplePeriod))
-        .one(map(literal(".."), Token::DoublePeriod))
-        .one(map(literal("."), Token::Period))
-        .one(map(literal("?"), Token::QuestionMark))
-        .one(map(literal("$"), Token::Dollar))
-        .one(map(literal("/"), Token::Slash))
-        .one(map(literal(r#"\"#), Token::Backslash))
+
+        // Keywords
         .one(map(literal("as"), Token::As))
         .one(map(literal("box"), Token::Box))
         .one(map(literal("break"), Token::Break))
