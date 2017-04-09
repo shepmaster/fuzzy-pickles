@@ -1521,6 +1521,7 @@ pub struct Trait {
 #[derive(Debug, Visit, Decompose)]
 pub enum TraitMember {
     Attribute(Attribute),
+    Const(TraitMemberConst),
     Function(TraitMemberFunction),
     Type(TraitMemberType),
     Whitespace(Vec<Whitespace>),
@@ -1538,6 +1539,15 @@ pub struct TraitMemberType {
     extent: Extent,
     name: Ident,
     bounds: Option<TraitBounds>,
+    whitespace: Vec<Whitespace>,
+}
+
+#[derive(Debug, Visit)]
+pub struct TraitMemberConst {
+    extent: Extent,
+    name: Ident,
+    typ: Type,
+    value: Option<Expression>,
     whitespace: Vec<Whitespace>,
 }
 
@@ -1564,6 +1574,7 @@ pub struct ImplOfTrait {
 #[derive(Debug, Visit, Decompose)]
 pub enum ImplMember {
     Attribute(Attribute),
+    Const(ImplConst),
     Function(ImplFunction),
     Type(ImplType),
     MacroCall(MacroCall),
@@ -1582,6 +1593,15 @@ pub struct ImplType {
     extent: Extent,
     name: Ident,
     typ: Type,
+    whitespace: Vec<Whitespace>,
+}
+
+#[derive(Debug, Visit)]
+pub struct ImplConst {
+    extent: Extent,
+    name: Ident,
+    typ: Type,
+    value: Expression,
     whitespace: Vec<Whitespace>,
 }
 
@@ -1824,6 +1844,7 @@ pub trait Visitor {
     fn visit_if(&mut self, &If) {}
     fn visit_if_let(&mut self, &IfLet) {}
     fn visit_impl(&mut self, &Impl) {}
+    fn visit_impl_const(&mut self, &ImplConst) {}
     fn visit_impl_function(&mut self, &ImplFunction) {}
     fn visit_impl_member(&mut self, &ImplMember) {}
     fn visit_impl_of_trait(&mut self, &ImplOfTrait) {}
@@ -1897,6 +1918,7 @@ pub trait Visitor {
     fn visit_trait_impl_argument_named(&mut self, &TraitImplArgumentNamed) {}
     fn visit_trait_impl_function_header(&mut self, &TraitImplFunctionHeader) {}
     fn visit_trait_member(&mut self, &TraitMember) {}
+    fn visit_trait_member_const(&mut self, &TraitMemberConst) {}
     fn visit_trait_member_function(&mut self, &TraitMemberFunction) {}
     fn visit_trait_member_type(&mut self, &TraitMemberType) {}
     fn visit_try_operator(&mut self, &TryOperator) {}
@@ -1987,6 +2009,7 @@ pub trait Visitor {
     fn exit_if(&mut self, &If) {}
     fn exit_if_let(&mut self, &IfLet) {}
     fn exit_impl(&mut self, &Impl) {}
+    fn exit_impl_const(&mut self, &ImplConst) {}
     fn exit_impl_function(&mut self, &ImplFunction) {}
     fn exit_impl_member(&mut self, &ImplMember) {}
     fn exit_impl_of_trait(&mut self, &ImplOfTrait) {}
@@ -2060,6 +2083,7 @@ pub trait Visitor {
     fn exit_trait_impl_argument_named(&mut self, &TraitImplArgumentNamed) {}
     fn exit_trait_impl_function_header(&mut self, &TraitImplFunctionHeader) {}
     fn exit_trait_member(&mut self, &TraitMember) {}
+    fn exit_trait_member_const(&mut self, &TraitMemberConst) {}
     fn exit_trait_member_function(&mut self, &TraitMemberFunction) {}
     fn exit_trait_member_type(&mut self, &TraitMemberType) {}
     fn exit_try_operator(&mut self, &TryOperator) {}
@@ -4603,6 +4627,7 @@ fn trait_impl_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Tra
     pm.alternate(pt)
         .one(map(trait_member_function, TraitMember::Function))
         .one(map(trait_member_type, TraitMember::Type))
+        .one(map(trait_member_const, TraitMember::Const))
         .one(map(attribute, TraitMember::Attribute))
         .one(map(whitespace, TraitMember::Whitespace))
         .finish()
@@ -4627,6 +4652,32 @@ fn trait_member_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Tra
         ws     = optional_whitespace(ws);
         _      = literal(";");
     }, |_, pt| TraitMemberType { extent: ex(spt, pt), name, bounds, whitespace: ws })
+}
+
+fn trait_member_const<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TraitMemberConst> {
+    sequence!(pm, pt, {
+        spt   = point;
+        _     = keyword("const");
+        ws    = whitespace;
+        name  = ident;
+        ws    = optional_whitespace(ws);
+        _     = literal(":");
+        ws    = optional_whitespace(ws);
+        typ   = typ;
+        ws    = optional_whitespace(ws);
+        value = optional(trait_member_const_value);
+        _     = literal(";");
+    }, |_, pt| TraitMemberConst { extent: ex(spt, pt), name, typ, value, whitespace: ws })
+}
+
+fn trait_member_const_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
+    sequence!(pm, pt, {
+        _x    = optional_whitespace(Vec::new());
+        _     = literal("=");
+        _x    = optional_whitespace(_x);
+        value = expression;
+        _x    = optional_whitespace(_x);
+    }, |_, _| value)
 }
 
 fn visibility<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Visibility> {
@@ -4775,6 +4826,7 @@ fn p_impl_of_trait<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplO
 fn impl_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplMember> {
     pm.alternate(pt)
         .one(map(attribute, ImplMember::Attribute))
+        .one(map(impl_const, ImplMember::Const))
         .one(map(impl_function, ImplMember::Function))
         .one(map(impl_type, ImplMember::Type))
         .one(map(item_macro_call, ImplMember::MacroCall))
@@ -4804,6 +4856,25 @@ fn impl_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplType> {
         ws   = optional_whitespace(ws);
         _    = literal(";");
     }, |_, pt| ImplType { extent: ex(spt, pt), name, typ, whitespace: ws })
+}
+
+fn impl_const<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplConst> {
+    sequence!(pm, pt, {
+        spt   = point;
+        _     = keyword("const");
+        ws    = whitespace;
+        name  = ident;
+        ws    = optional_whitespace(ws);
+        _     = literal(":");
+        ws    = optional_whitespace(ws);
+        typ   = typ;
+        ws    = optional_whitespace(ws);
+        _     = literal("=");
+        ws    = optional_whitespace(ws);
+        value = expression;
+        ws    = optional_whitespace(ws);
+        _     = literal(";");
+    }, |_, pt| ImplConst { extent: ex(spt, pt), name, typ, value, whitespace: ws })
 }
 
 // TODO: optional could take E that is `into`, or just a different one
@@ -5647,6 +5718,18 @@ mod test {
     }
 
     #[test]
+    fn item_trait_with_associated_const() {
+        let p = qp(item, "trait Foo { type Bar: u8; }");
+        assert_eq!(unwrap_progress(p).extent(), (0, 27))
+    }
+
+    #[test]
+    fn item_trait_with_associated_const_with_default() {
+        let p = qp(item, "trait Foo { const Bar: u8 = 42; }");
+        assert_eq!(unwrap_progress(p).extent(), (0, 33))
+    }
+
+    #[test]
     fn item_trait_with_supertraits() {
         let p = qp(item, "trait Foo: Bar + Baz {}");
         assert_eq!(unwrap_progress(p).extent(), (0, 23))
@@ -5818,6 +5901,12 @@ mod test {
     fn impl_with_associated_type() {
         let p = qp(p_impl, "impl Foo { type A = B; }");
         assert_eq!(unwrap_progress(p).extent, (0, 24))
+    }
+
+    #[test]
+    fn impl_with_associated_const() {
+        let p = qp(p_impl, "impl Foo { const A: i32 = 42; }");
+        assert_eq!(unwrap_progress(p).extent, (0, 31))
     }
 
     #[test]
