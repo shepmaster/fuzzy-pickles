@@ -610,105 +610,91 @@ fn literal<'s>(expected: &'static str) ->
 mod test {
     use super::*;
 
+    macro_rules! tokenize_as {
+        ($input:expr, $p:path) => ({
+            let toks = tok($input);
+            unwrap_as!(toks[0], $p)
+        })
+    }
+
+    macro_rules! unwrap_as {
+        ($tok:expr, $p:path) => {
+            match $tok {
+                $p(s) => s,
+                _ => panic!("Not a {}: {:?}", stringify!($p), $tok),
+            }
+        }
+    }
+
     fn tok(s: &str) -> Vec<Token> {
         Tokens::new(s).collect::<Result<_, _>>().expect("Tokenization failed")
     }
 
     #[test]
     fn character() {
-        let toks = tok("'a'");
-        match toks[0] {
-            Token::Character(s) => assert_eq!(s, (0, 3)),
-            _ => panic!("Not a character: {:?}", toks[0]),
-        }
+        let s = tokenize_as!("'a'", Token::Character);
+        assert_eq!(s, (0, 3));
     }
 
     #[test]
     fn character_escaped() {
-        let toks = tok(r#"'\\'"#);
-        match toks[0] {
-            Token::Character(s) => assert_eq!(s, (0, 4)),
-            _ => panic!("Not a character: {:?}", toks[0]),
-        }
+        let s = tokenize_as!(r#"'\\'"#, Token::Character);
+        assert_eq!(s, (0, 4));
     }
 
     #[test]
     fn character_escaped_hex() {
-        let toks = tok(r#"'\x41'"#);
-        match toks[0] {
-            Token::Character(s) => assert_eq!(s, (0, 6)),
-            _ => panic!("Not a character: {:?}", toks[0]),
-        }
+        let s = tokenize_as!(r#"'\x41'"#, Token::Character);
+        assert_eq!(s, (0, 6));
     }
 
     #[test]
     fn character_escaped_unicode() {
-        let toks = tok(r#"'\u{1F63B}'"#);
-        match toks[0] {
-            Token::Character(s) => assert_eq!(s, (0, 11)),
-            _ => panic!("Not a character: {:?}", toks[0]),
-        }
+        let s = tokenize_as!(r#"'\u{1F63B}'"#, Token::Character);
+        assert_eq!(s, (0, 11));
     }
 
     #[test]
     fn character_limited_to_single() {
         let toks = tok("impl<'a> Foo<'a> for Bar<'a> { }");
-        match toks[2] {
-            Token::Lifetime(s) => assert_eq!(s, (5, 7)),
-            _ => panic!("Not a lifetime"),
-        }
-        match toks[7] {
-            Token::Lifetime(s) => assert_eq!(s, (13, 15)),
-            _ => panic!("Not a lifetime"),
-        }
-        match toks[14] {
-            Token::Lifetime(s) => assert_eq!(s, (25, 27)),
-            _ => panic!("Not a lifetime"),
-        }
+
+        let s = unwrap_as!(toks[2], Token::Lifetime);
+        assert_eq!(s, (5, 7));
+
+        let s = unwrap_as!(toks[7], Token::Lifetime);
+        assert_eq!(s, (13, 15));
+
+        let s = unwrap_as!(toks[14], Token::Lifetime);
+        assert_eq!(s, (25, 27));
     }
 
     #[test]
     fn string_raw() {
-        let toks = tok(r###"r#"inner"#"###);
-        match toks[0] {
-            Token::StringRaw(s) => assert_eq!(s, (0, 10)),
-            _ => panic!("Not a raw string"),
-        }
+        let s = tokenize_as!(r###"r#"inner"#"###, Token::StringRaw);
+        assert_eq!(s, (0, 10));
     }
 
     #[test]
     fn byte() {
-        let toks = tok(r#"b'a'"#);
-        match toks[0] {
-            Token::Byte(s) => assert_eq!(s, (0, 4)),
-            _ => panic!("Not a byte: {:?}", toks[0]),
-        }
+        let s = tokenize_as!(r#"b'a'"#, Token::Byte);
+        assert_eq!(s, (0, 4));
     }
 
     #[test]
     fn byte_string() {
-        let toks = tok(r#"b"abc""#);
-        match toks[0] {
-            Token::ByteString(s) => assert_eq!(s, (0, 6)),
-            _ => panic!("Not a byte string"),
-        }
+        let s = tokenize_as!(r#"b"abc""#, Token::ByteString);
+        assert_eq!(s, (0, 6));
     }
 
     #[test]
     fn byte_string_raw() {
-        let toks = tok(r#"br"abc""#);
-        match toks[0] {
-            Token::ByteStringRaw(s) => assert_eq!(s, (0, 7)),
-            _ => panic!("Not a raw byte string: {:?}", toks[0]),
-        }
+        let s = tokenize_as!(r#"br"abc""#, Token::ByteStringRaw);
+        assert_eq!(s, (0, 7));
     }
 
     #[test]
     fn tilde_is_a_token_even_though_unused() {
-        let toks = tok("~");
-        match toks[0] {
-            Token::Tilde(s) => assert_eq!(s, (0, 1)),
-            _ => panic!("Not a tilde: {:?}", toks[0]),
-        }
+        let s = tokenize_as!("~", Token::Tilde);
+        assert_eq!(s, (0, 1));
     }
 }
