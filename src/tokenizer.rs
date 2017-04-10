@@ -108,7 +108,7 @@ pub enum Token {
 
     // Other
     Ident(Extent),
-    Digits(Extent),
+    Number(Extent),
     Whitespace(Extent),
     DocComment(Extent),
     Comment(Extent),
@@ -141,7 +141,6 @@ impl Token {
             Const(s)               |
             Continue(s)            |
             Crate(s)               |
-            Digits(s)              |
             DivideEquals(s)        |
             DocComment(s)          |
             Dollar(s)              |
@@ -179,6 +178,7 @@ impl Token {
             Move(s)                |
             Mut(s)                 |
             NotEqual(s)            |
+            Number(s)              |
             Percent(s)             |
             PercentEquals(s)       |
             Period(s)              |
@@ -222,7 +222,7 @@ impl Token {
 pub enum Error {
     Literal(&'static str),
     ExpectedIdent,
-    ExpectedDigits,
+    ExpectedNumber,
     ExpectedHex,
     ExpectedWhitespace,
     ExpectedComment,
@@ -377,7 +377,7 @@ fn single_token<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token> {
         .one(map(literal("where"), Token::Where))
         .one(map(literal("while"), Token::While))
         .one(map(ident, Token::Ident))
-        .one(map(digits, Token::Digits))
+        .one(map(number, Token::Number))
         .one(map(whitespace, Token::Whitespace))
         .finish()
 }
@@ -397,11 +397,55 @@ fn ident<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     split_point_at_non_zero_offset(pt, idx, Error::ExpectedIdent).map(|(_, e)| e)
 }
 
-fn digits<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
-    let ci = pt.s.chars();
-    let idx = ci.take_while(|c| c.is_digit(10)).map(|c| c.len_utf8()).sum();
+fn number<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+    sequence!(pm, pt, {
+        spt = point;
+        _   = number_value;
+        _   = optional(number_exponent);
+        _   = optional(ident);
+    }, |_, pt| ex(spt, pt))
+}
 
-    split_point_at_non_zero_offset(pt, idx, Error::ExpectedDigits).map(|(_, e)| e)
+fn number_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+    pm.alternate(pt)
+        .one(number_base("0b", 2))
+        .one(number_base("0x", 16))
+        .one(number_base("0o", 8))
+        .one(number_base("", 10))
+        .finish()
+}
+
+fn number_base<'s>(prefix: &'static str, radix: u32) ->
+    impl Fn(&mut Master<'s>, Point<'s>) -> Progress<'s, Extent>
+{
+    move |pm, pt| {
+        sequence!(pm, pt, {
+            spt = point;
+            _   = literal(prefix);
+            _   = number_digits(radix);
+            _   = optional(literal("."));
+            _   = optional(number_digits(radix));
+        }, |_, pt| ex(spt, pt))
+    }
+}
+
+fn number_digits<'s>(radix: u32) ->
+    impl Fn(&mut Master<'s>, Point<'s>) -> Progress<'s, Extent>
+{
+    move |_, pt| {
+        let ci = pt.s.chars();
+        let idx = ci.take_while(|&c| c.is_digit(radix) || c == '_').map(|c| c.len_utf8()).sum();
+
+        split_point_at_non_zero_offset(pt, idx, Error::ExpectedNumber).map(|(_, e)| e)
+    }
+}
+
+fn number_exponent<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+    sequence!(pm, pt, {
+        spt = point;
+        _   = literal("E");
+        _   = number_digits(10);
+    }, |_, pt| ex(spt, pt))
 }
 
 fn whitespace<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
@@ -696,5 +740,71 @@ mod test {
     fn tilde_is_a_token_even_though_unused() {
         let s = tokenize_as!("~", Token::Tilde);
         assert_eq!(s, (0, 1));
+    }
+
+    #[test]
+    fn number_binary() {
+        let s = tokenize_as!("0b0101", Token::Number);
+        assert_eq!(s, (0, 6));
+    }
+
+    #[test]
+    fn number_decimal() {
+        let s = tokenize_as!("123456", Token::Number);
+        assert_eq!(s, (0, 6));
+    }
+
+    #[test]
+    fn number_hexadecimal() {
+        let s = tokenize_as!("0xBeeF", Token::Number);
+        assert_eq!(s, (0, 6));
+    }
+
+    #[test]
+    fn number_octal() {
+        let s = tokenize_as!("0o0777", Token::Number);
+        assert_eq!(s, (0, 6));
+    }
+
+    #[test]
+    fn number_with_decimal() {
+        let s = tokenize_as!("0xA.", Token::Number);
+        assert_eq!(s, (0, 4));
+    }
+
+    #[test]
+    fn number_with_fractional_part() {
+        let s = tokenize_as!("0b01.10", Token::Number);
+        assert_eq!(s, (0, 7));
+    }
+
+    #[test]
+    fn number_with_exponent() {
+        let s = tokenize_as!("0b1000E7", Token::Number);
+        assert_eq!(s, (0, 8));
+    }
+
+    #[test]
+    fn number_with_type_suffix() {
+        let s = tokenize_as!("0o1234_usize", Token::Number);
+        assert_eq!(s, (0, 12));
+    }
+
+    #[test]
+    fn number_with_spacers() {
+        let s = tokenize_as!("0x0A_1b_2C_3d", Token::Number);
+        assert_eq!(s, (0, 13));
+    }
+
+    #[test]
+    fn number_with_everything() {
+        let s = tokenize_as!("0o__12__56__.__43__e__32__my_type", Token::Number);
+        assert_eq!(s, (0, 33));
+    }
+
+    #[test]
+    fn number_decimal_with_leading_spacer_is_an_ident() {
+        let s = tokenize_as!("_42", Token::Ident);
+        assert_eq!(s, (0, 3));
     }
 }
