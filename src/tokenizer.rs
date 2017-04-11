@@ -2,7 +2,7 @@ use unicode_xid::UnicodeXID;
 use peresil;
 use peresil::combinators::*;
 
-use super::{Extent, ex, split_point_at_non_zero_offset};
+use super::{Extent, ex, split_point_at_non_zero_offset, not, peek};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Decompose)]
 pub enum Token {
@@ -284,6 +284,9 @@ pub enum Error {
     ExpectedCharacter,
     UnterminatedRawString,
     UnableToTokenize(usize),
+
+    // Internal parsing errors, should be recovered
+    InvalidFollowForFractionalNumber,
 }
 
 impl peresil::Recoverable for Error {
@@ -522,6 +525,8 @@ fn number_fractional<'s>(radix: u32) ->
         sequence!(pm, pt, {
             spt = point;
             _   = literal(".");
+            _   = not(peek(literal(".")), Error::InvalidFollowForFractionalNumber);
+            _   = not(peek(ident), Error::InvalidFollowForFractionalNumber);
             _   = optional(number_digits(radix));
         }, |_, pt| ex(spt, pt))
     }
@@ -932,18 +937,46 @@ mod test {
 
     #[test]
     fn number_with_everything() {
-        let s = tokenize_as!("0o__12__56__.__43__e__32__my_type", Token::Number);
-        assert_eq!(s.extent(), (0, 33));
+        let s = tokenize_as!("0o__12__56__.43__e__32__my_type", Token::Number);
+        assert_eq!(s.extent(), (0, 31));
         let n = unwrap_as!(s, Number::Octal);
         assert_eq!(n.integral, (2, 12));
-        assert_eq!(n.fractional, Some((12, 19)));
-        assert_eq!(n.exponent, Some((20, 26)));
-        assert_eq!(n.type_suffix, Some((26, 33)));
+        assert_eq!(n.fractional, Some((12, 17)));
+        assert_eq!(n.exponent, Some((18, 24)));
+        assert_eq!(n.type_suffix, Some((24, 31)));
     }
 
     #[test]
     fn number_decimal_with_leading_spacer_is_an_ident() {
         let s = tokenize_as!("_42", Token::Ident);
         assert_eq!(s, (0, 3));
+    }
+
+    #[test]
+    fn number_followed_by_range_is_not_fractional() {
+        let toks = tok("1..2");
+
+        let s = unwrap_as!(toks[0], Token::Number);
+        assert_eq!(s.extent(), (0, 1));
+
+        let s = unwrap_as!(toks[1], Token::DoublePeriod);
+        assert_eq!(s, (1, 3));
+
+        let s = unwrap_as!(toks[2], Token::Number);
+        assert_eq!(s.extent(), (3, 4));
+    }
+
+    #[test]
+    fn number_followed_by_ident_is_not_fractional() {
+        let toks = tok("1.foo");
+
+        let s = unwrap_as!(toks[0], Token::Number);
+        assert_eq!(s.extent(), (0, 1));
+
+        let s = unwrap_as!(toks[1], Token::Period);
+        assert_eq!(s, (1, 2));
+
+        let s = unwrap_as!(toks[2], Token::Ident);
+        assert_eq!(s, (2, 5));
     }
 }
