@@ -404,46 +404,58 @@ fn single_token<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token> {
         .one(map(literal("{"), Token::LeftCurly))
         .one(map(literal("}"), Token::RightCurly))
 
-        // Keywords
-        .one(map(literal("as"), Token::As))
-        .one(map(literal("box"), Token::Box))
-        .one(map(literal("break"), Token::Break))
-        .one(map(literal("const"), Token::Const))
-        .one(map(literal("continue"), Token::Continue))
-        .one(map(literal("crate"), Token::Crate))
-        .one(map(literal("else"), Token::Else))
-        .one(map(literal("enum"), Token::Enum))
-        .one(map(literal("extern"), Token::Extern))
-        .one(map(literal("fn"), Token::Fn))
-        .one(map(literal("for"), Token::For))
-        .one(map(literal("if"), Token::If))
-        .one(map(literal("impl"), Token::Impl))
-        .one(map(literal("in"), Token::In))
-        .one(map(literal("let"), Token::Let))
-        .one(map(literal("loop"), Token::Loop))
-        .one(map(literal("match"), Token::Match))
-        .one(map(literal("mod"), Token::Mod))
-        .one(map(literal("move"), Token::Move))
-        .one(map(literal("mut"), Token::Mut))
-        .one(map(literal("pub"), Token::Pub))
-        .one(map(literal("ref"), Token::Ref))
-        .one(map(literal("return"), Token::Return))
-        .one(map(literal("self"), Token::SelfIdent))
-        .one(map(literal("static"), Token::Static))
-        .one(map(literal("struct"), Token::Struct))
-        .one(map(literal("trait"), Token::Trait))
-        .one(map(literal("type"), Token::Type))
-        .one(map(literal("use"), Token::Use))
-        .one(map(literal("unsafe"), Token::Unsafe))
-        .one(map(literal("where"), Token::Where))
-        .one(map(literal("while"), Token::While))
-        .one(map(ident, Token::Ident))
+        // Specialty items
+        .one(keyword_or_ident)
         .one(map(number, Token::Number))
         .one(map(whitespace, Token::Whitespace))
         .finish()
 }
 
-fn ident<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+fn keyword_or_ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token> {
+    ident_raw(pm, pt).map(|(s, extent)| {
+        match s {
+            "as" => Token::As(extent),
+            "box" => Token::Box(extent),
+            "break" => Token::Break(extent),
+            "const" => Token::Const(extent),
+            "continue" => Token::Continue(extent),
+            "crate" => Token::Crate(extent),
+            "else" => Token::Else(extent),
+            "enum" => Token::Enum(extent),
+            "extern" => Token::Extern(extent),
+            "fn" => Token::Fn(extent),
+            "for" => Token::For(extent),
+            "if" => Token::If(extent),
+            "impl" => Token::Impl(extent),
+            "in" => Token::In(extent),
+            "let" => Token::Let(extent),
+            "loop" => Token::Loop(extent),
+            "match" => Token::Match(extent),
+            "mod" => Token::Mod(extent),
+            "move" => Token::Move(extent),
+            "mut" => Token::Mut(extent),
+            "pub" => Token::Pub(extent),
+            "ref" => Token::Ref(extent),
+            "return" => Token::Return(extent),
+            "self" => Token::SelfIdent(extent),
+            "static" => Token::Static(extent),
+            "struct" => Token::Struct(extent),
+            "trait" => Token::Trait(extent),
+            "type" => Token::Type(extent),
+            "use" => Token::Use(extent),
+            "unsafe" => Token::Unsafe(extent),
+            "where" => Token::Where(extent),
+            "while" => Token::While(extent),
+            _ => Token::Ident(extent)
+        }
+    })
+}
+
+fn ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+    ident_raw(pm, pt).map(|(_, e)| e)
+}
+
+fn ident_raw<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, (&'s str, Extent)> {
     let mut ci = pt.s.chars();
     let mut idx = 0;
 
@@ -455,7 +467,7 @@ fn ident<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
         }
     }
 
-    split_point_at_non_zero_offset(pt, idx, Error::ExpectedIdent).map(|(_, e)| e)
+    split_point_at_non_zero_offset(pt, idx, Error::ExpectedIdent)
 }
 
 enum NumberPartial {
@@ -792,6 +804,18 @@ mod test {
 
     fn tok(s: &str) -> Vec<Token> {
         Tokens::new(s).collect::<Result<_, _>>().expect("Tokenization failed")
+    }
+
+    #[test]
+    fn keyword_is_not_an_ident() {
+        let s = tokenize_as!("for", Token::For);
+        assert_eq!(s, (0, 3))
+    }
+
+    #[test]
+    fn ident_can_have_keyword_substring() {
+        let s = tokenize_as!("form", Token::Ident);
+        assert_eq!(s, (0, 4))
     }
 
     #[test]
