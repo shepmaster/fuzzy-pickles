@@ -89,6 +89,7 @@ pub enum Token {
     Pub(Extent),
     Ref(Extent),
     Return(Extent),
+    SelfIdent(Extent),
     Static(Extent),
     Struct(Extent),
     Trait(Extent),
@@ -193,6 +194,7 @@ impl Token {
             RightCurly(s)          |
             RightParen(s)          |
             RightSquare(s)         |
+            SelfIdent(s)           |
             Semicolon(s)           |
             ShiftLeftEquals(s)     |
             ShiftRightEquals(s)    |
@@ -426,6 +428,7 @@ fn single_token<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token> {
         .one(map(literal("pub"), Token::Pub))
         .one(map(literal("ref"), Token::Ref))
         .one(map(literal("return"), Token::Return))
+        .one(map(literal("self"), Token::SelfIdent))
         .one(map(literal("static"), Token::Static))
         .one(map(literal("struct"), Token::Struct))
         .one(map(literal("trait"), Token::Trait))
