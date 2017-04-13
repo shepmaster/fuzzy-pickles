@@ -111,8 +111,10 @@ pub enum Token {
     Ident(Extent),
     Number(Number),
     Whitespace(Extent),
-    DocComment(Extent),
     Comment(Extent),
+    CommentBlock(Extent),
+    DocComment(Extent),
+    DocCommentBlock(Extent),
     Lifetime(Extent),
 }
 
@@ -139,11 +141,13 @@ impl Token {
             Colon(s)               |
             Comma(s)               |
             Comment(s)             |
+            CommentBlock(s)        |
             Const(s)               |
             Continue(s)            |
             Crate(s)               |
             DivideEquals(s)        |
             DocComment(s)          |
+            DocCommentBlock(s)     |
             Dollar(s)              |
             DoubleAmpersand(s)     |
             DoubleColon(s)         |
@@ -623,6 +627,14 @@ fn comment_or_doc_comment<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'
         let eol = pt.s.find("\n").unwrap_or(pt.s.len());
         let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
         Progress::success(pt, Token::Comment(ex(spt, pt)))
+    } else if pt.s.starts_with("/**") && !pt.s[3..].starts_with("*") && !pt.s[3..].starts_with("/") {
+        let eol = pt.s[3..].find("*/").map(|x| 3 + x + 2).unwrap_or(pt.s.len());
+        let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
+        Progress::success(pt, Token::DocCommentBlock(ex(spt, pt)))
+    } else if pt.s.starts_with("/*") {
+        let eol = pt.s[2..].find("*/").map(|x| 2 + x + 2).unwrap_or(pt.s.len());
+        let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
+        Progress::success(pt, Token::CommentBlock(ex(spt, pt)))
     } else {
         Progress::failure(pt, Error::ExpectedComment)
     }
@@ -1048,5 +1060,29 @@ mod test {
 
         let s = unwrap_as!(toks[2], Token::Ident);
         assert_eq!(s, (2, 5));
+    }
+
+    #[test]
+    fn comment_block() {
+        let s = tokenize_as!("/* hi */", Token::CommentBlock);
+        assert_eq!(s, (0, 8))
+    }
+
+    #[test]
+    fn comment_block_not_immediately_closed() {
+        let s = tokenize_as!("/*/ */", Token::CommentBlock);
+        assert_eq!(s, (0, 6))
+    }
+
+    #[test]
+    fn comment_block_immediately_closed() {
+        let s = tokenize_as!("/**/", Token::CommentBlock);
+        assert_eq!(s, (0, 4))
+    }
+
+    #[test]
+    fn doc_comment_block() {
+        let s = tokenize_as!("/** hi */", Token::DocCommentBlock);
+        assert_eq!(s, (0, 9))
     }
 }
