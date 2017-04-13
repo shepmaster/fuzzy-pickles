@@ -240,6 +240,23 @@ impl Number {
             Octal(n) => n.extent(),
         }
     }
+
+    pub fn into_simple(self) -> Option<Extent> {
+        match self {
+            Number::Decimal(d) => {
+                if d.fractional.is_none() &&
+                    d.exponent.is_none() &&
+                    d.type_suffix.is_none() &&
+                    d.underscores == 0
+                {
+                    Some(d.extent)
+                } else {
+                    None
+                }
+            }
+            _ => None
+        }
+    }
 }
 
 macro_rules! number {
@@ -251,6 +268,7 @@ macro_rules! number {
             pub fractional: Option<Extent>,
             pub exponent: Option<Extent>,
             pub type_suffix: Option<Extent>,
+            underscores: usize,
         }
 
         impl $name {
@@ -259,8 +277,8 @@ macro_rules! number {
                       exponent: Option<Extent>,
                       type_suffix: Option<Extent>) -> $name
             {
-                let NumberDetailsPartial { integral, fractional } = details;
-                $name { extent, integral, fractional, exponent, type_suffix }
+                let NumberDetailsPartial { integral, fractional, underscores } = details;
+                $name { extent, integral, fractional, exponent, type_suffix, underscores }
             }
 
             pub fn extent(&self) -> Extent {
@@ -501,6 +519,7 @@ impl NumberPartial {
 struct NumberDetailsPartial {
     integral: Extent,
     fractional: Option<Extent>,
+    underscores: usize,
 }
 
 fn number<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Number> {
@@ -526,10 +545,10 @@ fn number_base<'s>(prefix: &'static str, radix: u32) ->
 {
     move |pm, pt| {
         sequence!(pm, pt, {
-            _          = literal(prefix);
-            integral   = number_digits(radix);
-            fractional = optional(number_fractional(radix));
-        }, |_, _| NumberDetailsPartial { integral, fractional })
+            _                       = literal(prefix);
+            (integral, underscores) = number_digits(radix);
+            fractional              = optional(number_fractional(radix));
+        }, |_, _| NumberDetailsPartial { integral, fractional, underscores })
     }
 }
 
@@ -548,13 +567,18 @@ fn number_fractional<'s>(radix: u32) ->
 }
 
 fn number_digits<'s>(radix: u32) ->
-    impl Fn(&mut Master<'s>, Point<'s>) -> Progress<'s, Extent>
+    impl Fn(&mut Master<'s>, Point<'s>) -> Progress<'s, (Extent, usize)>
 {
     move |_, pt| {
+        let mut underscores = 0;
         let ci = pt.s.chars();
-        let idx = ci.take_while(|&c| c.is_digit(radix) || c == '_').map(|c| c.len_utf8()).sum();
+        let idx = ci
+            .take_while(|&c| c.is_digit(radix) || c == '_')
+            .inspect(|&c| if c == '_' { underscores += 1 })
+            .map(|c| c.len_utf8())
+            .sum();
 
-        split_point_at_non_zero_offset(pt, idx, Error::ExpectedNumber).map(|(_, e)| e)
+        split_point_at_non_zero_offset(pt, idx, Error::ExpectedNumber).map(|(_, e)| (e, underscores))
     }
 }
 
@@ -568,15 +592,15 @@ fn number_exponent<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Exten
 
 fn number_exponent_lowercase<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
-        _     = literal("e");
-        value = number_digits(10);
+        _          = literal("e");
+        (value, _) = number_digits(10);
     }, |_, _| value)
 }
 
 fn number_exponent_uppercase<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
-        _     = literal("E");
-        value = number_digits(10);
+        _          = literal("E");
+        (value, _) = number_digits(10);
     }, |_, _| value)
 }
 
@@ -900,6 +924,8 @@ mod test {
         assert_eq!(s.extent(), (0, 6));
         let n = unwrap_as!(s, Number::Decimal);
         assert_eq!(n.integral, (0, 6));
+        let n = s.into_simple();
+        assert_eq!(n, Some((0, 6)));
     }
 
     #[test]
@@ -916,6 +942,15 @@ mod test {
         assert_eq!(s.extent(), (0, 6));
         let n = unwrap_as!(s, Number::Octal);
         assert_eq!(n.integral, (2, 6));
+    }
+
+    #[test]
+    fn number_decimal_with_decimal() {
+        let s = tokenize_as!("0.", Token::Number);
+        assert_eq!(s.extent(), (0, 2));
+        let n = unwrap_as!(s, Number::Decimal);
+        assert_eq!(n.integral, (0, 1));
+        assert_eq!(n.fractional, Some((1, 2)));
     }
 
     #[test]
@@ -960,6 +995,14 @@ mod test {
         assert_eq!(s.extent(), (0, 13));
         let n = unwrap_as!(s, Number::Hexadecimal);
         assert_eq!(n.integral, (2, 13));
+    }
+
+    #[test]
+    fn number_decimal_with_spacers() {
+        let s = tokenize_as!("01_23", Token::Number);
+        assert_eq!(s.extent(), (0, 5));
+        let n = unwrap_as!(s, Number::Decimal);
+        assert_eq!(n.integral, (0, 5));
     }
 
     #[test]
