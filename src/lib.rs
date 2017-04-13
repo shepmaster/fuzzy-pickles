@@ -15,9 +15,91 @@ use peresil::combinators::*;
 
 use tokenizer::{Token, Tokens};
 
-type Point<'s> = peresil::SlicePoint<'s, Token>;
+type Point<'s> = TokenPoint<'s, Token>;
 type Master<'s> = peresil::ParseMaster<Point<'s>, Error, State<'s>>;
 type Progress<'s, T> = peresil::Progress<Point<'s>, T, Error>;
+
+// ------
+
+/// A Point that allows splitting the tokens based on parser whims.
+///
+/// The tokenizer greedily constructs tokens such that `>>=` will be
+/// one token. Unfortunately, this can occur in a context where we
+/// want separate tokens:
+///
+/// ```rust,ignore
+/// let foo: Vec<Vec<u8>>= vec![];
+/// ```
+///
+/// To handle this, if the requested token fails, we attempt to split
+/// the current token. If the head of the split matches, we accept it
+/// and track that we are in the middle of a split through
+/// `sub_offset`.
+///
+/// This has the nice benefit of getting our automatic rewind
+/// capability from the point and the grammar logic can stay clean.
+#[derive(Debug)]
+pub struct TokenPoint<'s, T: 's> {
+    pub offset: usize,
+    pub sub_offset: Option<u8>,
+    pub s: &'s [T],
+}
+
+impl<'s, T: 's> TokenPoint<'s, T> {
+    fn new(slice: &'s [T]) -> Self {
+        TokenPoint {
+            offset: 0,
+            sub_offset: None,
+            s: slice,
+        }
+    }
+
+    // You'd better know what you are doing, as this doesn't care about split tokens!
+    fn advance_by(&self, offset: usize) -> Self {
+        TokenPoint {
+            offset: self.offset + offset,
+            sub_offset: None,
+            s: &self.s[offset..],
+        }
+    }
+
+    fn location(&self) -> (usize, Option<u8>) {
+        (self.offset, self.sub_offset)
+    }
+}
+
+impl<'s, T> peresil::Point for TokenPoint<'s, T> {
+    fn zero() -> Self {
+        Self::new(&[])
+    }
+}
+
+impl<'s, T> Copy for TokenPoint<'s, T> {}
+impl<'s, T> Clone for TokenPoint<'s, T> {
+    fn clone(&self) -> Self { *self }
+}
+
+impl<'s, T> PartialOrd for TokenPoint<'s, T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<'s, T> Ord for TokenPoint<'s, T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.location().cmp(&other.location())
+    }
+}
+
+impl<'s, T> PartialEq for TokenPoint<'s, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.location().eq(&other.location())
+    }
+}
+
+impl<'s, T> Eq for TokenPoint<'s, T> {}
+
+// -----
 
 #[derive(Debug, Default)]
 struct State<'s> {
@@ -2661,10 +2743,92 @@ fn token<'s, F, T>(token_convert: F, error: Error) ->
     where F: Fn(Token) -> Option<T>
 {
     move |_, pt| {
-        match pt.s.get(0).and_then(|&t| token_convert(t)) {
-            Some(v) => Progress::success(pt.advance_by(1), v),
-            None => Progress::failure(pt, error),
+        let original_token = match pt.s.first() {
+            Some(&token) => token,
+            None => return Progress::failure(pt, error),
+        };
+
+        let token = match pt.sub_offset {
+            Some(sub_offset) => {
+                split(original_token, sub_offset).expect("Cannot resume a split token").1
+            },
+            None => original_token,
+        };
+
+        match token_convert(token) {
+            Some(v) => {
+                // We exactly matched the requested token
+                Progress::success(pt.advance_by(1), v)
+            }
+            None => {
+                // Maybe we can split the token
+                let sub_offset = pt.sub_offset.map(|x| x + 1).unwrap_or(0);
+                match split(original_token, sub_offset) {
+                    Some((token, _)) => {
+                        match token_convert(token) {
+                            // The split did match
+                            Some(v) => {
+                                let pt = Point {
+                                    sub_offset: Some(sub_offset),
+                                    ..pt
+                                };
+                                Progress::success(pt, v)
+                            }
+                            None => {
+                                // The split did not match
+                                Progress::failure(pt, error)
+                            }
+                        }
+                    }
+                    None => {
+                        // Cannot split
+                        Progress::failure(pt, error)
+                    }
+                }
+            }
         }
+    }
+}
+
+fn split(token: Token, n: u8) -> Option<(Token, Token)> {
+    match (token, n) {
+        (Token::DoubleLeftAngle(extent), 0) => {
+            let (s, e) = extent;
+            let a = Token::LeftAngle((s, s+1));
+            let b = Token::LeftAngle((s+1, e));
+            Some((a, b))
+        }
+        (Token::DoubleRightAngle(extent), 0) => {
+            let (s, e) = extent;
+            let a = Token::RightAngle((s, s+1));
+            let b = Token::RightAngle((s+1, e));
+            Some((a, b))
+        }
+        (Token::ShiftRightEquals(extent), 0) => {
+            let (s, e) = extent;
+            let a = Token::RightAngle((s, s+1));
+            let b = Token::GreaterThanOrEquals((s+1, e));
+            Some((a, b))
+        }
+        (Token::ShiftRightEquals(extent), 1) => {
+            let (s, e) = extent;
+            let a = Token::RightAngle((s+1, s+2));
+            let b = Token::Equals((s+2, e));
+            Some((a, b))
+        }
+        (Token::DoublePipe(extent), 0) => {
+            let (s, e) = extent;
+            let a = Token::Pipe((s, s+1));
+            let b = Token::Pipe((s+1, e));
+            Some((a, b))
+        }
+        (Token::DoubleAmpersand(extent), 0) => {
+            let (s, e) = extent;
+            let a = Token::Ampersand((s, s+1));
+            let b = Token::Ampersand((s+1, e));
+            Some((a, b))
+        }
+        _ => None
     }
 }
 
@@ -5676,6 +5840,13 @@ mod test {
     }
 
     #[test]
+    fn expr_let_explicit_type_and_value_not_confused_with_shift_right_assign() {
+        let p = unwrap_progress(qp(expression, "let foo: Vec<Vec<u8>>=vec![]"));
+        assert!(p.is_let());
+        assert_eq!(p.extent(), (0, 28));
+    }
+
+    #[test]
     fn expr_let_mut() {
         let p = qp(expression, "let mut pm = Master::new()");
         assert_eq!(unwrap_progress(p).extent(), (0, 26))
@@ -5759,7 +5930,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn expr_call_method_with_turbofish_nested() {
         let p = unwrap_progress(qp(expression, "e.into_iter().collect::<BTreeSet<_>>()"));
         assert!(p.is_call());
@@ -6122,7 +6292,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn expr_closure_no_args() {
         let p = qp(expression, "|| 42");
         assert_eq!(unwrap_progress(p).extent(), (0, 5))
@@ -6153,7 +6322,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn expr_closure_move() {
         let p = qp(expression, "move || 42");
         assert_eq!(unwrap_progress(p).extent(), (0, 10))
@@ -6269,6 +6437,12 @@ mod test {
     fn expr_reference() {
         let p = qp(expression, "&foo");
         assert_eq!(unwrap_progress(p).extent(), (0, 4))
+    }
+
+    #[test]
+    fn expr_reference_double() {
+        let p = qp(expression, "&&foo");
+        assert_eq!(unwrap_progress(p).extent(), (0, 5))
     }
 
     #[test]
@@ -6414,7 +6588,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn pathed_ident_with_turbofish() {
         let p = qp(pathed_ident, "foo::<Vec<u8>>");
         assert_eq!(unwrap_progress(p).extent, (0, 14))
@@ -6841,6 +7014,12 @@ mod test {
     fn type_disambiguation_without_disambiguation() {
         let p = qp(typ, "<Foo>");
         assert_eq!(unwrap_progress(p).extent(), (0, 5))
+    }
+
+    #[test]
+    fn type_disambiguation_with_double_angle_brackets() {
+        let p = qp(typ, "<<A as B> as Option<T>>");
+        assert_eq!(unwrap_progress(p).extent(), (0, 23))
     }
 
     #[test]
