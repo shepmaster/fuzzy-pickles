@@ -2161,8 +2161,8 @@ fn parse_until<'s>(p: &'static str) -> impl Fn(&mut Master<'s>, Point<'s>) -> Pr
 
 fn parse_nested_tokens_until<'s, O, C>(is_open: O, is_close: C) ->
     impl Fn(&mut Master<'s>, Point<'s>) -> Progress<'s, Extent>
-    where O: Fn(&Token<'s>) -> bool,
-          C: Fn(&Token<'s>) -> bool,
+    where O: Fn(&Token) -> bool,
+          C: Fn(&Token) -> bool,
 {
     move |_, spt| {
         let mut bytes: usize = 0;
@@ -2179,7 +2179,8 @@ fn parse_nested_tokens_until<'s, O, C>(is_open: O, is_close: C) ->
                 }
             }
 
-            bytes += token.data().len();
+            let (a, b) = token.extent();
+            bytes += b - a;
         }
 
         let pt = Point { s: &spt.s[bytes..], offset: spt.offset + bytes };
@@ -2698,15 +2699,17 @@ fn reject_keywords((s, ex): (&str, Extent)) -> Result<Extent, Error> {
     }
 }
 
-fn split_point_at_non_zero_offset<'s>(pt: Point<'s>, idx: usize, e: Error) -> Progress<'s, (&'s str, Extent)> {
+fn split_point_at_non_zero_offset<'s, E>(pt: Point<'s>, idx: usize, e: E) ->
+    peresil::Progress<Point<'s>, (&'s str, Extent), E>
+{
     if idx == 0 {
-        Progress::failure(pt, e)
+        peresil::Progress::failure(pt, e)
     } else {
         let (matched, tail) = pt.s.split_at(idx);
         let end = pt.offset + idx;
         let end_pt = Point { s: tail, offset: end };
 
-        Progress::success(end_pt, (matched, (pt.offset, end)))
+        peresil::Progress::success(end_pt, (matched, (pt.offset, end)))
     }
 }
 
