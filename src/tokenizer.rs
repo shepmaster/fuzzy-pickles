@@ -108,7 +108,7 @@ pub enum Token {
 
     // Other
     Ident(Extent),
-    Number(Extent),
+    Number(Number),
     Whitespace(Extent),
     DocComment(Extent),
     Comment(Extent),
@@ -178,7 +178,6 @@ impl Token {
             Move(s)                |
             Mut(s)                 |
             NotEqual(s)            |
-            Number(s)              |
             Percent(s)             |
             PercentEquals(s)       |
             Period(s)              |
@@ -213,10 +212,66 @@ impl Token {
             Use(s)                 |
             Where(s)               |
             While(s)               |
-            Whitespace(s)          => s
+            Whitespace(s)          => s,
+
+            Number(s) => s.extent(),
         }
     }
 }
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Decompose)]
+pub enum Number {
+    Binary(NumberBinary),
+    Decimal(NumberDecimal),
+    Hexadecimal(NumberHexadecimal),
+    Octal(NumberOctal),
+}
+
+impl Number {
+    fn extent(&self) -> Extent {
+        use self::Number::*;
+
+        match *self {
+            Binary(n) => n.extent(),
+            Decimal(n) => n.extent(),
+            Hexadecimal(n) => n.extent(),
+            Octal(n) => n.extent(),
+        }
+    }
+}
+
+macro_rules! number {
+    ($name:ident) => {
+        #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+        pub struct $name {
+            pub extent: Extent,
+            pub integral: Extent,
+            pub fractional: Option<Extent>,
+            pub exponent: Option<Extent>,
+            pub type_suffix: Option<Extent>,
+        }
+
+        impl $name {
+            fn finish(details: NumberDetailsPartial,
+                      extent: Extent,
+                      exponent: Option<Extent>,
+                      type_suffix: Option<Extent>) -> $name
+            {
+                let NumberDetailsPartial { integral, fractional } = details;
+                $name { extent, integral, fractional, exponent, type_suffix }
+            }
+
+            pub fn extent(&self) -> Extent {
+                self.extent
+            }
+        }
+    }
+}
+
+number!(NumberBinary);
+number!(NumberDecimal);
+number!(NumberHexadecimal);
+number!(NumberOctal);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Error {
@@ -397,33 +452,76 @@ fn ident<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     split_point_at_non_zero_offset(pt, idx, Error::ExpectedIdent).map(|(_, e)| e)
 }
 
-fn number<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
-    sequence!(pm, pt, {
-        spt = point;
-        _   = number_value;
-        _   = optional(number_exponent);
-        _   = optional(ident);
-    }, |_, pt| ex(spt, pt))
+enum NumberPartial {
+    Binary(NumberDetailsPartial),
+    Decimal(NumberDetailsPartial),
+    Hexadecimal(NumberDetailsPartial),
+    Octal(NumberDetailsPartial),
 }
 
-fn number_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+impl NumberPartial {
+    fn finish(self, extent: Extent, exponent: Option<Extent>, type_suffix: Option<Extent>) ->
+        Number
+    {
+        match self {
+            NumberPartial::Binary(v) => {
+                Number::Binary(NumberBinary::finish(v, extent, exponent, type_suffix))
+            },
+            NumberPartial::Decimal(v) => {
+                Number::Decimal(NumberDecimal::finish(v, extent, exponent, type_suffix))
+            },
+            NumberPartial::Hexadecimal(v) => {
+                Number::Hexadecimal(NumberHexadecimal::finish(v, extent, exponent, type_suffix))
+            },
+            NumberPartial::Octal(v) => {
+                Number::Octal(NumberOctal::finish(v, extent, exponent, type_suffix))
+            },
+        }
+    }
+}
+
+struct NumberDetailsPartial {
+    integral: Extent,
+    fractional: Option<Extent>,
+}
+
+fn number<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Number> {
+    sequence!(pm, pt, {
+        spt         = point;
+        value       = number_value;
+        exponent    = optional(number_exponent);
+        type_suffix = optional(ident);
+    }, |_, pt| value.finish(ex(spt, pt), exponent, type_suffix))
+}
+
+fn number_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, NumberPartial> {
     pm.alternate(pt)
-        .one(number_base("0b", 2))
-        .one(number_base("0x", 16))
-        .one(number_base("0o", 8))
-        .one(number_base("", 10))
+        .one(map(number_base("0b", 2), NumberPartial::Binary))
+        .one(map(number_base("0x", 16), NumberPartial::Hexadecimal))
+        .one(map(number_base("0o", 8), NumberPartial::Octal))
+        .one(map(number_base("", 10), NumberPartial::Decimal))
         .finish()
 }
 
 fn number_base<'s>(prefix: &'static str, radix: u32) ->
+    impl Fn(&mut Master<'s>, Point<'s>) -> Progress<'s, NumberDetailsPartial>
+{
+    move |pm, pt| {
+        sequence!(pm, pt, {
+            _          = literal(prefix);
+            integral   = number_digits(radix);
+            fractional = optional(number_fractional(radix));
+        }, |_, _| NumberDetailsPartial { integral, fractional })
+    }
+}
+
+fn number_fractional<'s>(radix: u32) ->
     impl Fn(&mut Master<'s>, Point<'s>) -> Progress<'s, Extent>
 {
     move |pm, pt| {
         sequence!(pm, pt, {
             spt = point;
-            _   = literal(prefix);
-            _   = number_digits(radix);
-            _   = optional(literal("."));
+            _   = literal(".");
             _   = optional(number_digits(radix));
         }, |_, pt| ex(spt, pt))
     }
@@ -440,12 +538,26 @@ fn number_digits<'s>(radix: u32) ->
     }
 }
 
+// TODO: add a case-insensitive matcher?
 fn number_exponent<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+    pm.alternate(pt)
+        .one(number_exponent_lowercase)
+        .one(number_exponent_uppercase)
+        .finish()
+}
+
+fn number_exponent_lowercase<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
-        spt = point;
-        _   = literal("E");
-        _   = number_digits(10);
-    }, |_, pt| ex(spt, pt))
+        _     = literal("e");
+        value = number_digits(10);
+    }, |_, _| value)
+}
+
+fn number_exponent_uppercase<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+    sequence!(pm, pt, {
+        _     = literal("E");
+        value = number_digits(10);
+    }, |_, _| value)
 }
 
 fn whitespace<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
@@ -745,61 +857,88 @@ mod test {
     #[test]
     fn number_binary() {
         let s = tokenize_as!("0b0101", Token::Number);
-        assert_eq!(s, (0, 6));
+        assert_eq!(s.extent(), (0, 6));
+        let n = unwrap_as!(s, Number::Binary);
+        assert_eq!(n.integral, (2, 6));
     }
 
     #[test]
     fn number_decimal() {
         let s = tokenize_as!("123456", Token::Number);
-        assert_eq!(s, (0, 6));
+        assert_eq!(s.extent(), (0, 6));
+        let n = unwrap_as!(s, Number::Decimal);
+        assert_eq!(n.integral, (0, 6));
     }
 
     #[test]
     fn number_hexadecimal() {
         let s = tokenize_as!("0xBeeF", Token::Number);
-        assert_eq!(s, (0, 6));
+        assert_eq!(s.extent(), (0, 6));
+        let n = unwrap_as!(s, Number::Hexadecimal);
+        assert_eq!(n.integral, (2, 6));
     }
 
     #[test]
     fn number_octal() {
         let s = tokenize_as!("0o0777", Token::Number);
-        assert_eq!(s, (0, 6));
+        assert_eq!(s.extent(), (0, 6));
+        let n = unwrap_as!(s, Number::Octal);
+        assert_eq!(n.integral, (2, 6));
     }
 
     #[test]
     fn number_with_decimal() {
         let s = tokenize_as!("0xA.", Token::Number);
-        assert_eq!(s, (0, 4));
+        assert_eq!(s.extent(), (0, 4));
+        let n = unwrap_as!(s, Number::Hexadecimal);
+        assert_eq!(n.integral, (2, 3));
+        assert_eq!(n.fractional, Some((3, 4)));
     }
 
     #[test]
     fn number_with_fractional_part() {
         let s = tokenize_as!("0b01.10", Token::Number);
-        assert_eq!(s, (0, 7));
+        assert_eq!(s.extent(), (0, 7));
+        let n = unwrap_as!(s, Number::Binary);
+        assert_eq!(n.integral, (2, 4));
+        assert_eq!(n.fractional, Some((4, 7)));
     }
 
     #[test]
     fn number_with_exponent() {
         let s = tokenize_as!("0b1000E7", Token::Number);
-        assert_eq!(s, (0, 8));
+        assert_eq!(s.extent(), (0, 8));
+        let n = unwrap_as!(s, Number::Binary);
+        assert_eq!(n.integral, (2, 6));
+        assert_eq!(n.exponent, Some((7, 8)));
     }
 
     #[test]
     fn number_with_type_suffix() {
         let s = tokenize_as!("0o1234_usize", Token::Number);
-        assert_eq!(s, (0, 12));
+        assert_eq!(s.extent(), (0, 12));
+        let n = unwrap_as!(s, Number::Octal);
+        assert_eq!(n.integral, (2, 7));
+        assert_eq!(n.type_suffix, Some((7, 12)));
     }
 
     #[test]
     fn number_with_spacers() {
         let s = tokenize_as!("0x0A_1b_2C_3d", Token::Number);
-        assert_eq!(s, (0, 13));
+        assert_eq!(s.extent(), (0, 13));
+        let n = unwrap_as!(s, Number::Hexadecimal);
+        assert_eq!(n.integral, (2, 13));
     }
 
     #[test]
     fn number_with_everything() {
         let s = tokenize_as!("0o__12__56__.__43__e__32__my_type", Token::Number);
-        assert_eq!(s, (0, 33));
+        assert_eq!(s.extent(), (0, 33));
+        let n = unwrap_as!(s, Number::Octal);
+        assert_eq!(n.integral, (2, 12));
+        assert_eq!(n.fractional, Some((12, 19)));
+        assert_eq!(n.exponent, Some((20, 26)));
+        assert_eq!(n.type_suffix, Some((26, 33)));
     }
 
     #[test]
