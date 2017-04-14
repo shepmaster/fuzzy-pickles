@@ -15,9 +15,24 @@ fn main() {
     f.read_to_string(&mut s).expect("unable to read file");
 
     let tokens = Tokens::new(&s);
-    let toks: Vec<_> = tokens.collect();
+    let toks: Result<Vec<_>, _> = tokens.collect();
 
-    let n = 50;
-    println!("Parsed {} tokens. The last {} were", toks.len(), n);
-    println!("{:?}", &toks[toks.len().saturating_sub(n)..]);
+    match toks {
+        Ok(toks) => {
+            for t in toks {
+                let extent = t.extent();
+                let tok_str = &s[extent.0..extent.1];
+                let x = format!("{:?}", t);
+
+                if tok_str.contains("\n") {
+                    println!("{: >30} | {:?}", x, tok_str);
+                } else {
+                    println!("{: >30} | {}", x, tok_str);
+                }
+            }
+        }
+        Err(e) => {
+            println!("failed to tokenize: {:?}", e)
+        }
+    }
 }

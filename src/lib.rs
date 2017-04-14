@@ -2169,6 +2169,7 @@ fn parse_nested_tokens_until<'s, O, C>(is_open: O, is_close: C) ->
         let mut depth: usize = 0;
 
         for token in Tokens::new(spt.s) {
+            let token = token.expect("Not handling tokenization errors yet");
             if is_open(&token) {
                 depth += 1;
             } else if is_close(&token) {

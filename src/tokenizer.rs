@@ -130,7 +130,8 @@ impl Token {
     }
 }
 
-enum Error {
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Error {
     Literal(&'static str),
     ExpectedIdent,
     ExpectedDigits,
@@ -139,6 +140,7 @@ enum Error {
     ExpectedComment,
     ExpectedCharacter,
     UnterminatedRawString,
+    UnableToTokenize(usize),
 }
 
 impl peresil::Recoverable for Error {
@@ -164,22 +166,21 @@ impl<'s> Tokens<'s> {
 }
 
 impl<'s> Iterator for Tokens<'s> {
-    type Item = Token;
+    type Item = Result<Token, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.pt.s.is_empty() {
+            return None
+        }
+
         match single_token(&mut self.pm, self.pt) {
             Progress { status: peresil::Status::Success(value), point } => {
                 self.pt = point;
-                Some(value)
+                Some(Ok(value))
             }
-            Progress { status: peresil::Status::Failure(_), .. } => {
-                // TODO: improved error reporting
-
-                // if !point.s.is_empty() {
-                //     let h = &point.s[..min(10, point.s.len())];
-                //     println!("Ending at offset {}: {:?}", self.pt.offset, h);
-                // }
-                None
+            Progress { status: peresil::Status::Failure(_), point } => {
+                // TODO: include the inner failure, split out master error type?
+                Some(Err(Error::UnableToTokenize(point.offset)))
             }
         }
     }
@@ -471,7 +472,7 @@ mod test {
     use super::*;
 
     fn tok(s: &str) -> Vec<Token> {
-        Tokens::new(s).collect()
+        Tokens::new(s).collect::<Result<_, _>>().expect("Tokenization failed")
     }
 
     #[test]
