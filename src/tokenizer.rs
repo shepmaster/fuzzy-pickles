@@ -4,7 +4,7 @@ use peresil::combinators::*;
 
 use super::{Extent, ex, split_point_at_non_zero_offset};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Decompose)]
 pub enum Token {
     LeftSquare(Extent),
     RightSquare(Extent),
@@ -126,48 +126,6 @@ impl Token {
             TimesEquals(s)   |
             TriplePeriod(s)  |
             Whitespace(s)    => s
-        }
-    }
-
-    pub fn is_left_paren(&self) -> bool {
-        match *self {
-            Token::LeftParen(_) => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_right_paren(&self) -> bool {
-        match *self {
-            Token::RightParen(_) => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_left_square(&self) -> bool {
-        match *self {
-            Token::LeftSquare(_) => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_right_square(&self) -> bool {
-        match *self {
-            Token::RightSquare(_) => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_left_curly(&self) -> bool {
-        match *self {
-            Token::LeftCurly(_) => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_right_curly(&self) -> bool {
-        match *self {
-            Token::RightCurly(_) => true,
-            _ => false,
         }
     }
 }
