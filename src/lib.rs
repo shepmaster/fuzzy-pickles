@@ -1013,6 +1013,7 @@ pub enum Expression {
     Number(Number),
     Parenthetical(Parenthetical),
     Range(Range),
+    RangeInclusive(RangeInclusive),
     Reference(Reference),
     Return(Return),
     Slice(Slice),
@@ -1056,6 +1057,7 @@ impl Expression {
             Expression::Match(Match { extent, .. })                   |
             Expression::Parenthetical(Parenthetical { extent, .. })   |
             Expression::Range(Range { extent, .. })                   |
+            Expression::RangeInclusive(RangeInclusive { extent, .. }) |
             Expression::Reference(Reference { extent, .. })           |
             Expression::Return(Return { extent, .. })                 |
             Expression::Slice(Slice { extent, .. })                   |
@@ -1364,6 +1366,13 @@ pub struct Range {
     rhs: Option<Box<Expression>>,
 }
 
+#[derive(Debug, Visit)]
+pub struct RangeInclusive {
+    extent: Extent,
+    lhs: Option<Box<Expression>>,
+    rhs: Option<Box<Expression>>,
+}
+
 #[derive(Debug, Visit, Decompose)]
 pub enum Array {
     Explicit(ArrayExplicit),
@@ -1511,6 +1520,7 @@ enum ExpressionTail {
     FieldAccess { field: FieldName },
     Call { args: Vec<Expression> },
     Range { rhs: Option<Box<Expression>> },
+    RangeInclusive { rhs: Option<Box<Expression>> },
     Slice { range: Box<Expression>, whitespace: Vec<Whitespace> },
     TryOperator,
 }
@@ -2055,6 +2065,7 @@ pub trait Visitor {
     fn visit_pattern_tuple_member(&mut self, &PatternTupleMember) {}
     fn visit_pattern_wildcard(&mut self, &PatternWildcard) {}
     fn visit_range(&mut self, &Range) {}
+    fn visit_range_inclusive(&mut self, &RangeInclusive) {}
     fn visit_reference(&mut self, &Reference) {}
     fn visit_return(&mut self, &Return) {}
     fn visit_self_argument(&mut self, &SelfArgument) {}
@@ -2220,6 +2231,7 @@ pub trait Visitor {
     fn exit_pattern_tuple_member(&mut self, &PatternTupleMember) {}
     fn exit_pattern_wildcard(&mut self, &PatternWildcard) {}
     fn exit_range(&mut self, &Range) {}
+    fn exit_range_inclusive(&mut self, &RangeInclusive) {}
     fn exit_reference(&mut self, &Reference) {}
     fn exit_return(&mut self, &Return) {}
     fn exit_self_argument(&mut self, &SelfArgument) {}
@@ -3182,6 +3194,7 @@ fn expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression
             .one(map(expr_let, Expression::Let))
             .one(expr_tuple_or_parenthetical)
             .one(map(expr_range, Expression::Range))
+            .one(map(expr_range_inclusive, Expression::RangeInclusive))
             .one(map(expr_array, Expression::Array))
             .one(map(character_literal, Expression::Character))
             .one(map(string_literal, Expression::String))
@@ -3239,6 +3252,13 @@ fn expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression
             }
             Some(ExpressionTail::Range { rhs }) => {
                 expression = Expression::Range(Range {
+                    extent: pm.state.ex(spt, pt),
+                    lhs: Some(Box::new(expression)),
+                    rhs
+                })
+            }
+            Some(ExpressionTail::RangeInclusive { rhs }) => {
+                expression = Expression::RangeInclusive(RangeInclusive {
                     extent: pm.state.ex(spt, pt),
                     lhs: Some(Box::new(expression)),
                     rhs
@@ -3621,7 +3641,23 @@ fn expr_range<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Range> {
         spt = point;
         _   = double_period;
         rhs = optional(expression);
-    }, |pm: &mut Master, pt| Range { extent: pm.state.ex(spt, pt), lhs: None, rhs: rhs.map(Box::new) } )
+    }, |pm: &mut Master, pt| Range {
+        extent: pm.state.ex(spt, pt),
+        lhs: None,
+        rhs: rhs.map(Box::new),
+    })
+}
+
+fn expr_range_inclusive<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, RangeInclusive> {
+    sequence!(pm, pt, {
+        spt = point;
+        _   = triple_period;
+        rhs = optional(expression);
+    }, |pm: &mut Master, pt| RangeInclusive {
+        extent: pm.state.ex(spt, pt),
+        lhs: None,
+        rhs: rhs.map(Box::new),
+    })
 }
 
 fn expr_array<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Array> {
@@ -3953,6 +3989,7 @@ fn expression_tail<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expre
         .one(expr_tail_call)
         .one(expr_tail_field_access)
         .one(expr_tail_range)
+        .one(expr_tail_range_inclusive)
         .one(expr_tail_slice)
         .one(expr_tail_try_operator)
         .finish()
@@ -4039,6 +4076,15 @@ fn expr_tail_range<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expre
         _   = double_period;
         rhs = optional(expression);
     }, |_, _| ExpressionTail::Range { rhs: rhs.map(Box::new) })
+}
+
+fn expr_tail_range_inclusive<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, ExpressionTail>
+{
+    sequence!(pm, pt, {
+        _   = triple_period;
+        rhs = optional(expression);
+    }, |_, _| ExpressionTail::RangeInclusive { rhs: rhs.map(Box::new) })
 }
 
 fn expr_tail_slice<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExpressionTail> {
@@ -6259,6 +6305,30 @@ mod test {
     fn expr_range_tail_all_space() {
         let p = qp(expression, "1 .. 2");
         assert_eq!(unwrap_progress(p).extent(), (0, 6))
+    }
+
+    #[test]
+    fn expr_range_inclusive_both() {
+        let p = qp(expression, "1...2");
+        assert_eq!(unwrap_progress(p).extent(), (0, 5))
+    }
+
+    #[test]
+    fn expr_range_inclusive_left() {
+        let p = qp(expression, "3...");
+        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+    }
+
+    #[test]
+    fn expr_range_inclusive_right() {
+        let p = qp(expression, "...4");
+        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+    }
+
+    #[test]
+    fn expr_range_inclusive_none() {
+        let p = qp(expression, "...");
+        assert_eq!(unwrap_progress(p).extent(), (0, 3))
     }
 
     #[test]
