@@ -1723,6 +1723,7 @@ pub struct TraitMemberType {
     extent: Extent,
     name: Ident,
     bounds: Option<TraitBounds>,
+    default: Option<Type>,
     whitespace: Vec<Whitespace>,
 }
 
@@ -4480,12 +4481,19 @@ fn trait_member_function<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s,
 
 fn trait_member_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TraitMemberType> {
     sequence!(pm, pt, {
-        spt    = point;
-        _      = kw_type;
-        name   = ident;
-        bounds = optional(generic_declaration_type_bounds);
-        _      = semicolon;
-    }, |pm: &mut Master, pt| TraitMemberType { extent: pm.state.ex(spt, pt), name, bounds, whitespace: Vec::new() })
+        spt     = point;
+        _       = kw_type;
+        name    = ident;
+        bounds  = optional(generic_declaration_type_bounds);
+        default = optional(generic_declaration_type_default);
+        _       = semicolon;
+    }, |pm: &mut Master, pt| TraitMemberType {
+        extent: pm.state.ex(spt, pt),
+        name,
+        bounds,
+        default,
+        whitespace: Vec::new(),
+    })
 }
 
 fn trait_member_const<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TraitMemberConst> {
@@ -5407,6 +5415,18 @@ mod test {
     fn item_trait_with_associated_type_with_bounds() {
         let p = qp(item, "trait Foo { type Bar: Baz; }");
         assert_eq!(unwrap_progress(p).extent(), (0, 28))
+    }
+
+    #[test]
+    fn item_trait_with_associated_type_with_default() {
+        let p = qp(item, "trait Foo { type Bar = (); }");
+        assert_eq!(unwrap_progress(p).extent(), (0, 28))
+    }
+
+    #[test]
+    fn item_trait_with_associated_type_with_bounds_and_default() {
+        let p = qp(item, "trait Foo { type Bar: Baz = (); }");
+        assert_eq!(unwrap_progress(p).extent(), (0, 33))
     }
 
     #[test]
