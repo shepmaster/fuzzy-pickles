@@ -1856,7 +1856,9 @@ pub struct ExternBlockMemberFunctionArgumentVariadic {
 pub struct TypeAlias {
     extent: Extent,
     visibility: Option<Visibility>,
-    name: Type,
+    name: Ident,
+    generics: Option<GenericDeclarations>,
+    wheres: Vec<Where>,
     defn: Type,
     whitespace: Vec<Whitespace>,
 }
@@ -4893,11 +4895,21 @@ fn type_alias<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeAlias>
         spt        = point;
         visibility = optional(visibility);
         _          = kw_type;
-        name       = typ;
+        name       = ident;
+        generics   = optional(generic_declarations);
+        wheres     = optional(where_clause);
         _          = equals;
         defn       = typ;
         _          = semicolon;
-    }, |pm: &mut Master, pt| TypeAlias { extent: pm.state.ex(spt, pt), visibility, name, defn, whitespace: Vec::new() })
+    }, |pm: &mut Master, pt| TypeAlias {
+        extent: pm.state.ex(spt, pt),
+        visibility,
+        name,
+        generics,
+        wheres: wheres.unwrap_or_else(Vec::new),
+        defn,
+        whitespace: Vec::new(),
+    })
 }
 
 fn module<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Module> {
@@ -5437,6 +5449,12 @@ mod test {
     fn item_type_alias_public() {
         let p = qp(item, "pub type Foo<T> = Bar<T, u8>;");
         assert_eq!(unwrap_progress(p).extent(), (0, 29))
+    }
+
+    #[test]
+    fn item_type_alias_with_trait_bounds() {
+        let p = qp(item, "type X<T: Foo> where T: Bar = Option<T>;");
+        assert_eq!(unwrap_progress(p).extent(), (0, 40))
     }
 
     #[test]
