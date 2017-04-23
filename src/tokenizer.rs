@@ -2,7 +2,7 @@ use unicode_xid::UnicodeXID;
 use peresil;
 use peresil::combinators::*;
 
-use super::{Extent, ex, split_point_at_non_zero_offset, not, peek};
+use super::{Extent, not, peek};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Decompose)]
 pub enum Token {
@@ -345,6 +345,7 @@ impl<'s> Iterator for Tokens<'s> {
 
         match single_token(&mut self.pm, self.pt) {
             Progress { status: peresil::Status::Success(value), point } => {
+                assert_ne!(self.pt.offset, point.offset, "Tokenizer did not make progress");
                 self.pt = point;
                 Some(Ok(value))
             }
@@ -815,6 +816,26 @@ fn literal<'s>(expected: &'static str) ->
     move |_, spt| {
         let (pt, _) = try_parse!(spt.consume_literal(expected).map_err(|_| Error::Literal(expected)));
         Progress::success(pt, ex(spt, pt))
+    }
+}
+
+fn ex(start: Point, end: Point) -> Extent {
+    let ex = (start.offset, end.offset);
+    assert!(ex.1 >= ex.0, "{} does not come before {}", ex.1, ex.0);
+    ex
+}
+
+fn split_point_at_non_zero_offset<'s>(pt: Point<'s>, idx: usize, e: Error) ->
+    Progress<'s, (&'s str, Extent)>
+{
+    if idx == 0 {
+        peresil::Progress::failure(pt, e)
+    } else {
+        let (matched, tail) = pt.s.split_at(idx);
+        let end = pt.offset + idx;
+        let end_pt = Point { s: tail, offset: end };
+
+        peresil::Progress::success(end_pt, (matched, (pt.offset, end)))
     }
 }
 
