@@ -5411,8 +5411,8 @@ mod test {
 
     #[test]
     fn item_trait_with_associated_const() {
-        let p = qp(item, "trait Foo { type Bar: u8; }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 27))
+        let p = qp(item, "trait Foo { const Bar: u8; }");
+        assert_eq!(unwrap_progress(p).extent(), (0, 28))
     }
 
     #[test]
