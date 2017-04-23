@@ -1677,6 +1677,7 @@ pub struct PatternRange {
 
 #[derive(Debug, Decompose)]
 pub enum PatternRangeComponent {
+    Ident(PathedIdent),
     Byte(Byte),
     Character(Character),
     Number(Number),
@@ -4283,6 +4284,7 @@ fn pattern_range<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Pattern
 
 fn pattern_range_component<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternRangeComponent> {
     pm.alternate(pt)
+        .one(map(pathed_ident, PatternRangeComponent::Ident))
         .one(map(character_literal, PatternRangeComponent::Character))
         .one(map(expr_byte, PatternRangeComponent::Byte))
         .one(map(number_literal, PatternRangeComponent::Number))
@@ -6918,6 +6920,12 @@ mod test {
     fn pattern_with_byte_range() {
         let p = qp(pattern, "b'a'...b'z'");
         assert_eq!(unwrap_progress(p).extent(), (0, 11))
+    }
+
+    #[test]
+    fn pattern_with_pathed_ident_range() {
+        let p = qp(pattern, "foo::a...z");
+        assert_eq!(unwrap_progress(p).extent(), (0, 10))
     }
 
     #[test]
