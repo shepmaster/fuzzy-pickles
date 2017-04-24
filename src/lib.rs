@@ -838,6 +838,7 @@ pub enum SelfArgument {
 #[derive(Debug, Visit)]
 pub struct SelfArgumentLonghand {
     extent: Extent,
+    is_mut: Option<Extent>,
     name: Ident,
     typ: Type,
     whitespace: Vec<Whitespace>,
@@ -2994,13 +2995,15 @@ fn self_argument<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, SelfArg
 
 fn self_argument_longhand<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, SelfArgumentLonghand> {
     sequence!(pm, pt, {
-        spt  = point;
-        name = kw_self_ident;
-        _    = colon;
-        typ  = typ;
-        _    = optional(comma);
+        spt    = point;
+        is_mut = optional(kw_mut);
+        name   = kw_self_ident;
+        _      = colon;
+        typ    = typ;
+        _      = optional(comma);
     }, |pm: &mut Master, pt| SelfArgumentLonghand {
         extent: pm.state.ex(spt, pt),
+        is_mut,
         name: Ident { extent: name },
         typ,
         whitespace: Vec::new(),
@@ -5759,6 +5762,12 @@ mod test {
     fn fn_with_self_type_explicit_type() {
         let p = qp(function_header, "fn foo(self: &mut Self)");
         assert_eq!(unwrap_progress(p).extent, (0, 23))
+    }
+
+    #[test]
+    fn fn_with_self_type_explicit_type_mutable() {
+        let p = qp(function_header, "fn foo(mut self: &mut Self)");
+        assert_eq!(unwrap_progress(p).extent, (0, 27))
     }
 
     #[test]
