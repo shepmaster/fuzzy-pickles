@@ -94,8 +94,9 @@ pub enum Token {
     Struct(Extent),
     Trait(Extent),
     Type(Extent),
-    Use(Extent),
+    Union(Extent),
     Unsafe(Extent),
+    Use(Extent),
     Where(Extent),
     While(Extent),
 
@@ -214,6 +215,7 @@ impl Token {
             Trait(s)               |
             TriplePeriod(s)        |
             Type(s)                |
+            Union(s)               |
             Unsafe(s)              |
             Use(s)                 |
             Where(s)               |
@@ -466,6 +468,7 @@ fn keyword_or_ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Toke
             "trait" => Token::Trait(extent),
             "type" => Token::Type(extent),
             "use" => Token::Use(extent),
+            "union" => Token::Union(extent),
             "unsafe" => Token::Unsafe(extent),
             "where" => Token::Where(extent),
             "while" => Token::While(extent),
