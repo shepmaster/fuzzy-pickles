@@ -714,6 +714,7 @@ pub struct PathComponent {
 #[derive(Debug, Visit)]
 pub struct Turbofish {
     extent: Extent,
+    lifetimes: Vec<Lifetime>,
     types: Vec<Type>,
 }
 
@@ -4134,12 +4135,13 @@ fn path_component<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PathCo
 
 fn turbofish<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Turbofish> {
     sequence!(pm, pt, {
-        spt   = point;
-        _     = double_colon;
-        _     = left_angle;
-        types = zero_or_more_tailed_values(comma, typ);
+        spt       = point;
+        _         = double_colon;
+        _         = left_angle;
+        lifetimes = zero_or_more_tailed_values(comma, lifetime);
+        types     = zero_or_more_tailed_values(comma, typ);
         _     = right_angle;
-    }, |pm: &mut Master, pt| Turbofish { extent: pm.state.ex(spt, pt), types: types })
+    }, |pm: &mut Master, pt| Turbofish { extent: pm.state.ex(spt, pt), lifetimes, types })
 }
 
 fn pattern<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Pattern> {
@@ -6710,6 +6712,12 @@ mod test {
     fn pathed_ident_with_turbofish() {
         let p = qp(pathed_ident, "foo::<Vec<u8>>");
         assert_eq!(unwrap_progress(p).extent, (0, 14))
+    }
+
+    #[test]
+    fn pathed_ident_with_turbofish_with_lifetime() {
+        let p = qp(pathed_ident, "StructWithLifetime::<'a, u8>");
+        assert_eq!(unwrap_progress(p).extent, (0, 28))
     }
 
     #[test]
