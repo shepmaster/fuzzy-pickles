@@ -1666,6 +1666,7 @@ pub struct PatternString {
 #[derive(Debug, Visit)]
 pub struct PatternNumber {
     extent: Extent,
+    is_negative: Option<Extent>,
     value: Number,
 }
 
@@ -1682,7 +1683,7 @@ pub enum PatternRangeComponent {
     Ident(PathedIdent),
     Byte(Byte),
     Character(Character),
-    Number(Number),
+    Number(PatternNumber),
 }
 
 #[derive(Debug, Visit)]
@@ -4261,7 +4262,11 @@ fn pattern_string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Patter
 }
 
 fn pattern_number<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternNumber> {
-    number_literal(pm, pt).map(|value| PatternNumber { extent: value.extent(), value })
+    sequence!(pm, pt, {
+        spt         = point;
+        is_negative = optional(minus);
+        value       = number_literal;
+    }, |pm: &mut Master, pt| PatternNumber { extent: pm.state.ex(spt, pt), is_negative, value })
 }
 
 fn pattern_reference<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternReference> {
@@ -4292,7 +4297,7 @@ fn pattern_range_component<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'
         .one(map(pathed_ident, PatternRangeComponent::Ident))
         .one(map(character_literal, PatternRangeComponent::Character))
         .one(map(expr_byte, PatternRangeComponent::Byte))
-        .one(map(number_literal, PatternRangeComponent::Number))
+        .one(map(pattern_number, PatternRangeComponent::Number))
         .finish()
 }
 
@@ -6897,6 +6902,12 @@ mod test {
     }
 
     #[test]
+    fn pattern_with_numeric_literal_negative() {
+        let p = qp(pattern, "- 42");
+        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+    }
+
+    #[test]
     fn pattern_with_reference() {
         let p = qp(pattern, "&a");
         assert_eq!(unwrap_progress(p).extent(), (0, 2))
@@ -6925,6 +6936,12 @@ mod test {
     fn pattern_with_numeric_range() {
         let p = qp(pattern, "1 ... 10");
         assert_eq!(unwrap_progress(p).extent(), (0, 8))
+    }
+
+    #[test]
+    fn pattern_with_numeric_range_negative() {
+        let p = qp(pattern, "-10 ... -1");
+        assert_eq!(unwrap_progress(p).extent(), (0, 10))
     }
 
     #[test]
