@@ -306,8 +306,22 @@ pub fn parse_rust_file(file: &str) -> Result<File, ErrorDetail> {
                 item.point
             },
             peresil::Status::Failure(e) => {
+                // Tokens stretch over an `Extent` and when we fail,
+                // we point at the location of the token that would
+                // have caused the problem. When we've run out of
+                // input, there is no such token!
+                //
+                // An alternate solution might be to add an implicit
+                // "end-of-file" token that we could always point to.
+                let offending_token_idx = item.point.offset;
+                let byte_offset = if offending_token_idx == 0 {
+                    0
+                } else {
+                    tokens[offending_token_idx - 1].extent().1
+                };
+
                 return Err(ErrorDetail {
-                    location: tokens[item.point.offset].extent().0,
+                    location: byte_offset,
                     errors: e.into_iter().collect(),
                 })
             },
@@ -7594,6 +7608,12 @@ mod test {
         let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 1);
         assert_eq!(p.separator_count, 0);
+    }
+
+    #[test]
+    fn error_on_last_token_does_not_panic() {
+        let r = parse_rust_file("an_ident");
+        assert!(r.is_err());
     }
 
     fn unwrap_progress<T>(p: TestResult<T>) -> T {
