@@ -227,6 +227,7 @@ pub enum Error {
     ExpectedTrait,
     ExpectedTriplePeriod,
     ExpectedType,
+    ExpectedUnion,
     ExpectedUnsafe,
     ExpectedUse,
     ExpectedWhere,
@@ -348,6 +349,7 @@ pub enum Item {
     Trait(Trait),
     TypeAlias(TypeAlias),
     Use(Use),
+    Union(Union),
 }
 
 impl Item {
@@ -367,6 +369,7 @@ impl Item {
             Item::Struct(Struct { extent, .. })           |
             Item::Trait(Trait { extent, .. })             |
             Item::TypeAlias(TypeAlias { extent, .. })     |
+            Item::Union(Union { extent, .. })             |
             Item::Use(Use { extent, .. })                 => extent,
         }
     }
@@ -795,6 +798,17 @@ pub struct StructDefinitionFieldUnnamed {
     attributes: Vec<Attribute>,
     visibility: Option<Visibility>,
     typ: Type,
+}
+
+#[derive(Debug, Visit)]
+pub struct Union {
+    pub extent: Extent,
+    visibility: Option<Visibility>,
+    name: Ident,
+    generics: Option<GenericDeclarations>,
+    wheres: Vec<Where>,
+    fields: Vec<StructDefinitionFieldNamed>,
+    whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, Visit)]
@@ -2131,6 +2145,7 @@ pub trait Visitor {
     fn visit_type_slice(&mut self, &TypeSlice) {}
     fn visit_type_tuple(&mut self, &TypeTuple) {}
     fn visit_unary(&mut self, &Unary) {}
+    fn visit_union(&mut self, &Union) {}
     fn visit_unsafe_block(&mut self, &UnsafeBlock) {}
     fn visit_use(&mut self, &Use) {}
     fn visit_use_tail(&mut self, &UseTail) {}
@@ -2297,6 +2312,7 @@ pub trait Visitor {
     fn exit_type_slice(&mut self, &TypeSlice) {}
     fn exit_type_tuple(&mut self, &TypeTuple) {}
     fn exit_unary(&mut self, &Unary) {}
+    fn exit_union(&mut self, &Union) {}
     fn exit_unsafe_block(&mut self, &UnsafeBlock) {}
     fn exit_use(&mut self, &Use) {}
     fn exit_use_tail(&mut self, &UseTail) {}
@@ -2635,6 +2651,7 @@ fn item<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Item> {
         .one(map(p_static, Item::Static))
         .one(map(p_struct, Item::Struct))
         .one(map(p_trait, Item::Trait))
+        .one(map(p_union, Item::Union))
         .one(map(p_use, Item::Use))
         .one(map(type_alias, Item::TypeAlias))
         .finish()
@@ -2699,6 +2716,7 @@ shims! [
     (kw_struct, Token::into_struct, Error::ExpectedStruct),
     (kw_trait, Token::into_trait, Error::ExpectedTrait),
     (kw_type, Token::into_type, Error::ExpectedType),
+    (kw_union, Token::into_union, Error::ExpectedUnion),
     (kw_unsafe, Token::into_unsafe, Error::ExpectedUnsafe),
     (kw_use, Token::into_use, Error::ExpectedUse),
     (kw_where, Token::into_where, Error::ExpectedWhere),
@@ -2917,6 +2935,7 @@ fn function_qualifier_extern<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
 fn ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ident> {
     pm.alternate(pt)
         .one(kw_self_ident)
+        .one(kw_union)
         .one(ident_normal)
         .finish()
         .map(|extent| Ident { extent })
@@ -4397,6 +4416,28 @@ fn struct_defn_field<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Str
         attributes,
         name,
         typ,
+        whitespace: Vec::new(),
+    })
+}
+
+fn p_union<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Union> {
+    sequence!(pm, pt, {
+        spt        = point;
+        visibility = optional(visibility);
+        _          = kw_union;
+        name       = ident;
+        generics   = optional(generic_declarations);
+        wheres     = optional(where_clause);
+        _          = left_curly;
+        fields     = zero_or_more_tailed_values(comma, struct_defn_field);
+        _          = right_curly;
+    }, |pm: &mut Master, pt| Union {
+        extent: pm.state.ex(spt, pt),
+        visibility,
+        name,
+        generics,
+        wheres: wheres.unwrap_or_else(Vec::new),
+        fields,
         whitespace: Vec::new(),
     })
 }
@@ -7254,6 +7295,48 @@ mod test {
     fn struct_with_tuple_and_where_clause() {
         let p = qp(p_struct, "struct S<A>(A) where A: Foo;");
         assert_eq!(unwrap_progress(p).extent, (0, 28))
+    }
+
+    #[test]
+    fn union_basic() {
+        let p = qp(p_union, "union U { field: TheType, other: OtherType }");
+        assert_eq!(unwrap_progress(p).extent, (0, 44))
+    }
+
+    #[test]
+    fn union_is_still_an_ident() {
+        let p = qp(p_union, "union union { union: union }");
+        assert_eq!(unwrap_progress(p).extent, (0, 28))
+    }
+
+    #[test]
+    fn union_with_generic_declarations() {
+        let p = qp(p_union, "union S<T> { field: Option<T> }");
+        assert_eq!(unwrap_progress(p).extent, (0, 31))
+    }
+
+    #[test]
+    fn union_with_where_clause() {
+        let p = qp(p_union, "union S<A> where A: Foo { a: A }");
+        assert_eq!(unwrap_progress(p).extent, (0, 32))
+    }
+
+    #[test]
+    fn union_public() {
+        let p = qp(p_union, "pub union S {}");
+        assert_eq!(unwrap_progress(p).extent, (0, 14))
+    }
+
+    #[test]
+    fn union_public_field() {
+        let p = qp(p_union, "union S { pub age: u8 }");
+        assert_eq!(unwrap_progress(p).extent, (0, 23))
+    }
+
+    #[test]
+    fn union_with_attributed_field() {
+        let p = qp(p_union, "union S { #[foo(bar)] #[baz(quux)] field: u8 }");
+        assert_eq!(unwrap_progress(p).extent, (0, 46))
     }
 
     #[test]
