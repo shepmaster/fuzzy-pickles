@@ -2,7 +2,7 @@ language: rust
 rust: nightly
 cache: cargo
 sudo: false
-script: |
-  cargo build --verbose
-  cargo test --verbose
-  cargo run --bin=stats src/lib.rs > /dev/null
+script:
+- cargo build --verbose
+- cargo test --verbose
+- cargo run --bin=stats src/lib.rs > /dev/null
