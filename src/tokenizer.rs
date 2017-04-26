@@ -117,6 +117,7 @@ pub enum Token {
     DocComment(Extent),
     DocCommentBlock(Extent),
     Lifetime(Extent),
+    EndOfFile(Extent),
 }
 
 impl Token {
@@ -158,6 +159,7 @@ impl Token {
             DoublePipe(s)          |
             DoubleRightAngle(s)    |
             Else(s)                |
+            EndOfFile(s)           |
             Enum(s)                |
             Equals(s)              |
             Extern(s)              |
@@ -326,6 +328,7 @@ type Progress<'s, T> = peresil::Progress<Point<'s>, T, Error>;
 pub struct Tokens<'s> {
     pm: Master<'s>,
     pt: Point<'s>,
+    is_exhausted: bool,
 }
 
 impl<'s> Tokens<'s> {
@@ -333,6 +336,7 @@ impl<'s> Tokens<'s> {
         Tokens {
             pm: Master::new(),
             pt: Point::new(code),
+            is_exhausted: false,
         }
     }
 }
@@ -341,8 +345,13 @@ impl<'s> Iterator for Tokens<'s> {
     type Item = Result<Token, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.pt.s.is_empty() {
+        if self.is_exhausted {
             return None
+        }
+
+        if self.pt.s.is_empty() {
+            self.is_exhausted = true;
+            return Some(Ok(Token::EndOfFile((self.pt.offset, self.pt.offset))));
         }
 
         match single_token(&mut self.pm, self.pt) {
@@ -1108,5 +1117,11 @@ mod test {
     fn doc_comment_block() {
         let s = tokenize_as!("/** hi */", Token::DocCommentBlock);
         assert_eq!(s, (0, 9))
+    }
+
+    #[test]
+    fn end_of_file() {
+        let s = tokenize_as!("", Token::EndOfFile);
+        assert_eq!(s, (0, 0))
     }
 }
