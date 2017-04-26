@@ -295,7 +295,7 @@ pub fn parse_rust_file(file: &str) -> Result<File, ErrorDetail> {
     let mut items = Vec::new();
 
     loop {
-        if pt.s.is_empty() { break }
+        if pt.s.first().map(Token::is_end_of_file).unwrap_or(true) { break }
 
         let item = item(&mut pm, pt);
         let item = pm.finish(item);
@@ -306,22 +306,8 @@ pub fn parse_rust_file(file: &str) -> Result<File, ErrorDetail> {
                 item.point
             },
             peresil::Status::Failure(e) => {
-                // Tokens stretch over an `Extent` and when we fail,
-                // we point at the location of the token that would
-                // have caused the problem. When we've run out of
-                // input, there is no such token!
-                //
-                // An alternate solution might be to add an implicit
-                // "end-of-file" token that we could always point to.
-                let offending_token_idx = item.point.offset;
-                let byte_offset = if offending_token_idx == 0 {
-                    0
-                } else {
-                    tokens[offending_token_idx - 1].extent().1
-                };
-
                 return Err(ErrorDetail {
-                    location: byte_offset,
+                    location: tokens[item.point.offset].extent().0,
                     errors: e.into_iter().collect(),
                 })
             },
@@ -2375,7 +2361,9 @@ fn parse_nested_until<'s, O, C>(is_open: O, is_close: C) ->
         let mut depth: usize = 0;
 
         for token in spt.s {
-            if is_open(token) {
+            if token.is_end_of_file() {
+                break;
+            } else if is_open(token) {
                 depth += 1;
             } else if is_close(token) {
                 if depth == 0 {
@@ -7632,8 +7620,20 @@ mod test {
     }
 
     #[test]
+    fn can_parse_an_empty_rust_file() {
+        let r = parse_rust_file("");
+        assert!(r.is_ok());
+    }
+
+    #[test]
     fn error_on_last_token_does_not_panic() {
         let r = parse_rust_file("an_ident");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn error_on_unclosed_macro_args_does_not_panic() {
+        let r = parse_rust_file("c!(");
         assert!(r.is_err());
     }
 
