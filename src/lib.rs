@@ -1584,6 +1584,7 @@ pub enum PatternKind {
     ByteString(PatternByteString),
     Character(PatternCharacter),
     Ident(PatternIdent), // TODO: split into ident and enumtuple
+    MacroCall(PatternMacroCall),
     Number(PatternNumber),
     Range(PatternRange),
     Reference(PatternReference),
@@ -1603,6 +1604,7 @@ impl PatternKind {
             Character(PatternCharacter { extent, .. })   |
             Ident(PatternIdent { extent, .. })           |
             Number(PatternNumber { extent, .. })         |
+            MacroCall(PatternMacroCall { extent, .. })   |
             Range(PatternRange { extent, .. })           |
             Reference(PatternReference { extent, .. })   |
             String(PatternString { extent, .. })         |
@@ -1696,6 +1698,12 @@ pub struct PatternNumber {
     extent: Extent,
     is_negative: Option<Extent>,
     value: Number,
+}
+
+#[derive(Debug, Visit)]
+pub struct PatternMacroCall {
+    extent: Extent,
+    value: MacroCall,
 }
 
 #[derive(Debug, Visit)]
@@ -2088,6 +2096,7 @@ pub trait Visitor {
     fn visit_pattern_byte_string(&mut self, &PatternByteString) {}
     fn visit_pattern_character(&mut self, &PatternCharacter) {}
     fn visit_pattern_ident(&mut self, &PatternIdent) {}
+    fn visit_pattern_macro_call(&mut self, &PatternMacroCall) {}
     fn visit_pattern_number(&mut self, &PatternNumber) {}
     fn visit_pattern_range(&mut self, &PatternRange) {}
     fn visit_pattern_reference(&mut self, &PatternReference) {}
@@ -2255,6 +2264,7 @@ pub trait Visitor {
     fn exit_pattern_byte_string(&mut self, &PatternByteString) {}
     fn exit_pattern_character(&mut self, &PatternCharacter) {}
     fn exit_pattern_ident(&mut self, &PatternIdent) {}
+    fn exit_pattern_macro_call(&mut self, &PatternMacroCall) {}
     fn exit_pattern_number(&mut self, &PatternNumber) {}
     fn exit_pattern_range(&mut self, &PatternRange) {}
     fn exit_pattern_reference(&mut self, &PatternReference) {}
@@ -4208,6 +4218,7 @@ fn pattern_kind<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternK
         .one(map(pattern_string, PatternKind::String))
         .one(map(pattern_struct, PatternKind::Struct))
         .one(map(pattern_tuple, PatternKind::Tuple))
+        .one(map(pattern_macro_call, PatternKind::MacroCall))
         // Must be last, otherwise it collides with struct names
         .one(map(pattern_ident, PatternKind::Ident))
         .finish()
@@ -4332,6 +4343,10 @@ fn pattern_range_component<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'
         .one(map(expr_byte, PatternRangeComponent::Byte))
         .one(map(pattern_number, PatternRangeComponent::Number))
         .finish()
+}
+
+fn pattern_macro_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternMacroCall> {
+    expr_macro_call(pm, pt).map(|value| PatternMacroCall { extent: value.extent, value })
 }
 
 fn p_struct<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Struct> {
@@ -7015,6 +7030,12 @@ mod test {
     fn pattern_with_pathed_ident_range() {
         let p = qp(pattern, "foo::a...z");
         assert_eq!(unwrap_progress(p).extent(), (0, 10))
+    }
+
+    #[test]
+    fn pattern_with_macro_call() {
+        let p = qp(pattern, "foo![]");
+        assert_eq!(unwrap_progress(p).extent(), (0, 6))
     }
 
     #[test]
