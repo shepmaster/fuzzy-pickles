@@ -11,6 +11,8 @@ extern crate unicode_xid;
 pub mod tokenizer;
 
 use std::collections::BTreeSet;
+use std::fmt;
+
 use peresil::combinators::*;
 
 use tokenizer::{Token, Tokens};
@@ -256,28 +258,41 @@ pub struct ErrorDetailText<'a> {
     text: &'a str,
 }
 
-use std::fmt;
-
 impl<'a> fmt::Display for ErrorDetailText<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let (head, tail) = self.text.split_at(self.detail.location);
-        let start_of_line = head.rfind("\n").unwrap_or(0);
-        let end_of_line = tail.find("\n").unwrap_or_else(|| tail.len());
+        let human = HumanTextError::new(self.text, self.detail.location);
 
-        let head_line = &head[start_of_line..];
-        let tail_line = &tail[..end_of_line];
-
-        let line = head.matches("\n").count() + 1; // Normally the first line is #1, so add one
-        let col = head_line.len();
-
-        writeln!(f, "Unable to parse text (line {}, column {})", line, col)?;
-        writeln!(f, "{}{}", head_line, tail_line)?;
-        writeln!(f, "{:>width$}", "^", width = col)?;
+        writeln!(f, "Unable to parse text (line {}, column {})", human.line, human.column)?;
+        writeln!(f, "{}{}", human.head_of_line, human.tail_of_line)?;
+        writeln!(f, "{:>width$}", "^", width = human.column)?;
         writeln!(f, "Expected:")?;
         for e in &self.detail.errors {
             writeln!(f, "  {:?}", e)?; // TODO: should be Display
         }
         Ok(())
+    }
+}
+
+struct HumanTextError<'a> {
+    head_of_line: &'a str,
+    tail_of_line: &'a str,
+    line: usize,
+    column: usize,
+}
+
+impl<'a> HumanTextError<'a> {
+    fn new(text: &'a str, location: usize) -> HumanTextError<'a> {
+        let (head, tail) = text.split_at(location);
+        let start_of_line = head.rfind("\n").unwrap_or(0);
+        let end_of_line = tail.find("\n").unwrap_or_else(|| tail.len());
+
+        let head_of_line = &head[start_of_line..];
+        let tail_of_line = &tail[..end_of_line];
+
+        let line = head.matches("\n").count() + 1; // Normally the first line is #1, so add one
+        let column = head_of_line.len();
+
+        HumanTextError { head_of_line, tail_of_line, line, column }
     }
 }
 

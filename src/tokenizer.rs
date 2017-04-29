@@ -1,8 +1,11 @@
+use std::collections::BTreeSet;
+use std::fmt;
+
 use unicode_xid::UnicodeXID;
 use peresil;
 use peresil::combinators::*;
 
-use super::{Extent, not, peek};
+use super::{Extent, HumanTextError, not, peek};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Decompose)]
 pub enum Token {
@@ -301,7 +304,7 @@ number!(NumberDecimal);
 number!(NumberHexadecimal);
 number!(NumberOctal);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Error {
     Literal(&'static str),
     ExpectedIdent,
@@ -311,7 +314,6 @@ pub enum Error {
     ExpectedComment,
     ExpectedCharacter,
     UnterminatedRawString,
-    UnableToTokenize(usize),
 
     // Internal parsing errors, should be recovered
     InvalidFollowForFractionalNumber,
@@ -319,6 +321,39 @@ pub enum Error {
 
 impl peresil::Recoverable for Error {
     fn recoverable(&self) -> bool { true }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct ErrorDetail {
+    location: usize,
+    errors: BTreeSet<Error>,
+}
+
+impl ErrorDetail {
+    pub fn with_text<'a>(&'a self, text: &'a str) -> ErrorDetailText<'a> {
+        ErrorDetailText { detail: self, text }
+    }
+}
+
+#[derive(Debug)]
+pub struct ErrorDetailText<'a> {
+    detail: &'a ErrorDetail,
+    text: &'a str,
+}
+
+impl<'a> fmt::Display for ErrorDetailText<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let human = HumanTextError::new(self.text, self.detail.location);
+
+        writeln!(f, "Unable to tokenize text (line {}, column {})", human.line, human.column)?;
+        writeln!(f, "{}{}", human.head_of_line, human.tail_of_line)?;
+        writeln!(f, "{:>width$}", "^", width = human.column)?;
+        writeln!(f, "Expected:")?;
+        for e in &self.detail.errors {
+            writeln!(f, "  {:?}", e)?; // TODO: should be Display
+        }
+        Ok(())
+    }
 }
 
 type Point<'s> = peresil::StringPoint<'s>;
@@ -342,7 +377,7 @@ impl<'s> Tokens<'s> {
 }
 
 impl<'s> Iterator for Tokens<'s> {
-    type Item = Result<Token, Error>;
+    type Item = Result<Token, ErrorDetail>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.is_exhausted {
@@ -354,15 +389,20 @@ impl<'s> Iterator for Tokens<'s> {
             return Some(Ok(Token::EndOfFile((self.pt.offset, self.pt.offset))));
         }
 
-        match single_token(&mut self.pm, self.pt) {
-            Progress { status: peresil::Status::Success(value), point } => {
+        let tok = single_token(&mut self.pm, self.pt);
+        let tok = self.pm.finish(tok);
+
+        match tok {
+            peresil::Progress { status: peresil::Status::Success(value), point } => {
                 assert_ne!(self.pt.offset, point.offset, "Tokenizer did not make progress");
                 self.pt = point;
                 Some(Ok(value))
             }
-            Progress { status: peresil::Status::Failure(_), point } => {
-                // TODO: include the inner failure, split out master error type?
-                Some(Err(Error::UnableToTokenize(point.offset)))
+            peresil::Progress { status: peresil::Status::Failure(errors), point } => {
+                Some(Err(ErrorDetail {
+                    location: point.offset,
+                    errors: errors.into_iter().collect(),
+                }))
             }
         }
     }
