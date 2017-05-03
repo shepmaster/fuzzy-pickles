@@ -19,15 +19,15 @@ fn main() {
 
     match toks {
         Ok(toks) => {
-            for t in toks {
+            for (i, t) in toks.into_iter().enumerate() {
                 let extent = t.extent();
                 let tok_str = &s[extent.0..extent.1];
                 let x = format!("{:?}", t);
 
                 if tok_str.contains("\n") {
-                    println!("{: >30} | {:?}", x, tok_str);
+                    println!("{} {: >30} | {:?}", i, x, tok_str);
                 } else {
-                    println!("{: >30} | {}", x, tok_str);
+                    println!("{} {: >30} | {}", i, x, tok_str);
                 }
             }
         }
