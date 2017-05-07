@@ -11,6 +11,7 @@ extern crate unicode_xid;
 pub mod tokenizer;
 
 use std::collections::BTreeSet;
+use std::cmp::max;
 use std::fmt;
 
 use peresil::combinators::*;
@@ -234,6 +235,8 @@ pub enum Error {
     ExpectedUse,
     ExpectedWhere,
     ExpectedWhile,
+
+    ExpectedExpression,
 }
 
 impl peresil::Recoverable for Error {
@@ -1141,6 +1144,28 @@ impl Expression {
             Expression::WhileLet(WhileLet { extent, .. })             => extent,
         }
     }
+
+    fn may_terminate_implicit_statement(&self) -> bool {
+        match *self {
+            Expression::Block(_)       |
+            Expression::Match(_)       |
+            Expression::UnsafeBlock(_) => true,
+            _ => self.may_only_be_followed_by_postfix(),
+        }
+    }
+
+    fn may_only_be_followed_by_postfix(&self) -> bool {
+        match *self {
+            Expression::ForLoop(_)  |
+            Expression::If(_)       |
+            Expression::IfLet(_)    |
+            Expression::Loop(_)     |
+            Expression::While(_)    |
+            Expression::WhileLet(_) |
+            Expression::MacroCall(MacroCall { args: MacroCallArgs::Curly(_), .. }) => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Visit)]
@@ -1182,7 +1207,7 @@ pub struct TryOperator {
 #[derive(Debug, Visit)]
 pub struct FieldAccess {
     extent: Extent,
-    value: Box<Expression>,
+    target: Box<Expression>,
     field: FieldName,
 }
 
@@ -1476,16 +1501,14 @@ pub struct ArrayRepeated {
 #[derive(Debug, Visit)]
 pub struct ExpressionBox {
     extent: Extent,
-    value: Box<Expression>,
-    whitespace: Vec<Whitespace>,
+    target: Box<Expression>,
 }
 
 #[derive(Debug, Visit)]
 pub struct AsType {
     extent: Extent,
-    value: Box<Expression>,
+    target: Box<Expression>,
     typ: Type,
-    whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, Visit)]
@@ -1516,8 +1539,7 @@ pub struct ByteString {
 pub struct Slice {
     extent: Extent,
     target: Box<Expression>,
-    range: Box<Expression>,
-    whitespace: Vec<Whitespace>,
+    index: Box<Expression>,
 }
 
 #[derive(Debug, Visit)]
@@ -1541,15 +1563,14 @@ pub struct ClosureArg {
 #[derive(Debug, Visit)]
 pub struct Reference {
     extent: Extent,
-    mutable: Option<Extent>,
-    value: Box<Expression>,
-    whitespace: Vec<Whitespace>,
+    is_mutable: Option<Extent>,
+    target: Box<Expression>,
 }
 
 #[derive(Debug, Visit)]
 pub struct Dereference {
     extent: Extent,
-    value: Box<Expression>,
+    target: Box<Expression>,
     whitespace: Vec<Whitespace>,
 }
 
@@ -1581,18 +1602,6 @@ pub struct Break {
     extent: Extent,
     label: Option<Lifetime>,
     whitespace: Vec<Whitespace>,
-}
-
-#[derive(Debug)]
-enum ExpressionTail {
-    AsType { typ: Type, whitespace: Vec<Whitespace> },
-    Binary { op: BinaryOp, rhs: Box<Expression>, whitespace: Vec<Whitespace> },
-    FieldAccess { field: FieldName },
-    Call { args: Vec<Expression> },
-    Range { rhs: Option<Box<Expression>> },
-    RangeInclusive { rhs: Option<Box<Expression>> },
-    Slice { range: Box<Expression>, whitespace: Vec<Whitespace> },
-    TryOperator,
 }
 
 #[derive(Debug, Visit)]
@@ -3248,135 +3257,712 @@ fn statement_empty<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Exten
     }, |pm: &mut Master, pt| pm.state.ex(spt, pt))
 }
 
-// idea: trait w/associated types to avoid redefin fn types?
-
 impl ImplicitSeparator for Statement {
     fn is_implicit_separator(&self) -> bool {
         match *self {
-            Statement::Expression(Expression::If(_))          |
-            Statement::Expression(Expression::IfLet(_))       |
-            Statement::Expression(Expression::ForLoop(_))     |
-            Statement::Expression(Expression::Loop(_))        |
-            Statement::Expression(Expression::While(_))       |
-            Statement::Expression(Expression::WhileLet(_))    |
-            Statement::Expression(Expression::Match(_))       |
-            Statement::Expression(Expression::UnsafeBlock(_)) |
-            Statement::Expression(Expression::Block(_))       |
-            Statement::Expression(Expression::MacroCall(MacroCall { args: MacroCallArgs::Curly(_), .. })) |
-            Statement::Item(_)                                => true,
-
-            Statement::Expression(_) => false,
-            Statement::Empty(_) => false,
+            Statement::Expression(ref e) => e.may_terminate_implicit_statement(),
+            Statement::Item(_)           => true,
+            Statement::Empty(_)          => false,
         }
     }
 }
 
-fn expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
-    let spt = pt;
-    let (pt, mut expression) = try_parse!({
-        pm.alternate(pt)
-            .one(map(expr_if, Expression::If))
-            .one(map(expr_if_let, Expression::IfLet))
-            .one(map(expr_for_loop, Expression::ForLoop))
-            .one(map(expr_loop, Expression::Loop))
-            .one(map(expr_while, Expression::While))
-            .one(map(expr_while_let, Expression::WhileLet))
-            .one(map(expr_match, Expression::Match))
-            .one(map(expr_unsafe_block, Expression::UnsafeBlock))
-            .one(map(expr_block, Expression::Block))
-            .one(map(expr_macro_call, Expression::MacroCall))
-            .one(map(expr_let, Expression::Let))
-            .one(expr_tuple_or_parenthetical)
-            .one(map(expr_range, Expression::Range))
-            .one(map(expr_range_inclusive, Expression::RangeInclusive))
-            .one(map(expr_array, Expression::Array))
-            .one(map(character_literal, Expression::Character))
-            .one(map(string_literal, Expression::String))
-            .one(map(expr_closure, Expression::Closure))
-            .one(map(expr_return, Expression::Return))
-            .one(map(expr_continue, Expression::Continue))
-            .one(map(expr_break, Expression::Break))
-            .one(map(number_literal, Expression::Number))
-            .one(map(expr_reference, Expression::Reference))
-            .one(map(expr_dereference, Expression::Dereference))
-            .one(map(expr_unary, Expression::Unary))
-            .one(map(expr_box, Expression::Box))
-            .one(map(expr_byte, Expression::Byte))
-            .one(map(expr_byte_string, Expression::ByteString))
-            .one(map(expr_disambiguation, Expression::Disambiguation))
-            .one(map(expr_value, Expression::Value))
-            .finish()
-    });
+#[derive(Debug)]
+enum OperatorPrefix {
+    Box(Extent),
+    Dereference(Extent),
+    Negate(Extent),
+    Not(Extent),
+    RangeExclusive(Extent),
+    RangeInclusive(Extent),
+    Reference { is_mutable: Option<Extent> },
+}
 
-    let mut pt = pt;
-    loop {
-        let (pt2, tail) = try_parse!(optional(expression_tail)(pm, pt));
-        pt = pt2;
-        match tail {
-            Some(ExpressionTail::AsType { typ, whitespace }) => {
-                expression = Expression::AsType(AsType {
-                    extent: pm.state.ex(spt, pt),
-                    value: Box::new(expression),
-                    typ,
-                    whitespace,
-                })
-            }
-            Some(ExpressionTail::Binary { op, rhs, whitespace }) => {
-                expression = Expression::Binary(Binary {
-                    extent: pm.state.ex(spt, pt),
-                    op,
-                    lhs: Box::new(expression),
-                    rhs,
-                    whitespace,
-                })
-            }
-            Some(ExpressionTail::FieldAccess { field }) => {
-                expression = Expression::FieldAccess(FieldAccess {
-                    extent: pm.state.ex(spt, pt),
-                    value: Box::new(expression),
-                    field: field,
-                })
-            }
-            Some(ExpressionTail::Call { args }) => {
-                expression = Expression::Call(Call {
-                    extent: pm.state.ex(spt, pt),
-                    target: Box::new(expression),
-                    args: args
-                })
-            }
-            Some(ExpressionTail::Range { rhs }) => {
-                expression = Expression::Range(Range {
-                    extent: pm.state.ex(spt, pt),
-                    lhs: Some(Box::new(expression)),
-                    rhs
-                })
-            }
-            Some(ExpressionTail::RangeInclusive { rhs }) => {
-                expression = Expression::RangeInclusive(RangeInclusive {
-                    extent: pm.state.ex(spt, pt),
-                    lhs: Some(Box::new(expression)),
-                    rhs
-                })
-            }
-            Some(ExpressionTail::Slice { range, whitespace }) => {
-                expression = Expression::Slice(Slice {
-                    extent: pm.state.ex(spt, pt),
-                    target: Box::new(expression),
-                    range,
-                    whitespace,
-                })
-            }
-            Some(ExpressionTail::TryOperator) => {
-                expression = Expression::TryOperator(TryOperator {
-                    extent: pm.state.ex(spt, pt),
-                    target: Box::new(expression),
-                })
-            }
-            None => break,
+#[derive(Debug)]
+enum OperatorInfix {
+    Add(Extent),
+    AddAssign(Extent),
+    Assign(Extent),
+    BitwiseAnd(Extent),
+    BitwiseAndAssign(Extent),
+    BitwiseOr(Extent),
+    BitwiseOrAssign(Extent),
+    BitwiseXor(Extent),
+    BitwiseXorAssign(Extent),
+    BooleanAnd(Extent),
+    BooleanOr(Extent),
+    Div(Extent),
+    DivAssign(Extent),
+    Equal(Extent),
+    GreaterThan(Extent),
+    GreaterThanOrEqual(Extent),
+    LessThan(Extent),
+    LessThanOrEqual(Extent),
+    Mod(Extent),
+    ModAssign(Extent),
+    Mul(Extent),
+    MulAssign(Extent),
+    NotEqual(Extent),
+    RangeExclusive(Extent),
+    RangeInclusive(Extent),
+    ShiftLeft(Extent),
+    ShiftLeftAssign(Extent),
+    ShiftRight(Extent),
+    ShiftRightAssign(Extent),
+    Sub(Extent),
+    SubAssign(Extent),
+}
+
+#[derive(Debug)]
+enum OperatorPostfix {
+    AsType { typ: Type },
+    Call { args: Vec<Expression> },
+    FieldAccess { field: FieldName },
+    Slice { index: Expression },
+    Try(Extent),
+}
+
+#[derive(Debug)]
+enum OperatorKind {
+    Prefix(OperatorPrefix),
+    Infix(OperatorInfix),
+    Postfix(OperatorPostfix),
+}
+
+type Precedence = u8;
+
+impl OperatorKind {
+    fn precedence(&self) -> Precedence {
+        use OperatorKind::*;
+
+        match *self {
+            Prefix(_) => 20,
+            Infix(OperatorInfix::RangeExclusive(_)) => 9,
+            Infix(OperatorInfix::RangeInclusive(_)) => 9,
+            Infix(_) => 10,
+            Postfix(OperatorPostfix::Call { .. }) => 10,
+            Postfix(_) => 20,
+        }
+    }
+}
+
+#[derive(Debug)]
+enum PrefixOrAtom {
+    Prefix(OperatorPrefix),
+    Atom(Expression),
+}
+
+#[derive(Debug)]
+enum InfixOrPostfix {
+    Infix(OperatorInfix),
+    Postfix(OperatorPostfix),
+}
+
+fn expression_prefix_or_atom<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, PrefixOrAtom>
+{
+    pm.alternate(pt)
+        .one(map(operator_prefix, PrefixOrAtom::Prefix))
+        .one(map(expression_atom, PrefixOrAtom::Atom))
+        .finish()
+}
+
+fn expression_infix_or_postfix<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, InfixOrPostfix>
+{
+    pm.alternate(pt)
+        .one(map(operator_infix, InfixOrPostfix::Infix))
+        .one(map(operator_postfix, InfixOrPostfix::Postfix))
+        .finish()
+}
+
+fn operator_prefix<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, OperatorPrefix>
+{
+    pm.alternate(pt)
+        .one(map(kw_box, OperatorPrefix::Box))
+        // 3 characters
+        .one(map(triple_period, OperatorPrefix::RangeInclusive))
+        // 2 characters
+        .one(map(double_period, OperatorPrefix::RangeExclusive))
+        // 1 character
+        .one(map(asterisk, OperatorPrefix::Dereference))
+        .one(map(bang, OperatorPrefix::Not))
+        .one(map(minus, OperatorPrefix::Negate))
+        .one(operator_prefix_reference)
+
+        .finish()
+}
+
+fn operator_prefix_reference<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, OperatorPrefix>
+{
+    sequence!(pm, pt, {
+        _          = ampersand;
+        is_mutable = optional(kw_mut);
+    }, |_, _| OperatorPrefix::Reference { is_mutable })
+}
+
+fn operator_infix<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, OperatorInfix>
+{
+    pm.alternate(pt)
+        // 3 characters
+        .one(map(shift_left_equals, OperatorInfix::ShiftLeftAssign))
+        .one(map(shift_right_equals, OperatorInfix::ShiftRightAssign))
+        .one(map(triple_period, OperatorInfix::RangeInclusive))
+        // 2 characters
+        .one(map(ampersand_equals, OperatorInfix::BitwiseAndAssign))
+        .one(map(caret_equals, OperatorInfix::BitwiseXorAssign))
+        .one(map(divide_equals, OperatorInfix::DivAssign))
+        .one(map(double_ampersand, OperatorInfix::BooleanAnd))
+        .one(map(double_equals, OperatorInfix::Equal))
+        .one(map(double_left_angle, OperatorInfix::ShiftLeft))
+        .one(map(double_period, OperatorInfix::RangeExclusive))
+        .one(map(double_pipe, OperatorInfix::BooleanOr))
+        .one(map(double_right_angle, OperatorInfix::ShiftRight))
+        .one(map(greater_than_or_equals, OperatorInfix::GreaterThanOrEqual))
+        .one(map(less_than_or_equals, OperatorInfix::LessThanOrEqual))
+        .one(map(minus_equals, OperatorInfix::SubAssign))
+        .one(map(not_equal, OperatorInfix::NotEqual))
+        .one(map(percent_equals, OperatorInfix::ModAssign))
+        .one(map(pipe_equals, OperatorInfix::BitwiseOrAssign))
+        .one(map(plus_equals, OperatorInfix::AddAssign))
+        .one(map(times_equals, OperatorInfix::MulAssign))
+        // 1 character
+        .one(map(ampersand, OperatorInfix::BitwiseAnd))
+        .one(map(asterisk, OperatorInfix::Mul))
+        .one(map(caret, OperatorInfix::BitwiseXor))
+        .one(map(equals, OperatorInfix::Assign))
+        .one(map(left_angle, OperatorInfix::LessThan))
+        .one(map(minus, OperatorInfix::Sub))
+        .one(map(percent, OperatorInfix::Mod))
+        .one(map(pipe, OperatorInfix::BitwiseOr))
+        .one(map(plus, OperatorInfix::Add))
+        .one(map(right_angle, OperatorInfix::GreaterThan))
+        .one(map(slash, OperatorInfix::Div))
+        .finish()
+}
+
+fn operator_postfix<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, OperatorPostfix>
+{
+    pm.alternate(pt)
+        .one(operator_postfix_as_type)
+        .one(operator_postfix_call)
+        .one(operator_postfix_field_access)
+        .one(operator_postfix_slice)
+        .one(map(question_mark, OperatorPostfix::Try))
+        .finish()
+}
+
+fn operator_postfix_as_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, OperatorPostfix>
+{
+    sequence!(pm, pt, {
+        _   = kw_as;
+        typ = typ;
+    }, |_, _| OperatorPostfix::AsType { typ })
+}
+
+// TODO: avoid recursion here
+fn operator_postfix_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, OperatorPostfix>
+{
+    sequence!(pm, pt, {
+        _    = left_paren;
+        args = allow_struct_literals(zero_or_more_tailed_values(comma, expression));
+        _    = right_paren;
+    }, |_, _| OperatorPostfix::Call { args })
+}
+
+fn operator_postfix_field_access<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, OperatorPostfix>
+{
+    sequence!(pm, pt, {
+        _     = period;
+        field = field_name;
+    }, |_, _| OperatorPostfix::FieldAccess { field })
+}
+
+fn field_name<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, FieldName> {
+    pm.alternate(pt)
+        .one(map(path_component, FieldName::Path))
+        .one(map(field_name_number, FieldName::Number))
+        .finish()
+}
+
+fn field_name_number<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+    number_normal(pm, pt)
+        .and_then(pt, |n| n.into_simple().ok_or(Error::ExpectedNumber))
+}
+
+// TODO: avoid recursion here
+fn operator_postfix_slice<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, OperatorPostfix>
+{
+    sequence!(pm, pt, {
+        _     = left_square;
+        index = allow_struct_literals(expression);
+        _     = right_square;
+    }, |_, _| OperatorPostfix::Slice { index })
+}
+
+fn expression_atom<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
+    pm.alternate(pt)
+        .one(map(expr_if, Expression::If))
+        .one(map(expr_if_let, Expression::IfLet))
+        .one(map(expr_for_loop, Expression::ForLoop))
+        .one(map(expr_loop, Expression::Loop))
+        .one(map(expr_while, Expression::While))
+        .one(map(expr_while_let, Expression::WhileLet))
+        .one(map(expr_match, Expression::Match))
+        .one(map(expr_unsafe_block, Expression::UnsafeBlock))
+        .one(map(expr_block, Expression::Block))
+        .one(map(expr_macro_call, Expression::MacroCall))
+        .one(map(expr_let, Expression::Let))
+        .one(expr_tuple_or_parenthetical)
+        .one(map(expr_array, Expression::Array))
+        .one(map(character_literal, Expression::Character))
+        .one(map(string_literal, Expression::String))
+        .one(map(expr_closure, Expression::Closure))
+        .one(map(expr_return, Expression::Return))
+        .one(map(expr_continue, Expression::Continue))
+        .one(map(expr_break, Expression::Break))
+        .one(map(number_literal, Expression::Number))
+        .one(map(expr_byte, Expression::Byte))
+        .one(map(expr_byte_string, Expression::ByteString))
+        .one(map(expr_disambiguation, Expression::Disambiguation))
+        .one(map(expr_value, Expression::Value))
+        .finish()
+}
+
+struct ShuntCar<'s, T> {
+    value: T,
+    spt: Point<'s>,
+    ept: Point<'s>,
+}
+
+struct ShuntingYard<'s> {
+    operators: Vec<ShuntCar<'s, OperatorKind>>,
+    result: Vec<ShuntCar<'s, Expression>>,
+}
+
+type PointRange<'s> = std::ops::Range<Point<'s>>;
+type ExprResult<'s, T> = std::result::Result<T, (Point<'s>, Error)>;
+
+impl<'s> ShuntingYard<'s> {
+    fn new() -> Self {
+        ShuntingYard {
+            operators: Vec::new(),
+            result: Vec::new(),
         }
     }
 
-    Progress::success(pt, expression)
+    fn add_expression(&mut self, expr: Expression, spt: Point<'s>, ept: Point<'s>) {
+//        println!("Pushing {:?}", expr);
+        self.result.push(ShuntCar { value: expr, spt, ept });
+    }
+
+    fn add_prefix(&mut self, pm: &Master, op: OperatorPrefix, spt: Point<'s>, ept: Point<'s>) ->
+        ExprResult<'s, ()>
+    {
+        let op = OperatorKind::Prefix(op);
+        self.apply_precedence(pm, &op)?;
+        self.operators.push(ShuntCar { value: op, spt, ept });
+        Ok(())
+    }
+
+    fn add_infix(&mut self, pm: &Master, op: OperatorInfix, spt: Point<'s>, ept: Point<'s>) ->
+        ExprResult<'s, ()>
+    {
+        let op = OperatorKind::Infix(op);
+        self.apply_precedence(pm, &op)?;
+        self.operators.push(ShuntCar { value: op, spt, ept });
+        Ok(())
+    }
+
+    fn add_postfix(&mut self, pm: &Master, op: OperatorPostfix, spt: Point<'s>, ept: Point<'s>) ->
+        ExprResult<'s, ()>
+    {
+        let op = OperatorKind::Postfix(op);
+        self.apply_precedence(pm, &op)?;
+        self.operators.push(ShuntCar { value: op, spt, ept });
+        Ok(())
+    }
+
+    fn finish(mut self, pm: &Master, failure_point: Point<'s>) ->
+        ExprResult<'s, ShuntCar<'s, Expression>>
+    {
+//        println!("Finishing expression");
+
+        self.apply_all(pm)?;
+
+        let r = self.pop_expression(failure_point);
+        assert_eq!(0, self.result.len());
+        r
+    }
+
+    fn apply_precedence(&mut self, pm: &Master, operator: &OperatorKind) -> ExprResult<'s, ()>  {
+//        println!("About to push {:?}", operator);
+        let op_precedence = operator.precedence();
+        while self.operators.last().map_or(false, |&ShuntCar { value: ref top, .. }| top.precedence() > op_precedence) {
+            let ShuntCar { value, spt, ept } = self.operators.pop()
+                .expect("Cannot pop operator that was just there");
+//            println!("Precedence current ({}) top ({})", value.precedence(), op_precedence);
+            self.apply_one(pm, value, spt..ept)?;
+        }
+        Ok(())
+    }
+
+    fn apply_all(&mut self, pm: &Master) -> ExprResult<'s, ()> {
+        while let Some(ShuntCar { value, spt, ept }) = self.operators.pop() {
+            self.apply_one(pm, value, spt..ept)?;
+        }
+        Ok(())
+    }
+
+    fn apply_one(&mut self, pm: &Master, op: OperatorKind, op_range: PointRange<'s>) ->
+        ExprResult<'s, ()>
+    {
+        use OperatorKind::*;
+
+//        println!("Applying {:?}", op);
+
+        match op {
+            // TODO: Make into unary ?
+            Prefix(OperatorPrefix::Dereference(..)) => {
+                self.apply_prefix(pm, op_range, |extent, expr| {
+                    Expression::Dereference(Dereference {
+                        extent,
+                        target: Box::new(expr),
+                        whitespace: Vec::new(),
+                    })
+                })
+            },
+            Prefix(OperatorPrefix::Reference { is_mutable }) => {
+                self.apply_prefix(pm, op_range, |extent, expr| {
+                    Expression::Reference(Reference {
+                        extent,
+                        is_mutable,
+                        target: Box::new(expr),
+                    })
+                })
+            },
+            // TODO: Make into unary ?
+            Prefix(OperatorPrefix::Box(..)) => {
+                self.apply_prefix(pm, op_range, |extent, expr| {
+                    Expression::Box(ExpressionBox {
+                        extent,
+                        target: Box::new(expr),
+                    })
+                })
+            },
+            Prefix(OperatorPrefix::RangeInclusive(..)) => {
+                self.apply_maybe_prefix(pm, op_range, |extent, expr| {
+                    Expression::RangeInclusive(RangeInclusive {
+                        extent,
+                        lhs: None,
+                        rhs: expr.map(Box::new),
+                    })
+                })
+            },
+            Prefix(OperatorPrefix::RangeExclusive(..)) => {
+                self.apply_maybe_prefix(pm, op_range, |extent, expr| {
+                    Expression::Range(Range {
+                        extent,
+                        lhs: None,
+                        rhs: expr.map(Box::new),
+                    })
+                })
+            },
+            Prefix(OperatorPrefix::Negate(..)) => self.apply_unary(pm, op_range, UnaryOp::Negate),
+            Prefix(OperatorPrefix::Not(..)) => self.apply_unary(pm, op_range, UnaryOp::Not),
+
+            Infix(OperatorInfix::Add(..)) => self.apply_binary(pm, op_range, BinaryOp::Add),
+            Infix(OperatorInfix::AddAssign(..)) => self.apply_binary(pm, op_range, BinaryOp::AddAssign),
+            Infix(OperatorInfix::Assign(..)) => self.apply_binary(pm, op_range, BinaryOp::Assign),
+            Infix(OperatorInfix::BitwiseAnd(..)) => self.apply_binary(pm, op_range, BinaryOp::BitwiseAnd),
+            Infix(OperatorInfix::BitwiseAndAssign(..)) => self.apply_binary(pm, op_range, BinaryOp::BitwiseAndAssign),
+            Infix(OperatorInfix::BitwiseOr(..)) => self.apply_binary(pm, op_range, BinaryOp::BitwiseOr),
+            Infix(OperatorInfix::BitwiseOrAssign(..)) => self.apply_binary(pm, op_range, BinaryOp::BitwiseOrAssign),
+            Infix(OperatorInfix::BitwiseXor(..)) => self.apply_binary(pm, op_range, BinaryOp::BitwiseXor),
+            Infix(OperatorInfix::BitwiseXorAssign(..)) => self.apply_binary(pm, op_range, BinaryOp::BitwiseXorAssign),
+            Infix(OperatorInfix::BooleanAnd(..)) => self.apply_binary(pm, op_range, BinaryOp::BooleanAnd),
+            Infix(OperatorInfix::BooleanOr(..)) => self.apply_binary(pm, op_range, BinaryOp::BooleanOr),
+            Infix(OperatorInfix::Div(..)) => self.apply_binary(pm, op_range, BinaryOp::Div),
+            Infix(OperatorInfix::DivAssign(..)) => self.apply_binary(pm, op_range, BinaryOp::DivAssign),
+            Infix(OperatorInfix::Equal(..)) => self.apply_binary(pm, op_range, BinaryOp::Equal),
+            Infix(OperatorInfix::GreaterThan(..)) => self.apply_binary(pm, op_range, BinaryOp::GreaterThan),
+            Infix(OperatorInfix::GreaterThanOrEqual(..)) => self.apply_binary(pm, op_range, BinaryOp::GreaterThanOrEqual),
+            Infix(OperatorInfix::LessThan(..)) => self.apply_binary(pm, op_range, BinaryOp::LessThan),
+            Infix(OperatorInfix::LessThanOrEqual(..)) => self.apply_binary(pm, op_range, BinaryOp::LessThanOrEqual),
+            Infix(OperatorInfix::Mod(..)) => self.apply_binary(pm, op_range, BinaryOp::Mod),
+            Infix(OperatorInfix::ModAssign(..)) => self.apply_binary(pm, op_range, BinaryOp::ModAssign),
+            Infix(OperatorInfix::Mul(..)) => self.apply_binary(pm, op_range, BinaryOp::Mul),
+            Infix(OperatorInfix::MulAssign(..)) => self.apply_binary(pm, op_range, BinaryOp::MulAssign),
+            Infix(OperatorInfix::NotEqual(..)) => self.apply_binary(pm, op_range, BinaryOp::NotEqual),
+            Infix(OperatorInfix::ShiftLeft(..)) => self.apply_binary(pm, op_range, BinaryOp::ShiftLeft),
+            Infix(OperatorInfix::ShiftLeftAssign(..)) => self.apply_binary(pm, op_range, BinaryOp::ShiftLeftAssign),
+            Infix(OperatorInfix::ShiftRight(..)) => self.apply_binary(pm, op_range, BinaryOp::ShiftRight),
+            Infix(OperatorInfix::ShiftRightAssign(..)) => self.apply_binary(pm, op_range, BinaryOp::ShiftRightAssign),
+            Infix(OperatorInfix::Sub(..)) => self.apply_binary(pm, op_range, BinaryOp::Sub),
+            Infix(OperatorInfix::SubAssign(..)) => self.apply_binary(pm, op_range, BinaryOp::SubAssign),
+
+            Infix(OperatorInfix::RangeInclusive(..)) => {
+                self.apply_maybe_infix(pm, op_range, |extent, lhs, rhs| {
+                    Expression::RangeInclusive(RangeInclusive {
+                        extent,
+                        lhs: Some(Box::new(lhs)),
+                        rhs: rhs.map(Box::new),
+                    })
+                })
+            },
+            Infix(OperatorInfix::RangeExclusive(..)) => {
+                self.apply_maybe_infix(pm, op_range, |extent, lhs, rhs| {
+                    Expression::Range(Range {
+                        extent,
+                        lhs: Some(Box::new(lhs)),
+                        rhs: rhs.map(Box::new),
+                    })
+                })
+            },
+
+            Postfix(OperatorPostfix::FieldAccess { field }) => {
+                self.apply_postfix(pm, op_range, |extent, expr| {
+                    Expression::FieldAccess(FieldAccess {
+                        extent,
+                        target: Box::new(expr),
+                        field,
+                    })
+                })
+            },
+            Postfix(OperatorPostfix::Call { args }) => {
+                self.apply_postfix(pm, op_range, |extent, expr| {
+                    Expression::Call(Call {
+                        extent,
+                        target: Box::new(expr),
+                        args,
+                    })
+                })
+            },
+            Postfix(OperatorPostfix::Slice { index }) => {
+                self.apply_postfix(pm, op_range, |extent, expr| {
+                    Expression::Slice(Slice {
+                        extent,
+                        target: Box::new(expr),
+                        index: Box::new(index),
+                    })
+                })
+            },
+            Postfix(OperatorPostfix::AsType { typ }) => {
+                self.apply_postfix(pm, op_range, |extent, expr| {
+                    Expression::AsType(AsType {
+                        extent,
+                        target: Box::new(expr),
+                        typ,
+                    })
+                })
+            },
+            Postfix(OperatorPostfix::Try(..)) => {
+                self.apply_postfix(pm, op_range, |extent, expr| {
+                    Expression::TryOperator(TryOperator {
+                        extent,
+                        target: Box::new(expr),
+                    })
+                })
+            },
+        }
+    }
+
+    fn apply_maybe_prefix<F>(&mut self, pm: &Master, op_range: PointRange<'s>, f: F) ->
+        ExprResult<'s, ()>
+        where F: FnOnce(Extent, Option<Expression>) -> Expression
+    {
+        if self.result.is_empty() {
+            let extent = pm.state.ex(op_range.start, op_range.end);
+            let new_expr = f(extent, None);
+            self.result.push(ShuntCar { value: new_expr, spt: op_range.start, ept: op_range.end });
+            Ok(())
+        } else {
+            self.apply_prefix(pm, op_range, |extent, expr| f(extent, Some(expr)))
+        }
+    }
+
+    fn apply_prefix<F>(&mut self, pm: &Master, op_range: PointRange<'s>, f: F) ->
+        ExprResult<'s, ()>
+        where F: FnOnce(Extent, Expression) -> Expression
+    {
+        let ShuntCar { value: expr, ept: expr_ept, .. } = self.pop_expression(op_range.start)?;
+        let extent = pm.state.ex(op_range.start, expr_ept);
+        let new_expr = f(extent, expr);
+        self.result.push(ShuntCar { value: new_expr, spt: op_range.start, ept: expr_ept });
+        Ok(())
+    }
+
+    fn apply_unary(&mut self, pm: &Master, op_range: PointRange<'s>, op: UnaryOp) ->
+        ExprResult<'s, ()>
+    {
+        self.apply_prefix(pm, op_range, |extent, expr| {
+            Expression::Unary(Unary {
+                extent,
+                op,
+                value: Box::new(expr),
+                whitespace: Vec::new(),
+            })
+        })
+    }
+
+    fn apply_maybe_infix<F>(&mut self, pm: &Master, op_range: PointRange<'s>, f: F) ->
+        ExprResult<'s, ()>
+        where F: FnOnce(Extent, Expression, Option<Expression>) -> Expression
+    {
+        if self.result.len() <= 1 {
+            let ShuntCar { value: lhs, spt: lexpr_spt, .. } = self.pop_expression(op_range.end)?;
+            let extent = pm.state.ex(lexpr_spt, op_range.end);
+            let new_expr = f(extent, lhs, None);
+            self.result.push(ShuntCar { value: new_expr, spt: lexpr_spt, ept: op_range.end });
+            Ok(())
+        } else {
+            self.apply_infix(pm, op_range, |extent, lhs, rhs| f(extent, lhs, Some(rhs)))
+        }
+    }
+
+    fn apply_infix<F>(&mut self, pm: &Master, op_range: PointRange<'s>, f: F) ->
+        ExprResult<'s, ()>
+        where F: FnOnce(Extent, Expression, Expression) -> Expression
+    {
+        let ShuntCar { value: rhs, ept: rexpr_ept, .. } = self.pop_expression(op_range.end)?;
+        let ShuntCar { value: lhs, spt: lexpr_spt, .. } = self.pop_expression(op_range.start)?;
+        let extent = pm.state.ex(lexpr_spt, rexpr_ept);
+        let new_expr = f(extent, lhs, rhs);
+        self.result.push(ShuntCar { value: new_expr, spt: lexpr_spt, ept: rexpr_ept });
+        Ok(())
+    }
+
+    fn apply_binary(&mut self, pm: &Master, op_range: PointRange<'s>, op: BinaryOp) ->
+        ExprResult<'s, ()>
+    {
+        self.apply_infix(pm, op_range, |extent, lhs, rhs| {
+            Expression::Binary(Binary {
+                extent,
+                op,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+                whitespace: Vec::new(),
+            })
+        })
+    }
+
+    fn apply_postfix<F>(&mut self, pm: &Master, op_range: PointRange<'s>, f: F) ->
+        ExprResult<'s, ()>
+        where F: FnOnce(Extent, Expression) -> Expression
+    {
+        let ShuntCar { value: expr, spt, ept: expr_ept } = self.pop_expression(op_range.start)?;
+        let ept = max(expr_ept, op_range.end);
+        let extent = pm.state.ex(spt, ept);
+        let new_expr = f(extent, expr);
+        self.result.push(ShuntCar { value: new_expr, spt, ept });
+        Ok(())
+    }
+
+    fn pop_expression(&mut self, location: Point<'s>) ->
+        ExprResult<'s, ShuntCar<'s, Expression>>
+    {
+        self.result.pop().ok_or((location, Error::ExpectedExpression))
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+enum ExpressionState {
+    Prefix, // Also "beginning of expression"
+    Infix,
+    Postfix,
+    Atom,
+    AtomPostfixOnly,
+}
+
+fn expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
+    match expression_x(pm, pt) {
+        Ok(ShuntCar { value: expr, ept, .. }) => Progress::success(ept, expr),
+        Err((failure_point, err)) => Progress::failure(failure_point, err),
+    }
+}
+
+// This is the shunting yard algorithm (probably modified from the
+// *pure* algorithm). It tracks the previously parsed thing so that
+// the next token looked for is in a limited set and thus the error
+// messages are accurate. In addition to precedence, it is also needed
+// to reduce the total depth of recursion.
+fn expression_x<'s>(pm: &mut Master<'s>, mut pt: Point<'s>) ->
+    ExprResult<'s, ShuntCar<'s, Expression>>
+{
+    let mut shunting_yard = ShuntingYard::new();
+    let mut state = ExpressionState::Prefix;
+
+    loop {
+        match state {
+            ExpressionState::Prefix |
+            ExpressionState::Infix => {
+                match expression_prefix_or_atom(pm, pt) {
+                    peresil::Progress { status: peresil::Status::Success(op_or_atom), point } => {
+                        match op_or_atom {
+                            PrefixOrAtom::Prefix(op) => {
+                                shunting_yard.add_prefix(pm, op, pt, point)?;
+                                state = ExpressionState::Prefix;
+                            }
+                            PrefixOrAtom::Atom(expr) => {
+                                let postfix_only = expr.may_only_be_followed_by_postfix();
+                                shunting_yard.add_expression(expr, pt, point);
+                                state = if postfix_only {
+                                    ExpressionState::AtomPostfixOnly
+                                } else {
+                                    ExpressionState::Atom
+                                };
+                            }
+                        }
+                        pt = point;
+                    }
+                    peresil::Progress { status: peresil::Status::Failure(_), point } => {
+                        return shunting_yard.finish(pm, point);
+                    }
+                }
+            }
+            ExpressionState::Postfix |
+            ExpressionState::Atom => {
+                match expression_infix_or_postfix(pm, pt) {
+                    peresil::Progress { status: peresil::Status::Success(infix_or_postfix), point } => {
+                        match infix_or_postfix {
+                            InfixOrPostfix::Infix(op) => {
+                                shunting_yard.add_infix(pm, op, pt, point)?;
+                                state = ExpressionState::Infix;
+                            }
+                            InfixOrPostfix::Postfix(op) => {
+                                shunting_yard.add_postfix(pm, op, pt, point)?;
+                                state = ExpressionState::Postfix;
+                            }
+                        }
+                        pt = point;
+                    }
+                    peresil::Progress { status: peresil::Status::Failure(_), point } => {
+                        return shunting_yard.finish(pm, point);
+                    }
+                }
+            }
+            ExpressionState::AtomPostfixOnly => {
+                match operator_postfix(pm, pt) {
+                    peresil::Progress { status: peresil::Status::Success(op), point } => {
+                        shunting_yard.add_postfix(pm, op, pt, point)?;
+                        state = ExpressionState::Postfix;
+                        pt = point;
+                    }
+                    peresil::Progress { status: peresil::Status::Failure(_), point } => {
+                        return shunting_yard.finish(pm, point);
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn expr_macro_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MacroCall> {
@@ -3730,30 +4316,6 @@ fn expr_tuple_or_parenthetical<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progre
     })
 }
 
-fn expr_range<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Range> {
-    sequence!(pm, pt, {
-        spt = point;
-        _   = double_period;
-        rhs = optional(expression);
-    }, |pm: &mut Master, pt| Range {
-        extent: pm.state.ex(spt, pt),
-        lhs: None,
-        rhs: rhs.map(Box::new),
-    })
-}
-
-fn expr_range_inclusive<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, RangeInclusive> {
-    sequence!(pm, pt, {
-        spt = point;
-        _   = triple_period;
-        rhs = optional(expression);
-    }, |pm: &mut Master, pt| RangeInclusive {
-        extent: pm.state.ex(spt, pt),
-        lhs: None,
-        rhs: rhs.map(Box::new),
-    })
-}
-
 fn expr_array<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Array> {
     pm.alternate(pt)
         .one(map(expr_array_explicit, Array::Explicit))
@@ -3940,64 +4502,6 @@ fn convert_number(n: tokenizer::Number) -> Number {
     }
 }
 
-fn expr_reference<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Reference> {
-    sequence!(pm, pt, {
-        spt     = point;
-        _       = ampersand;
-        mutable = optional(ext(kw_mut));
-        value   = expression;
-    }, |pm: &mut Master, pt| Reference {
-        extent: pm.state.ex(spt, pt),
-        mutable,
-        value: Box::new(value),
-        whitespace: Vec::new(),
-    } )
-}
-
-fn expr_dereference<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Dereference> {
-    sequence!(pm, pt, {
-        spt   = point;
-        _     = asterisk;
-        value = expression;
-    }, |pm: &mut Master, pt| Dereference {
-        extent: pm.state.ex(spt, pt),
-        value: Box::new(value),
-        whitespace: Vec::new(),
-    })
-}
-
-fn expr_unary<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Unary> {
-    sequence!(pm, pt, {
-        spt   = point;
-        op    = expr_unary_op;
-        value = expression;
-    }, |pm: &mut Master, pt| Unary {
-        extent: pm.state.ex(spt, pt),
-        op,
-        value: Box::new(value),
-        whitespace: Vec::new()
-    })
-}
-
-fn expr_unary_op<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, UnaryOp> {
-    pm.alternate(pt)
-        .one(map(bang, |_| UnaryOp::Not))
-        .one(map(minus, |_| UnaryOp::Negate))
-        .finish()
-}
-
-fn expr_box<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExpressionBox> {
-    sequence!(pm, pt, {
-        spt   = point;
-        _     = kw_box;
-        value = expression;
-    }, |pm: &mut Master, pt| ExpressionBox {
-        extent: pm.state.ex(spt, pt),
-        value: Box::new(value),
-        whitespace: Vec::new()
-    })
-}
-
 fn expr_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Value> {
     if pm.state.ignore_struct_literals {
         sequence!(pm, pt, {
@@ -4074,125 +4578,6 @@ fn expr_disambiguation<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, D
         components,
         whitespace: core.whitespace,
     })
-}
-
-fn expression_tail<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExpressionTail> {
-    pm.alternate(pt)
-        .one(expr_tail_as_type)
-        .one(expr_tail_binary)
-        .one(expr_tail_call)
-        .one(expr_tail_field_access)
-        .one(expr_tail_range)
-        .one(expr_tail_range_inclusive)
-        .one(expr_tail_slice)
-        .one(expr_tail_try_operator)
-        .finish()
-}
-
-fn expr_tail_as_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExpressionTail> {
-    sequence!(pm, pt, {
-        _   = kw_as;
-        typ = typ;
-    }, |_, _| ExpressionTail::AsType { typ, whitespace: Vec::new() })
-}
-
-fn expr_tail_binary<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExpressionTail> {
-    sequence!(pm, pt, {
-        op  = binary_op;
-        rhs = expression;
-    }, |_, _| ExpressionTail::Binary { op, rhs: Box::new(rhs), whitespace: Vec::new() })
-}
-
-fn binary_op<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, BinaryOp> {
-    // Longer operators before shorter to avoid matching += as +
-    pm.alternate(pt)
-        .one(map(shift_left_equals, |_| BinaryOp::ShiftLeftAssign))
-        .one(map(shift_right_equals, |_| BinaryOp::ShiftRightAssign))
-        .one(map(not_equal, |_| BinaryOp::NotEqual))
-        .one(map(double_equals, |_| BinaryOp::Equal))
-        .one(map(double_ampersand, |_| BinaryOp::BooleanAnd))
-        .one(map(double_pipe, |_| BinaryOp::BooleanOr))
-        .one(map(plus_equals, |_| BinaryOp::AddAssign))
-        .one(map(minus_equals, |_| BinaryOp::SubAssign))
-        .one(map(times_equals, |_| BinaryOp::MulAssign))
-        .one(map(divide_equals, |_| BinaryOp::DivAssign))
-        .one(map(percent_equals, |_| BinaryOp::ModAssign))
-        .one(map(less_than_or_equals, |_| BinaryOp::LessThanOrEqual))
-        .one(map(greater_than_or_equals, |_| BinaryOp::GreaterThanOrEqual))
-        .one(map(double_left_angle, |_| BinaryOp::ShiftLeft))
-        .one(map(double_right_angle, |_| BinaryOp::ShiftRight))
-        .one(map(ampersand_equals, |_| BinaryOp::BitwiseAndAssign))
-        .one(map(pipe_equals, |_| BinaryOp::BitwiseOrAssign))
-        .one(map(caret_equals, |_| BinaryOp::BitwiseXorAssign))
-        .one(map(plus, |_| BinaryOp::Add))
-        .one(map(minus, |_| BinaryOp::Sub))
-        .one(map(asterisk, |_| BinaryOp::Mul))
-        .one(map(slash, |_| BinaryOp::Div))
-        .one(map(percent, |_| BinaryOp::Mod))
-        .one(map(left_angle, |_| BinaryOp::LessThan))
-        .one(map(right_angle, |_| BinaryOp::GreaterThan))
-        .one(map(equals, |_| BinaryOp::Assign))
-        .one(map(ampersand, |_| BinaryOp::BitwiseAnd))
-        .one(map(pipe, |_| BinaryOp::BitwiseOr))
-        .one(map(caret, |_| BinaryOp::BitwiseXor))
-        .finish()
-}
-
-fn expr_tail_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExpressionTail> {
-    sequence!(pm, pt, {
-        _    = left_paren;
-        args = allow_struct_literals(zero_or_more_tailed_values(comma, expression));
-        _    = right_paren;
-    }, |_, _| ExpressionTail::Call { args })
-}
-
-fn expr_tail_field_access<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExpressionTail> {
-    sequence!(pm, pt, {
-        _     = period;
-        field = field_name;
-    }, |_, _| ExpressionTail::FieldAccess { field })
-}
-
-fn field_name<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, FieldName> {
-    pm.alternate(pt)
-        .one(map(path_component, FieldName::Path))
-        .one(map(field_name_number, FieldName::Number))
-        .finish()
-}
-
-fn field_name_number<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
-    number_normal(pm, pt)
-        .and_then(pt, |n| n.into_simple().ok_or(Error::ExpectedNumber))
-}
-
-fn expr_tail_range<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExpressionTail> {
-    sequence!(pm, pt, {
-        _   = double_period;
-        rhs = optional(expression);
-    }, |_, _| ExpressionTail::Range { rhs: rhs.map(Box::new) })
-}
-
-fn expr_tail_range_inclusive<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
-    Progress<'s, ExpressionTail>
-{
-    sequence!(pm, pt, {
-        _   = triple_period;
-        rhs = optional(expression);
-    }, |_, _| ExpressionTail::RangeInclusive { rhs: rhs.map(Box::new) })
-}
-
-fn expr_tail_slice<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExpressionTail> {
-    sequence!(pm, pt, {
-        _     = left_square;
-        range = allow_struct_literals(expression);
-        _     = right_square;
-    }, |_, _| ExpressionTail::Slice { range: Box::new(range), whitespace: Vec::new() })
-}
-
-fn expr_tail_try_operator<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExpressionTail> {
-    sequence!(pm, pt, {
-        _ = question_mark;
-    }, |_, _| ExpressionTail::TryOperator)
 }
 
 fn path<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Path> {
@@ -6184,6 +6569,12 @@ mod test {
     }
 
     #[test]
+    fn expr_for_loop_followed_by_infix() {
+        let p = qp(expression, "for a in b {} + c");
+        assert_eq!(unwrap_progress(p).extent(), (0, 13))
+    }
+
+    #[test]
     fn expr_loop() {
         let p = qp(expression, "loop {}");
         assert_eq!(unwrap_progress(p).extent(), (0, 7))
@@ -6305,6 +6696,18 @@ mod test {
     fn expr_if_else_if() {
         let p = qp(expression, "if a {} else if b {}");
         assert_eq!(unwrap_progress(p).extent(), (0, 20))
+    }
+
+    #[test]
+    fn expr_if_followed_by_infix() {
+        let p = qp(expression, "if a {} + 1");
+        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+    }
+
+    #[test]
+    fn expr_if_followed_by_postfix() {
+        let p = qp(expression, "if a {}.foo()");
+        assert_eq!(unwrap_progress(p).extent(), (0, 13))
     }
 
     #[test]
@@ -6461,6 +6864,12 @@ mod test {
     fn expr_range_none() {
         let p = qp(expression, "..");
         assert_eq!(unwrap_progress(p).extent(), (0, 2))
+    }
+
+    #[test]
+    fn expr_range_after_infix() {
+        let p = qp(expression, "1 + 2..");
+        assert_eq!(unwrap_progress(p).extent(), (0, 7))
     }
 
     #[test]
@@ -6731,6 +7140,66 @@ mod test {
     fn expr_as_no_space() {
         let p = qp(expression, "(42)as u8");
         assert_eq!(unwrap_progress(p).extent(), (0, 9))
+    }
+
+    #[test]
+    fn expr_infix_with_left_hand_prefix_operator() {
+        let p = qp(expression, "*a + b");
+        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+    }
+
+    #[test]
+    fn expr_infix_with_right_hand_prefix_operator() {
+        let p = qp(expression, "a + *b");
+        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+    }
+
+    #[test]
+    fn expr_infix_with_left_and_right_hand_prefix_operator() {
+        let p = qp(expression, "*a + *b");
+        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+    }
+
+    #[test]
+    fn expr_infix_with_left_hand_postfix_operator() {
+        let p = qp(expression, "a? + b");
+        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+    }
+
+    #[test]
+    fn expr_infix_with_right_hand_postfix_operator() {
+        let p = qp(expression, "a + b?");
+        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+    }
+
+    #[test]
+    fn expr_infix_with_left_and_right_hand_postfix_operator() {
+        let p = qp(expression, "a? + b?");
+        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+    }
+
+    #[test]
+    fn expr_infix_with_left_hand_prefix_and_postfix_operator() {
+        let p = qp(expression, "*a? + b");
+        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+    }
+
+    #[test]
+    fn expr_infix_with_right_hand_prefix_and_postfix_operator() {
+        let p = qp(expression, "a + *b?");
+        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+    }
+
+    #[test]
+    fn expr_infix_with_left_and_right_hand_prefix_and_postfix_operator() {
+        let p = qp(expression, "*a? + *b?");
+        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+    }
+
+    #[test]
+    fn expr_multiple_prefix_operator() {
+        let p = qp(expression, "&*a");
+        assert_eq!(unwrap_progress(p).extent(), (0, 3))
     }
 
     #[test]
