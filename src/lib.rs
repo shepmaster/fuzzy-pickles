@@ -1635,7 +1635,8 @@ pub enum PatternKind {
     Ident(PatternIdent), // TODO: split into ident and enumtuple
     MacroCall(PatternMacroCall),
     Number(PatternNumber),
-    Range(PatternRange),
+    RangeExclusive(PatternRangeExclusive),
+    RangeInclusive(PatternRangeInclusive),
     Reference(PatternReference),
     Slice(PatternSlice),
     String(PatternString),
@@ -1649,18 +1650,19 @@ impl PatternKind {
         use PatternKind::*;
 
         match *self {
-            Byte(PatternByte { extent, .. })             |
-            ByteString(PatternByteString { extent, .. }) |
-            Character(PatternCharacter { extent, .. })   |
-            Ident(PatternIdent { extent, .. })           |
-            Number(PatternNumber { extent, .. })         |
-            MacroCall(PatternMacroCall { extent, .. })   |
-            Range(PatternRange { extent, .. })           |
-            Reference(PatternReference { extent, .. })   |
-            Slice(PatternSlice { extent, .. })           |
-            String(PatternString { extent, .. })         |
-            Struct(PatternStruct { extent, .. })         |
-            Tuple(PatternTuple { extent, .. })           => extent,
+            Byte(PatternByte { extent, .. })                     |
+            ByteString(PatternByteString { extent, .. })         |
+            Character(PatternCharacter { extent, .. })           |
+            Ident(PatternIdent { extent, .. })                   |
+            Number(PatternNumber { extent, .. })                 |
+            MacroCall(PatternMacroCall { extent, .. })           |
+            RangeExclusive(PatternRangeExclusive { extent, .. }) |
+            RangeInclusive(PatternRangeInclusive { extent, .. }) |
+            Reference(PatternReference { extent, .. })           |
+            Slice(PatternSlice { extent, .. })                   |
+            String(PatternString { extent, .. })                 |
+            Struct(PatternStruct { extent, .. })                 |
+            Tuple(PatternTuple { extent, .. })                   => extent,
         }
     }
 }
@@ -1764,7 +1766,15 @@ pub struct PatternMacroCall {
 }
 
 #[derive(Debug, Visit)]
-pub struct PatternRange {
+pub struct PatternRangeExclusive {
+    extent: Extent,
+    start: PatternRangeComponent,
+    end: PatternRangeComponent,
+    whitespace: Vec<Whitespace>,
+}
+
+#[derive(Debug, Visit)]
+pub struct PatternRangeInclusive {
     extent: Extent,
     start: PatternRangeComponent,
     end: PatternRangeComponent,
@@ -2157,7 +2167,8 @@ pub trait Visitor {
     fn visit_pattern_kind(&mut self, &PatternKind) {}
     fn visit_pattern_macro_call(&mut self, &PatternMacroCall) {}
     fn visit_pattern_number(&mut self, &PatternNumber) {}
-    fn visit_pattern_range(&mut self, &PatternRange) {}
+    fn visit_pattern_range_exclusive(&mut self, &PatternRangeExclusive) {}
+    fn visit_pattern_range_inclusive(&mut self, &PatternRangeInclusive) {}
     fn visit_pattern_reference(&mut self, &PatternReference) {}
     fn visit_pattern_slice(&mut self, &PatternSlice) {}
     fn visit_pattern_string(&mut self, &PatternString) {}
@@ -2326,7 +2337,8 @@ pub trait Visitor {
     fn exit_pattern_macro_call(&mut self, &PatternMacroCall) {}
     fn exit_pattern_name(&mut self, &PatternName) {}
     fn exit_pattern_number(&mut self, &PatternNumber) {}
-    fn exit_pattern_range(&mut self, &PatternRange) {}
+    fn exit_pattern_range_exclusive(&mut self, &PatternRangeExclusive) {}
+    fn exit_pattern_range_inclusive(&mut self, &PatternRangeInclusive) {}
     fn exit_pattern_reference(&mut self, &PatternReference) {}
     fn exit_pattern_slice(&mut self, &PatternSlice) {}
     fn exit_pattern_string(&mut self, &PatternString) {}
@@ -3952,7 +3964,8 @@ fn pattern_name<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternN
 fn pattern_kind<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternKind> {
     pm.alternate(pt)
         // Must precede character and number as it contains them
-        .one(map(pattern_range, PatternKind::Range))
+        .one(map(pattern_range_exclusive, PatternKind::RangeExclusive))
+        .one(map(pattern_range_inclusive, PatternKind::RangeInclusive))
         .one(map(pattern_char, PatternKind::Character))
         .one(map(pattern_byte, PatternKind::Byte))
         .one(map(pattern_number, PatternKind::Number))
@@ -4080,13 +4093,36 @@ fn pattern_reference<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Pat
     })
 }
 
-fn pattern_range<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternRange> {
+fn pattern_range_exclusive<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, PatternRangeExclusive>
+{
+    sequence!(pm, pt, {
+        spt   = point;
+        start = pattern_range_component;
+        _     = double_period;
+        end   = pattern_range_component;
+    }, |pm: &mut Master, pt| PatternRangeExclusive {
+        extent: pm.state.ex(spt, pt),
+        start,
+        end,
+        whitespace: Vec::new()
+    })
+}
+
+fn pattern_range_inclusive<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, PatternRangeInclusive>
+{
     sequence!(pm, pt, {
         spt   = point;
         start = pattern_range_component;
         _     = triple_period;
         end   = pattern_range_component;
-    }, |pm: &mut Master, pt| PatternRange { extent: pm.state.ex(spt, pt), start, end, whitespace: Vec::new() })
+    }, |pm: &mut Master, pt| PatternRangeInclusive {
+        extent: pm.state.ex(spt, pt),
+        start,
+        end,
+        whitespace: Vec::new()
+    })
 }
 
 fn pattern_range_component<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternRangeComponent> {
@@ -6004,33 +6040,63 @@ mod test {
     }
 
     #[test]
-    fn pattern_with_numeric_range() {
+    fn pattern_with_numeric_inclusive_range() {
         let p = qp(pattern, "1 ... 10");
         assert_eq!(unwrap_progress(p).extent(), (0, 8))
     }
 
     #[test]
-    fn pattern_with_numeric_range_negative() {
+    fn pattern_with_numeric_inclusive_range_negative() {
         let p = qp(pattern, "-10 ... -1");
         assert_eq!(unwrap_progress(p).extent(), (0, 10))
     }
 
     #[test]
-    fn pattern_with_character_range() {
+    fn pattern_with_character_inclusive_range() {
         let p = qp(pattern, "'a'...'z'");
         assert_eq!(unwrap_progress(p).extent(), (0, 9))
     }
 
     #[test]
-    fn pattern_with_byte_range() {
+    fn pattern_with_byte_inclusive_range() {
         let p = qp(pattern, "b'a'...b'z'");
         assert_eq!(unwrap_progress(p).extent(), (0, 11))
     }
 
     #[test]
-    fn pattern_with_pathed_ident_range() {
+    fn pattern_with_pathed_ident_inclusive_range() {
         let p = qp(pattern, "foo::a...z");
         assert_eq!(unwrap_progress(p).extent(), (0, 10))
+    }
+
+    #[test]
+    fn pattern_with_numeric_exclusive_range() {
+        let p = qp(pattern, "1 .. 10");
+        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+    }
+
+    #[test]
+    fn pattern_with_numeric_exclusive_range_negative() {
+        let p = qp(pattern, "-10 .. -1");
+        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+    }
+
+    #[test]
+    fn pattern_with_character_exclusive_range() {
+        let p = qp(pattern, "'a'..'z'");
+        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+    }
+
+    #[test]
+    fn pattern_with_byte_exclusive_range() {
+        let p = qp(pattern, "b'a'..b'z'");
+        assert_eq!(unwrap_progress(p).extent(), (0, 10))
+    }
+
+    #[test]
+    fn pattern_with_pathed_ident_exclusive_range() {
+        let p = qp(pattern, "foo::a..z");
+        assert_eq!(unwrap_progress(p).extent(), (0, 9))
     }
 
     #[test]
