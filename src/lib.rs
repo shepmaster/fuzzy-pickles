@@ -1925,6 +1925,7 @@ pub struct ExternBlockMemberFunction {
     extent: Extent,
     visibility: Option<Visibility>,
     pub name: Ident,
+    generics: Option<GenericDeclarations>,
     arguments: Vec<ExternBlockMemberFunctionArgument>,
     return_type: Option<Type>,
     wheres: Vec<Where>,
@@ -4605,12 +4606,15 @@ fn extern_block_static<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, E
 }
 
 // TODO: Massively duplicated!!!
-fn extern_block_member_function<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExternBlockMemberFunction> {
+fn extern_block_member_function<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, ExternBlockMemberFunction>
+{
     sequence!(pm, pt, {
         spt         = point;
         visibility  = optional(visibility);
         _           = kw_fn;
         name        = ident;
+        generics    = optional(generic_declarations);
         arguments   = extern_block_function_arglist;
         return_type = optional(function_return_type);
         wheres      = optional(where_clause);
@@ -4620,6 +4624,7 @@ fn extern_block_member_function<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progr
             extent: pm.state.ex(spt, pt),
             visibility,
             name,
+            generics,
             arguments,
             return_type,
             wheres: wheres.unwrap_or_else(Vec::new),
@@ -5401,6 +5406,12 @@ mod test {
     fn item_extern_block_with_variadic_fn() {
         let p = qp(item, r#"extern { fn foo(bar: u8, ...) -> bool; }"#);
         assert_eq!(unwrap_progress(p).extent(), (0, 40))
+    }
+
+    #[test]
+    fn item_extern_block_with_fn_and_generics() {
+        let p = qp(item, r#"extern { fn foo<A, B>(bar: A) -> B; }"#);
+        assert_eq!(unwrap_progress(p).extent(), (0, 37))
     }
 
     #[test]
