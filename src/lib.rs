@@ -1637,6 +1637,7 @@ pub enum PatternKind {
     Number(PatternNumber),
     Range(PatternRange),
     Reference(PatternReference),
+    Slice(PatternSlice),
     String(PatternString),
     Struct(PatternStruct),
     Tuple(PatternTuple),
@@ -1656,6 +1657,7 @@ impl PatternKind {
             MacroCall(PatternMacroCall { extent, .. })   |
             Range(PatternRange { extent, .. })           |
             Reference(PatternReference { extent, .. })   |
+            Slice(PatternSlice { extent, .. })           |
             String(PatternString { extent, .. })         |
             Struct(PatternStruct { extent, .. })         |
             Tuple(PatternTuple { extent, .. })           => extent,
@@ -1704,11 +1706,17 @@ pub struct PatternStructFieldShort {
 #[derive(Debug, Visit)]
 pub struct PatternTuple {
     extent: Extent,
-    members: Vec<PatternTupleMember>,
+    members: Vec<PatternBundleMember>,
+}
+
+#[derive(Debug, Visit)]
+pub struct PatternSlice {
+    extent: Extent,
+    members: Vec<PatternBundleMember>,
 }
 
 #[derive(Debug, Visit, Decompose)]
-pub enum PatternTupleMember {
+pub enum PatternBundleMember {
     Pattern(Pattern),
     Wildcard(Extent),
 }
@@ -2140,22 +2148,23 @@ pub trait Visitor {
     fn visit_pathed_ident(&mut self, &PathedIdent) {}
     fn visit_pattern(&mut self, &Pattern) {}
     fn visit_pattern_name(&mut self, &PatternName) {}
-    fn visit_pattern_kind(&mut self, &PatternKind) {}
+    fn visit_pattern_bundle_member(&mut self, &PatternBundleMember) {}
     fn visit_pattern_byte(&mut self, &PatternByte) {}
     fn visit_pattern_byte_string(&mut self, &PatternByteString) {}
     fn visit_pattern_character(&mut self, &PatternCharacter) {}
     fn visit_pattern_ident(&mut self, &PatternIdent) {}
+    fn visit_pattern_kind(&mut self, &PatternKind) {}
     fn visit_pattern_macro_call(&mut self, &PatternMacroCall) {}
     fn visit_pattern_number(&mut self, &PatternNumber) {}
     fn visit_pattern_range(&mut self, &PatternRange) {}
     fn visit_pattern_reference(&mut self, &PatternReference) {}
+    fn visit_pattern_slice(&mut self, &PatternSlice) {}
     fn visit_pattern_string(&mut self, &PatternString) {}
     fn visit_pattern_struct(&mut self, &PatternStruct) {}
     fn visit_pattern_struct_field(&mut self, &PatternStructField) {}
     fn visit_pattern_struct_field_long(&mut self, &PatternStructFieldLong) {}
     fn visit_pattern_struct_field_short(&mut self, &PatternStructFieldShort) {}
     fn visit_pattern_tuple(&mut self, &PatternTuple) {}
-    fn visit_pattern_tuple_member(&mut self, &PatternTupleMember) {}
     fn visit_pattern_wildcard(&mut self, &PatternWildcard) {}
     fn visit_range(&mut self, &Range) {}
     fn visit_range_inclusive(&mut self, &RangeInclusive) {}
@@ -2307,23 +2316,24 @@ pub trait Visitor {
     fn exit_path_component(&mut self, &PathComponent) {}
     fn exit_pathed_ident(&mut self, &PathedIdent) {}
     fn exit_pattern(&mut self, &Pattern) {}
-    fn exit_pattern_name(&mut self, &PatternName) {}
-    fn exit_pattern_kind(&mut self, &PatternKind) {}
+    fn exit_pattern_bundle_member(&mut self, &PatternBundleMember) {}
     fn exit_pattern_byte(&mut self, &PatternByte) {}
     fn exit_pattern_byte_string(&mut self, &PatternByteString) {}
     fn exit_pattern_character(&mut self, &PatternCharacter) {}
     fn exit_pattern_ident(&mut self, &PatternIdent) {}
+    fn exit_pattern_kind(&mut self, &PatternKind) {}
     fn exit_pattern_macro_call(&mut self, &PatternMacroCall) {}
+    fn exit_pattern_name(&mut self, &PatternName) {}
     fn exit_pattern_number(&mut self, &PatternNumber) {}
     fn exit_pattern_range(&mut self, &PatternRange) {}
     fn exit_pattern_reference(&mut self, &PatternReference) {}
+    fn exit_pattern_slice(&mut self, &PatternSlice) {}
     fn exit_pattern_string(&mut self, &PatternString) {}
     fn exit_pattern_struct(&mut self, &PatternStruct) {}
     fn exit_pattern_struct_field(&mut self, &PatternStructField) {}
     fn exit_pattern_struct_field_long(&mut self, &PatternStructFieldLong) {}
     fn exit_pattern_struct_field_short(&mut self, &PatternStructFieldShort) {}
     fn exit_pattern_tuple(&mut self, &PatternTuple) {}
-    fn exit_pattern_tuple_member(&mut self, &PatternTupleMember) {}
     fn exit_pattern_wildcard(&mut self, &PatternWildcard) {}
     fn exit_range(&mut self, &Range) {}
     fn exit_range_inclusive(&mut self, &RangeInclusive) {}
@@ -3950,6 +3960,7 @@ fn pattern_kind<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternK
         .one(map(pattern_string, PatternKind::String))
         .one(map(pattern_struct, PatternKind::Struct))
         .one(map(pattern_tuple, PatternKind::Tuple))
+        .one(map(pattern_slice, PatternKind::Slice))
         .one(map(pattern_macro_call, PatternKind::MacroCall))
         // Must be last, otherwise it collides with struct names
         .one(map(pattern_ident, PatternKind::Ident))
@@ -3970,17 +3981,26 @@ fn pattern_tuple<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Pattern
     sequence!(pm, pt, {
         spt     = point;
         _       = left_paren;
-        members = zero_or_more_tailed_values(comma, pattern_tuple_member);
+        members = zero_or_more_tailed_values(comma, pattern_bundle_member);
         _       = right_paren;
     }, |pm: &mut Master, pt| PatternTuple { extent: pm.state.ex(spt, pt), members })
 }
 
-fn pattern_tuple_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
-    Progress<'s, PatternTupleMember>
+fn pattern_slice<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternSlice> {
+    sequence!(pm, pt, {
+        spt     = point;
+        _       = left_square;
+        members = zero_or_more_tailed_values(comma, pattern_bundle_member);
+        _       = right_square;
+    }, |pm: &mut Master, pt| PatternSlice { extent: pm.state.ex(spt, pt), members })
+}
+
+fn pattern_bundle_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, PatternBundleMember>
 {
     pm.alternate(pt)
-        .one(map(pattern, PatternTupleMember::Pattern))
-        .one(map(ext(double_period), PatternTupleMember::Wildcard))
+        .one(map(pattern, PatternBundleMember::Pattern))
+        .one(map(ext(double_period), PatternBundleMember::Wildcard))
         .finish()
 }
 
@@ -5939,6 +5959,12 @@ mod test {
     fn pattern_with_numeric_literal_negative() {
         let p = qp(pattern, "- 42");
         assert_eq!(unwrap_progress(p).extent(), (0, 4))
+    }
+
+    #[test]
+    fn pattern_with_slice() {
+        let p = qp(pattern, "[]");
+        assert_eq!(unwrap_progress(p).extent(), (0, 2))
     }
 
     #[test]
