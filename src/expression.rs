@@ -1284,6 +1284,20 @@ mod test {
     }
 
     #[test]
+    fn expr_break_with_value() {
+        let p = unwrap_progress(qp(expression, "break 42"));
+        assert!(p.is_break());
+        assert_eq!(p.extent(), (0, 8))
+    }
+
+    #[test]
+    fn expr_break_with_label_and_value() {
+        let p = unwrap_progress(qp(expression, "break 'outer 42"));
+        assert!(p.is_break());
+        assert_eq!(p.extent(), (0, 15))
+    }
+
+    #[test]
     fn expr_array_explicit() {
         let p = qp(expression, "[1, 1]");
         assert_eq!(unwrap_progress(p).extent(), (0, 6))
