@@ -1849,11 +1849,16 @@ pub struct Impl {
     extent: Extent,
     is_unsafe: Option<Extent>,
     generics: Option<GenericDeclarations>,
-    of_trait: Option<ImplOfTrait>,
-    type_name: Type,
+    kind: ImplKind,
     wheres: Vec<Where>,
     body: Vec<ImplMember>,
     whitespace: Vec<Whitespace>,
+}
+
+#[derive(Debug, Visit, Decompose)]
+pub enum ImplKind {
+    Trait(ImplOfTrait),
+    Inherent(ImplOfInherent),
 }
 
 #[derive(Debug, Visit)]
@@ -1861,6 +1866,14 @@ pub struct ImplOfTrait {
     extent: Extent,
     is_negative: Option<Extent>,
     trait_name: Type, // TODO: namedtype only?
+    type_name: Type,
+    whitespace: Vec<Whitespace>,
+}
+
+#[derive(Debug, Visit)]
+pub struct ImplOfInherent {
+    extent: Extent,
+    type_name: Type,
     whitespace: Vec<Whitespace>,
 }
 
@@ -2134,7 +2147,9 @@ pub trait Visitor {
     fn visit_impl(&mut self, &Impl) {}
     fn visit_impl_const(&mut self, &ImplConst) {}
     fn visit_impl_function(&mut self, &ImplFunction) {}
+    fn visit_impl_kind(&mut self, &ImplKind) {}
     fn visit_impl_member(&mut self, &ImplMember) {}
+    fn visit_impl_of_inherent(&mut self, &ImplOfInherent) {}
     fn visit_impl_of_trait(&mut self, &ImplOfTrait) {}
     fn visit_impl_type(&mut self, &ImplType) {}
     fn visit_item(&mut self, &Item) {}
@@ -2304,7 +2319,9 @@ pub trait Visitor {
     fn exit_impl(&mut self, &Impl) {}
     fn exit_impl_const(&mut self, &ImplConst) {}
     fn exit_impl_function(&mut self, &ImplFunction) {}
+    fn exit_impl_kind(&mut self, &ImplKind) {}
     fn exit_impl_member(&mut self, &ImplMember) {}
+    fn exit_impl_of_inherent(&mut self, &ImplOfInherent) {}
     fn exit_impl_of_trait(&mut self, &ImplOfTrait) {}
     fn exit_impl_type(&mut self, &ImplType) {}
     fn exit_item(&mut self, &Item) {}
@@ -4485,8 +4502,7 @@ fn p_impl<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Impl> {
         is_unsafe = optional(ext(kw_unsafe));
         _         = kw_impl;
         generics  = optional(generic_declarations);
-        of_trait  = optional(p_impl_of_trait);
-        type_name = typ;
+        kind      = p_impl_kind;
         wheres    = optional(where_clause);
         _         = left_curly;
         body      = zero_or_more(impl_member);
@@ -4495,10 +4511,27 @@ fn p_impl<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Impl> {
         extent: pm.state.ex(spt, pt),
         is_unsafe,
         generics,
-        of_trait,
-        type_name,
+        kind,
         wheres: wheres.unwrap_or_else(Vec::new),
         body,
+        whitespace: Vec::new(),
+    })
+}
+
+fn p_impl_kind<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplKind> {
+    pm.alternate(pt)
+        .one(map(p_impl_of_trait, ImplKind::Trait))
+        .one(map(p_impl_of_inherent, ImplKind::Inherent))
+        .finish()
+}
+
+fn p_impl_of_inherent<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplOfInherent> {
+    sequence!(pm, pt, {
+        spt       = point;
+        type_name = typ;
+    }, |pm: &mut Master, pt| ImplOfInherent {
+        extent: pm.state.ex(spt, pt),
+        type_name,
         whitespace: Vec::new(),
     })
 }
@@ -4509,7 +4542,14 @@ fn p_impl_of_trait<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplO
         is_negative = optional(ext(bang));
         trait_name  = typ;
         _           = kw_for;
-    }, |pm: &mut Master, pt| ImplOfTrait { extent: pm.state.ex(spt, pt), is_negative, trait_name, whitespace: Vec::new() })
+        type_name   = typ;
+    }, |pm: &mut Master, pt| ImplOfTrait {
+        extent: pm.state.ex(spt, pt),
+        is_negative,
+        trait_name,
+        type_name,
+        whitespace: Vec::new(),
+    })
 }
 
 fn impl_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplMember> {
