@@ -1866,7 +1866,7 @@ pub struct ImplOfTrait {
     extent: Extent,
     is_negative: Option<Extent>,
     trait_name: Type, // TODO: namedtype only?
-    type_name: Type,
+    type_name: ImplOfTraitType,
     whitespace: Vec<Whitespace>,
 }
 
@@ -1875,6 +1875,12 @@ pub struct ImplOfInherent {
     extent: Extent,
     type_name: Type,
     whitespace: Vec<Whitespace>,
+}
+
+#[derive(Debug, Visit, Decompose)]
+pub enum ImplOfTraitType {
+    Type(Type),
+    Wildcard(Extent),
 }
 
 #[derive(Debug, Visit, Decompose)]
@@ -2151,6 +2157,7 @@ pub trait Visitor {
     fn visit_impl_member(&mut self, &ImplMember) {}
     fn visit_impl_of_inherent(&mut self, &ImplOfInherent) {}
     fn visit_impl_of_trait(&mut self, &ImplOfTrait) {}
+    fn visit_impl_of_trait_type(&mut self, &ImplOfTraitType) {}
     fn visit_impl_type(&mut self, &ImplType) {}
     fn visit_item(&mut self, &Item) {}
     fn visit_let(&mut self, &Let) {}
@@ -2323,6 +2330,7 @@ pub trait Visitor {
     fn exit_impl_member(&mut self, &ImplMember) {}
     fn exit_impl_of_inherent(&mut self, &ImplOfInherent) {}
     fn exit_impl_of_trait(&mut self, &ImplOfTrait) {}
+    fn exit_impl_of_trait_type(&mut self, &ImplOfTraitType) {}
     fn exit_impl_type(&mut self, &ImplType) {}
     fn exit_item(&mut self, &Item) {}
     fn exit_let(&mut self, &Let) {}
@@ -4542,7 +4550,7 @@ fn p_impl_of_trait<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplO
         is_negative = optional(ext(bang));
         trait_name  = typ;
         _           = kw_for;
-        type_name   = typ;
+        type_name   = type_or_wildcard;
     }, |pm: &mut Master, pt| ImplOfTrait {
         extent: pm.state.ex(spt, pt),
         is_negative,
@@ -4550,6 +4558,13 @@ fn p_impl_of_trait<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplO
         type_name,
         whitespace: Vec::new(),
     })
+}
+
+fn type_or_wildcard<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplOfTraitType> {
+    pm.alternate(pt)
+        .one(map(typ, ImplOfTraitType::Type))
+        .one(map(ext(double_period), ImplOfTraitType::Wildcard))
+        .finish()
 }
 
 fn impl_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplMember> {
@@ -5531,6 +5546,12 @@ mod test {
     fn impl_with_negative_trait() {
         let p = qp(p_impl, "impl !Foo for Bar {}");
         assert_eq!(unwrap_progress(p).extent, (0, 20))
+    }
+
+    #[test]
+    fn impl_trait_with_wildcard_type() {
+        let p = qp(p_impl, "impl Foo for .. {}");
+        assert_eq!(unwrap_progress(p).extent, (0, 18))
     }
 
     #[test]
