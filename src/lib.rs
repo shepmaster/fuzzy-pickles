@@ -5128,7 +5128,7 @@ mod test_utils {
     pub fn unwrap_progress<T>(p: TestResult<T>) -> T {
         match p {
             Ok((_, v)) => v,
-            Err((offset, e)) => panic!("Failed parsing at {:?}: {:?}", offset, e),
+            Err((offset, e)) => panic!("Failed parsing at token at index {}: {:?}", offset, e),
         }
     }
 
