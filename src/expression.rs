@@ -144,6 +144,7 @@ enum OperatorInfix {
 
 #[derive(Debug)]
 enum OperatorPostfix {
+    Ascription { typ: Type },
     AsType { typ: Type },
     Call { args: Vec<Expression> },
     FieldAccess { field: FieldName },
@@ -278,6 +279,7 @@ fn operator_postfix<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
 {
     pm.alternate(pt)
         .one(operator_postfix_as_type)
+        .one(operator_postfix_ascription)
         .one(operator_postfix_call)
         .one(operator_postfix_field_access)
         .one(operator_postfix_slice)
@@ -292,6 +294,15 @@ fn operator_postfix_as_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
         _   = kw_as;
         typ = typ;
     }, |_, _| OperatorPostfix::AsType { typ })
+}
+
+fn operator_postfix_ascription<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, OperatorPostfix>
+{
+    sequence!(pm, pt, {
+        _   = colon;
+        typ = typ;
+    }, |_, _| OperatorPostfix::Ascription { typ })
 }
 
 // TODO: avoid recursion here
@@ -593,6 +604,15 @@ impl<'s> ShuntingYard<'s> {
                     })
                 })
             },
+            Postfix(OperatorPostfix::Ascription { typ }) => {
+                self.apply_postfix(pm, op_range, |extent, expr| {
+                    Expression::Ascription(Ascription {
+                        extent,
+                        target: Box::new(expr),
+                        typ,
+                    })
+                })
+            },
             Postfix(OperatorPostfix::Try(..)) => {
                 self.apply_postfix(pm, op_range, |extent, expr| {
                     Expression::TryOperator(TryOperator {
@@ -700,6 +720,499 @@ impl<'s> ShuntingYard<'s> {
     {
         self.result.pop().ok_or((location, Error::ExpectedExpression))
     }
+}
+
+pub fn expr_macro_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MacroCall> {
+    sequence!(pm, pt, {
+        spt  = point;
+        name = ident;
+        _    = bang;
+        arg  = optional(ident);
+        args = expr_macro_call_args;
+    }, |pm: &mut Master, pt| MacroCall { extent: pm.state.ex(spt, pt), name, arg, args })
+}
+
+fn expr_macro_call_args<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MacroCallArgs> {
+    pm.alternate(pt)
+        .one(map(expr_macro_call_paren, MacroCallArgs::Paren))
+        .one(map(expr_macro_call_square, MacroCallArgs::Square))
+        .one(map(expr_macro_call_curly, MacroCallArgs::Curly))
+        .finish()
+}
+
+fn expr_macro_call_paren<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+    sequence!(pm, pt, {
+        _    = left_paren;
+        args = parse_nested_until(Token::is_left_paren, Token::is_right_paren);
+        _    = right_paren;
+    }, |_, _| args)
+}
+
+fn expr_macro_call_square<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+    sequence!(pm, pt, {
+        _    = left_square;
+        args = parse_nested_until(Token::is_left_square, Token::is_right_square);
+        _    = right_square;
+    }, |_, _| args)
+}
+
+fn expr_macro_call_curly<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+    sequence!(pm, pt, {
+        _    = left_curly;
+        args = parse_nested_until(Token::is_left_curly, Token::is_right_curly);
+        _    = right_curly;
+    }, |_, _| args)
+}
+
+fn expr_let<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Let> {
+    sequence!(pm, pt, {
+        spt     = point;
+        _       = kw_let;
+        pattern = pattern;
+        typ     = optional(expr_let_type);
+        value   = optional(expr_let_rhs);
+    }, |pm: &mut Master, pt| Let {
+        extent: pm.state.ex(spt, pt),
+        pattern,
+        typ,
+        value: value.map(Box::new),
+        whitespace: Vec::new(),
+    })
+}
+
+fn expr_let_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Type> {
+    sequence!(pm, pt, {
+        _   = colon;
+        typ = typ;
+    }, |_, _| typ)
+}
+
+fn expr_let_rhs<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
+    sequence!(pm, pt, {
+        _     = equals;
+        value = expression;
+    }, |_, _| value)
+}
+
+fn expr_if<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, If> {
+    sequence!(pm, pt, {
+        spt               = point;
+        _                 = kw_if;
+        (condition, body) = expr_followed_by_block;
+        more              = zero_or_more(expr_if_else_if);
+        else_body         = optional(expr_if_else_end);
+    }, move |pm: &mut Master, pt| If {
+        extent: pm.state.ex(spt, pt),
+        condition: Box::new(condition),
+        body: Box::new(body),
+        more,
+        else_body: else_body.map(Box::new),
+        whitespace: Vec::new(),
+    })
+}
+
+fn expr_if_else_if<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, If> {
+    sequence!(pm, pt, {
+        _    = kw_else;
+        tail = expr_if;
+    }, |_, _| tail)
+}
+
+fn expr_if_else_end<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Block> {
+    sequence!(pm, pt, {
+        _         = kw_else;
+        else_body = block;
+    }, |_, _| else_body)
+}
+
+fn expr_followed_by_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, (Expression, Block)> {
+    sequence!(pm, pt, {
+        condition = disallow_struct_literals(expression);
+        body      = block;
+    }, |_, _| (condition, body))
+}
+
+fn expr_for_loop<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ForLoop> {
+    sequence!(pm, pt, {
+        spt          = point;
+        label        = optional(loop_label);
+        _            = kw_for;
+        pattern      = pattern;
+        _            = kw_in;
+        (iter, body) = expr_followed_by_block;
+    }, |pm: &mut Master, pt| ForLoop {
+        extent: pm.state.ex(spt, pt),
+        label,
+        pattern,
+        iter: Box::new(iter),
+        body: Box::new(body),
+        whitespace: Vec::new(),
+    })
+}
+
+fn loop_label<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Lifetime> {
+    sequence!(pm, pt, {
+        lifetime = lifetime;
+        _        = colon;
+    }, |_, _| lifetime)
+}
+
+fn expr_loop<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Loop> {
+    sequence!(pm, pt, {
+        spt   = point;
+        label = optional(loop_label);
+        _     = kw_loop;
+        body  = block;
+    }, |pm: &mut Master, pt| Loop { extent: pm.state.ex(spt, pt), label, body: Box::new(body), whitespace: Vec::new() })
+}
+
+fn expr_if_let<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, IfLet> {
+    sequence!(pm, pt, {
+        spt           = point;
+        _             = kw_if;
+        _             = kw_let;
+        pattern       = pattern;
+        _             = equals;
+        (value, body) = expr_followed_by_block;
+    }, |pm: &mut Master, pt| IfLet {
+        extent: pm.state.ex(spt, pt),
+        pattern,
+        value: Box::new(value),
+        body: Box::new(body),
+        whitespace: Vec::new(),
+    })
+}
+
+fn expr_while<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, While> {
+    sequence!(pm, pt, {
+        spt           = point;
+        label         = optional(loop_label);
+        _             = kw_while;
+        (value, body) = expr_followed_by_block;
+    }, |pm: &mut Master, pt| While {
+        extent: pm.state.ex(spt, pt),
+        label,
+        value: Box::new(value),
+        body: Box::new(body),
+        whitespace: Vec::new(),
+    })
+}
+
+fn expr_while_let<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, WhileLet> {
+    sequence!(pm, pt, {
+        spt           = point;
+        label         = optional(loop_label);
+        _             = kw_while;
+        _             = kw_let;
+        pattern       = pattern;
+        _             = equals;
+        (value, body) = expr_followed_by_block;
+    }, |pm: &mut Master, pt| WhileLet {
+        extent: pm.state.ex(spt, pt),
+        label,
+        pattern,
+        value: Box::new(value),
+        body: Box::new(body),
+        whitespace: Vec::new(),
+    })
+}
+
+impl ImplicitSeparator for MatchArm {
+    fn is_implicit_separator(&self) -> bool {
+        match self.hand {
+            MatchHand::Brace(..) => true,
+            MatchHand::Expression(..) => false,
+        }
+    }
+}
+
+fn expr_match<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Match> {
+    sequence!(pm, pt, {
+        spt  = point;
+        _    = kw_match;
+        head = disallow_struct_literals(expression);
+        _    = left_curly;
+        arms = zero_or_more_implicitly_tailed_values(comma, match_arm);
+        _    = right_curly;
+    }, |pm: &mut Master, pt| Match { extent: pm.state.ex(spt, pt), head: Box::new(head), arms, whitespace: Vec::new() })
+}
+
+fn match_arm<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MatchArm> {
+    sequence!(pm, pt, {
+        spt        = point;
+        attributes = zero_or_more(attribute);
+        pattern    = one_or_more_tailed_values(pipe, pattern);
+        guard      = optional(match_arm_guard);
+        _          = thick_arrow;
+        hand       = match_arm_hand;
+    }, |pm: &mut Master, pt| MatchArm { extent: pm.state.ex(spt, pt), attributes, pattern, guard, hand, whitespace: Vec::new() })
+}
+
+fn match_arm_guard<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
+    sequence!(pm, pt, {
+        _     = kw_if;
+        guard = allow_struct_literals(expression);
+    }, |_, _| guard)
+}
+
+fn match_arm_hand<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MatchHand> {
+    pm.alternate(pt)
+        .one(map(allow_struct_literals(expr_block), |b| MatchHand::Brace(Expression::Block(b))))
+        .one(map(allow_struct_literals(expression), MatchHand::Expression))
+        .finish()
+}
+
+fn expr_tuple_or_parenthetical<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
+    sequence!(pm, pt, {
+        spt    = point;
+        _      = left_paren;
+        values = allow_struct_literals(zero_or_more_tailed(comma, expression));
+        _      = right_paren;
+    }, move |pm: &mut Master, pt| {
+        let extent = pm.state.ex(spt, pt);
+        let values = values;
+        let Tailed { mut values, separator_count, .. } = values;
+        match (values.len(), separator_count) {
+            (1, 0) => Expression::Parenthetical(Parenthetical {
+                extent,
+                expression: Box::new(values.pop().expect("Must have one parenthesized value")),
+            }),
+            _ => Expression::Tuple(Tuple {
+                extent,
+                members: values,
+            }),
+        }
+    })
+}
+
+fn expr_array<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Array> {
+    pm.alternate(pt)
+        .one(map(expr_array_explicit, Array::Explicit))
+        .one(map(expr_array_repeated, Array::Repeated))
+        .finish()
+}
+
+fn expr_array_explicit<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ArrayExplicit> {
+    sequence!(pm, pt, {
+        spt    = point;
+        _      = left_square;
+        values = allow_struct_literals(zero_or_more_tailed_values(comma, expression));
+        _      = right_square;
+    }, |pm: &mut Master, pt| ArrayExplicit { extent: pm.state.ex(spt, pt), values })
+}
+
+fn expr_array_repeated<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ArrayRepeated> {
+    sequence!(pm, pt, {
+        spt   = point;
+        _     = left_square;
+        value = allow_struct_literals(expression);
+        _     = semicolon;
+        count = expression;
+        _     = right_square;
+    }, |pm: &mut Master, pt| ArrayRepeated {
+        extent: pm.state.ex(spt, pt),
+        value: Box::new(value),
+        count: Box::new(count),
+        whitespace: Vec::new(),
+    })
+}
+
+pub fn expr_byte<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Byte> {
+    byte(pm, pt)
+        .map(|extent| Byte { extent, value: Character { extent, value: extent } }) // FIXME: value
+}
+
+pub fn expr_byte_string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ByteString> {
+    pm.alternate(pt)
+        .one(map(byte_string, |extent| {
+            ByteString { extent, value: String { extent, value: extent } }  // FIXME: value
+        }))
+        .one(map(byte_string_raw, |extent| {
+            ByteString { extent, value: String { extent, value: extent } }  // FIXME: value
+        }))
+        .finish()
+}
+
+fn expr_closure<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Closure> {
+    sequence!(pm, pt, {
+        spt                 = point;
+        mov                 = optional(kw_move);
+        _                   = pipe;
+        args                = zero_or_more_tailed_values(comma, expr_closure_arg);
+        _                   = pipe;
+        (return_type, body) = expr_closure_return;
+    }, |pm: &mut Master, pt| Closure {
+        extent: pm.state.ex(spt, pt),
+        is_move: mov.is_some(),
+        args,
+        return_type,
+        body: Box::new(body),
+        whitespace: Vec::new(),
+    })
+}
+
+fn expr_closure_arg<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ClosureArg> {
+    sequence!(pm, pt, {
+        name = pattern;
+        typ  = optional(expr_closure_arg_type);
+    }, |_, _| ClosureArg { name, typ, whitespace: Vec::new() })
+}
+
+fn expr_closure_arg_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Type> {
+    sequence!(pm, pt, {
+        _   = colon;
+        typ = typ;
+    }, |_, _| typ)
+}
+
+fn expr_closure_return<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, (Option<Type>, Expression)> {
+    pm.alternate(pt)
+        .one(expr_closure_return_explicit)
+        .one(expr_closure_return_inferred)
+        .finish()
+}
+
+fn expr_closure_return_explicit<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, (Option<Type>, Expression)> {
+    sequence!(pm, pt, {
+        _    = thin_arrow;
+        typ  = typ;
+        body = expr_closure_return_body;
+    }, |_, _| (Some(typ), body))
+}
+
+fn expr_closure_return_body<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
+    pm.alternate(pt)
+        .one(expr_tuple_or_parenthetical)
+        .one(map(expr_block, Expression::Block))
+        .finish()
+}
+
+fn expr_closure_return_inferred<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, (Option<Type>, Expression)> {
+    map(expression, |body| (None, body))(pm, pt)
+}
+
+fn expr_return<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Return> {
+    sequence!(pm, pt, {
+        spt   = point;
+        _     = kw_return;
+        value = optional(expression);
+    }, |pm: &mut Master, pt| Return {
+        extent: pm.state.ex(spt, pt),
+        value: value.map(Box::new),
+        whitespace: Vec::new(),
+    })
+}
+
+fn expr_continue<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Continue> {
+    sequence!(pm, pt, {
+        spt   = point;
+        _     = kw_continue;
+        label = optional(lifetime);
+    }, |pm: &mut Master, pt| Continue { extent: pm.state.ex(spt, pt), label, whitespace: Vec::new() })
+}
+
+fn expr_break<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Break> {
+    sequence!(pm, pt, {
+        spt   = point;
+        _     = kw_break;
+        label = optional(lifetime);
+        value = optional(expression);
+    }, |pm: &mut Master, pt| Break {
+        extent: pm.state.ex(spt, pt),
+        label,
+        value: value.map(Box::new),
+        whitespace: Vec::new(),
+    })
+}
+
+fn expr_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Box<Block>> {
+    block(pm, pt).map(Box::new)
+}
+
+fn expr_unsafe_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, UnsafeBlock> {
+    sequence!(pm, pt, {
+        spt  = point;
+        _    = kw_unsafe;
+        body = block;
+    }, |pm: &mut Master, pt| UnsafeBlock { extent: pm.state.ex(spt, pt), body: Box::new(body), whitespace: Vec::new() })
+}
+
+fn expr_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Value> {
+    if pm.state.ignore_struct_literals {
+        sequence!(pm, pt, {
+            spt  = point;
+            name = pathed_ident;
+        }, |pm: &mut Master, pt| Value { extent: pm.state.ex(spt, pt), name, literal: None })
+    } else {
+        sequence!(pm, pt, {
+            spt     = point;
+            name    = pathed_ident;
+            literal = optional(expr_value_struct_literal);
+        }, |pm: &mut Master, pt| Value { extent: pm.state.ex(spt, pt), name, literal })
+    }
+}
+
+fn expr_value_struct_literal<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, StructLiteral> {
+    sequence!(pm, pt, {
+        spt    = point;
+        _      = left_curly;
+        fields = zero_or_more_tailed_values(comma, expr_value_struct_literal_field);
+        splat  = optional(expr_value_struct_literal_splat);
+        _      = right_curly;
+    }, |pm: &mut Master, pt| StructLiteral {
+        extent: pm.state.ex(spt, pt),
+        fields,
+        splat: splat.map(Box::new),
+        whitespace: Vec::new(),
+    })
+}
+
+fn expr_value_struct_literal_field<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, StructLiteralField> {
+    sequence!(pm, pt, {
+        spt   = point;
+        name  = ident;
+        mpt   = point;
+        value = optional(expr_value_struct_literal_field_value);
+    }, |pm: &mut Master, _| {
+        let value = value.unwrap_or_else(|| Expression::Value(Value {
+            extent: pm.state.ex(spt, mpt),
+            name: name.into(),
+            literal: None,
+        }));
+        StructLiteralField { name, value, whitespace: Vec::new() }
+    })
+}
+
+fn expr_value_struct_literal_field_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, Expression>
+{
+    sequence!(pm, pt, {
+        _     = colon;
+        value = allow_struct_literals(expression);
+    }, |_, _| value)
+}
+
+fn expr_value_struct_literal_splat<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, Expression>
+{
+    sequence!(pm, pt, {
+        _     = double_period;
+        value = allow_struct_literals(expression);
+    }, |_, _| value)
+}
+
+fn expr_disambiguation<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Disambiguation> {
+    sequence!(pm, pt, {
+        spt        = point;
+        core       = disambiguation_core;
+        components = zero_or_more_tailed_values_resume(double_colon, path_component);
+    }, move |pm: &mut Master, pt| Disambiguation {
+        extent: pm.state.ex(spt, pt),
+        from_type: core.from_type,
+        to_type: core.to_type,
+        components,
+        whitespace: core.whitespace,
+    })
 }
 
 #[cfg(test)]
@@ -1409,6 +1922,12 @@ mod test {
     }
 
     #[test]
+    fn expr_type_ascription() {
+        let p = qp(expression, "42 : u8");
+        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+    }
+
+    #[test]
     fn expr_infix_with_left_hand_prefix_operator() {
         let p = qp(expression, "*a + b");
         assert_eq!(unwrap_progress(p).extent(), (0, 6))
@@ -1520,5 +2039,49 @@ mod test {
     fn expr_disambiguation_without_disambiguation() {
         let p = qp(expression, "<Foo>::quux");
         assert_eq!(unwrap_progress(p).extent(), (0, 11))
+    }
+
+    #[test]
+    fn expr_followed_by_block_disallows_struct_literal() {
+        let p = qp(expr_followed_by_block, "a {}");
+        let (e, b) = unwrap_progress(p);
+        assert_eq!(e.extent(), (0, 1));
+        assert_eq!(b.extent, (2, 4));
+    }
+
+    #[test]
+    fn expr_followed_by_block_with_compound_condition() {
+        let p = qp(expr_followed_by_block, "a && b {}");
+        let (e, b) = unwrap_progress(p);
+        assert_eq!(e.extent(), (0, 6));
+        assert_eq!(b.extent, (7, 9));
+    }
+
+    #[test]
+    fn expr_followed_by_block_with_parenthesized_struct_literal() {
+        let p = qp(expr_followed_by_block, "(a {}) {}");
+        let (e, b) = unwrap_progress(p);
+        assert_eq!(e.extent(), (0, 6));
+        let p = e.into_parenthetical().unwrap();
+        assert!(p.expression.is_value());
+        assert_eq!(b.extent, (7, 9));
+    }
+
+    #[test]
+    fn match_arm_with_alternate() {
+        let p = qp(match_arm, "a | b => 1");
+        assert_eq!(unwrap_progress(p).extent, (0, 10))
+    }
+
+    #[test]
+    fn match_arm_with_guard() {
+        let p = qp(match_arm, "a if a > 2 => 1");
+        assert_eq!(unwrap_progress(p).extent, (0, 15))
+    }
+
+    #[test]
+    fn match_arm_with_attribute() {
+        let p = qp(match_arm, "#[cfg(cool)] _ => 1");
+        assert_eq!(unwrap_progress(p).extent, (0, 19))
     }
 }
