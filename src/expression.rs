@@ -144,6 +144,7 @@ enum OperatorInfix {
 
 #[derive(Debug)]
 enum OperatorPostfix {
+    Ascription { typ: Type },
     AsType { typ: Type },
     Call { args: Vec<Expression> },
     FieldAccess { field: FieldName },
@@ -278,6 +279,7 @@ fn operator_postfix<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
 {
     pm.alternate(pt)
         .one(operator_postfix_as_type)
+        .one(operator_postfix_ascription)
         .one(operator_postfix_call)
         .one(operator_postfix_field_access)
         .one(operator_postfix_slice)
@@ -292,6 +294,15 @@ fn operator_postfix_as_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
         _   = kw_as;
         typ = typ;
     }, |_, _| OperatorPostfix::AsType { typ })
+}
+
+fn operator_postfix_ascription<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, OperatorPostfix>
+{
+    sequence!(pm, pt, {
+        _   = colon;
+        typ = typ;
+    }, |_, _| OperatorPostfix::Ascription { typ })
 }
 
 // TODO: avoid recursion here
@@ -587,6 +598,15 @@ impl<'s> ShuntingYard<'s> {
             Postfix(OperatorPostfix::AsType { typ }) => {
                 self.apply_postfix(pm, op_range, |extent, expr| {
                     Expression::AsType(AsType {
+                        extent,
+                        target: Box::new(expr),
+                        typ,
+                    })
+                })
+            },
+            Postfix(OperatorPostfix::Ascription { typ }) => {
+                self.apply_postfix(pm, op_range, |extent, expr| {
+                    Expression::Ascription(Ascription {
                         extent,
                         target: Box::new(expr),
                         typ,
@@ -1899,6 +1919,12 @@ mod test {
     fn expr_as_type_of_value() {
         let p = qp(expression, "bits as u64");
         assert_eq!(unwrap_progress(p).extent(), (0, 11))
+    }
+
+    #[test]
+    fn expr_type_ascription() {
+        let p = qp(expression, "42 : u8");
+        assert_eq!(unwrap_progress(p).extent(), (0, 7))
     }
 
     #[test]

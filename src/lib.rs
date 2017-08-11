@@ -1067,6 +1067,7 @@ impl Statement {
 pub enum Expression {
     Array(Array),
     AsType(AsType),
+    Ascription(Ascription),
     Binary(Binary),
     Block(Box<Block>),
     Box(ExpressionBox),
@@ -1113,6 +1114,7 @@ impl Expression {
             Expression::Number(ref x) => x.extent(),
 
             Expression::AsType(AsType { extent, .. })                 |
+            Expression::Ascription(Ascription { extent, .. })         |
             Expression::Binary(Binary { extent, .. })                 |
             Expression::Box(ExpressionBox { extent, .. })             |
             Expression::Break(Break { extent, .. })                   |
@@ -1510,6 +1512,13 @@ pub struct ExpressionBox {
 
 #[derive(Debug, Visit)]
 pub struct AsType {
+    extent: Extent,
+    target: Box<Expression>,
+    typ: Type,
+}
+
+#[derive(Debug, Visit)]
+pub struct Ascription {
     extent: Extent,
     target: Box<Expression>,
     typ: Type,
@@ -2113,6 +2122,7 @@ pub trait Visitor {
     fn visit_array_explicit(&mut self, &ArrayExplicit) {}
     fn visit_array_repeated(&mut self, &ArrayRepeated) {}
     fn visit_as_type(&mut self, &AsType) {}
+    fn visit_ascription(&mut self, &Ascription) {}
     fn visit_associated_type(&mut self, &AssociatedType) {}
     fn visit_attribute(&mut self, &Attribute) {}
     fn visit_binary(&mut self, &Binary) {}
@@ -2286,6 +2296,7 @@ pub trait Visitor {
     fn exit_array_explicit(&mut self, &ArrayExplicit) {}
     fn exit_array_repeated(&mut self, &ArrayRepeated) {}
     fn exit_as_type(&mut self, &AsType) {}
+    fn exit_ascription(&mut self, &Ascription) {}
     fn exit_associated_type(&mut self, &AssociatedType) {}
     fn exit_attribute(&mut self, &Attribute) {}
     fn exit_binary(&mut self, &Binary) {}
