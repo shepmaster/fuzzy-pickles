@@ -1601,6 +1601,7 @@ pub struct Continue {
 pub struct Break {
     extent: Extent,
     label: Option<Lifetime>,
+    value: Option<Box<Expression>>,
     whitespace: Vec<Whitespace>,
 }
 
@@ -3788,7 +3789,13 @@ fn expr_break<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Break> {
         spt   = point;
         _     = kw_break;
         label = optional(lifetime);
-    }, |pm: &mut Master, pt| Break { extent: pm.state.ex(spt, pt), label, whitespace: Vec::new() })
+        value = optional(expression);
+    }, |pm: &mut Master, pt| Break {
+        extent: pm.state.ex(spt, pt),
+        label,
+        value: value.map(Box::new),
+        whitespace: Vec::new(),
+    })
 }
 
 fn expr_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Box<Block>> {
