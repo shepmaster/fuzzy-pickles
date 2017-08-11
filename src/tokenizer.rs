@@ -75,6 +75,7 @@ pub enum Token {
     Const(Extent),
     Continue(Extent),
     Crate(Extent),
+    Default(Extent),
     Else(Extent),
     Enum(Extent),
     Extern(Extent),
@@ -150,6 +151,7 @@ impl Token {
             Const(s)               |
             Continue(s)            |
             Crate(s)               |
+            Default(s)             |
             DivideEquals(s)        |
             DocComment(s)          |
             DocCommentBlock(s)     |
@@ -494,6 +496,7 @@ fn keyword_or_ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Toke
             "const" => Token::Const(extent),
             "continue" => Token::Continue(extent),
             "crate" => Token::Crate(extent),
+            "default" => Token::Default(extent),
             "else" => Token::Else(extent),
             "enum" => Token::Enum(extent),
             "extern" => Token::Extern(extent),
