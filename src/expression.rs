@@ -756,6 +756,13 @@ mod test {
     }
 
     #[test]
+    fn expr_let_explicit_type_and_value_not_confused_with_greater_than_or_equal() {
+        let p = unwrap_progress(qp(expression, "let foo: Vec<u8>=vec![]"));
+        assert!(p.is_let());
+        assert_eq!(p.extent(), (0, 23));
+    }
+
+    #[test]
     fn expr_let_explicit_type_and_value_not_confused_with_shift_right_assign() {
         let p = unwrap_progress(qp(expression, "let foo: Vec<Vec<u8>>=vec![]"));
         assert!(p.is_let());

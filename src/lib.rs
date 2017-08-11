@@ -2980,6 +2980,12 @@ fn split(token: Token, n: u8) -> Option<(Token, Token)> {
             let b = Token::Equals((s+2, e));
             Some((a, b))
         }
+        (Token::GreaterThanOrEquals(extent), 0) => {
+            let (s, e) = extent;
+            let a = Token::RightAngle((s, s+1));
+            let b = Token::Equals((s+1, e));
+            Some((a, b))
+        }
         (Token::DoublePipe(extent), 0) => {
             let (s, e) = extent;
             let a = Token::Pipe((s, s+1));
