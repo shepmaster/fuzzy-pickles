@@ -108,12 +108,7 @@ impl<'s, T> Eq for TokenPoint<'s, T> {}
 
 #[derive(Debug, Default)]
 pub struct State<'s> {
-    // Constructs like `if expr {}` will greedily match `StructName
-    // {}` as a structure literal expression and then fail because the
-    // body of the `if` isn't found. In these contexts, we disable
-    // struct literals. You can re-enable them by entering something
-    // like parenthesis or a block.
-    ignore_struct_literals: bool,
+    expression_ambiguity: expression::ExpressionAmbiguity,
 
     // When calculating the containing extent of an item, we need to
     // look back one token. Since that's already gone, we bundle all
@@ -240,6 +235,8 @@ pub enum Error {
     ExpectedWhile,
 
     ExpectedExpression,
+
+    BlockNotAllowedHere,
 }
 
 impl peresil::Recoverable for Error {
@@ -3397,48 +3394,6 @@ fn item_macro_call_curly<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s,
     }, |_, _| args)
 }
 
-// To check if a given subexpression should re-allow struct literals,
-// test something like this with the official compiler:
-//
-// ```rust
-// fn main() {
-//     struct Foo {a: u8}
-//     if $parent_expression Foo {a: 42} {}
-// }
-// ```
-//
-// In general, anything that is inside some kind of enclosing
-// container should re-enable them because it is no longer ambiguous.
-fn allow_struct_literals<'s, F, T>(parser: F) ->
-    impl FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, T>
-    where F: FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, T>
-{
-    set_ignore_struct_literals(parser, false)
-}
-
-fn disallow_struct_literals<'s, F, T>(parser: F) ->
-    impl FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, T>
-    where F: FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, T>
-{
-    set_ignore_struct_literals(parser, true)
-}
-
-fn set_ignore_struct_literals<'s, F, T>(parser: F, ignore: bool) ->
-    impl FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, T>
-    where F: FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, T>
-{
-    move |pm, pt| {
-        let old = pm.state.ignore_struct_literals;
-        pm.state.ignore_struct_literals = ignore;
-
-        let res = parser(pm, pt);
-
-        pm.state.ignore_struct_literals = old;
-
-        res
-    }
-}
-
 fn character_literal<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Character> {
     character(pm, pt)
         .map(|extent| Character { extent, value: extent }) // FIXME: value
@@ -3451,7 +3406,6 @@ fn string_literal<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, String
         .one(map(string_raw, |extent| String { extent, value: extent }))
         .finish()
 }
-
 
 fn number_literal<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Number> {
     pm.alternate(pt)
