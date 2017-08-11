@@ -516,6 +516,7 @@ pub struct FunctionHeader {
 #[derive(Debug, Visit)]
 pub struct FunctionQualifiers {
     pub extent: Extent,
+    is_default: Option<Extent>,
     is_const: Option<Extent>,
     is_unsafe: Option<Extent>,
     is_extern: Option<Extent>,
@@ -3033,19 +3034,31 @@ fn function_header<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Funct
         }})
 }
 
-fn function_qualifiers<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, FunctionQualifiers> {
+// TODO: This is overly loose; we can't really have a `default extern` function.
+// TODO: Not all places that call this really can allow all of these qualifiers
+fn function_qualifiers<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, FunctionQualifiers>
+{
     sequence!(pm, pt, {
-        spt       = point;
-        is_const  = optional(ext(kw_const));
-        is_unsafe = optional(ext(kw_unsafe));
-        is_extern = optional(function_qualifier_extern);
+        spt        = point;
+        is_default = optional(ext(kw_default));
+        is_const   = optional(ext(kw_const));
+        is_unsafe  = optional(ext(kw_unsafe));
+        is_extern  = optional(function_qualifier_extern);
     }, |pm: &mut Master, pt| {
         let is_extern = is_extern;
         let (is_extern, abi) = match is_extern {
             Some((ex, abi)) => (Some(ex), abi),
             None => (None, None),
         };
-        FunctionQualifiers { extent: pm.state.ex(spt, pt), is_const, is_unsafe, is_extern, abi }
+        FunctionQualifiers {
+            extent: pm.state.ex(spt, pt),
+            is_default,
+            is_const,
+            is_unsafe,
+            is_extern,
+            abi,
+        }
     })
 }
 
@@ -4454,7 +4467,7 @@ fn trait_impl_function_header<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progres
     sequence!(pm, pt, {
         spt         = point;
         visibility  = optional(visibility);
-        qualifiers  = function_qualifiers;
+        qualifiers  = function_qualifiers; // TODO: shouldn't allow const / default
         _           = kw_fn;
         name        = ident;
         generics    = optional(generic_declarations);
@@ -5135,7 +5148,7 @@ fn associated_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Assoc
 fn typ_function<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeFunction> {
     sequence!(pm, pt, {
         spt         = point;
-        qualifiers  = function_qualifiers;
+        qualifiers  = function_qualifiers; // TODO: shouldn't allow const / default
         _           = kw_fn;
         arguments   = trait_impl_function_arglist; // TODO: shouldn't allow `self`
         return_type = optional(function_return_type);
@@ -5534,9 +5547,51 @@ mod test {
     }
 
     #[test]
-    fn impl_without_trait() {
+    fn inherent_impl() {
         let p = qp(p_impl, "impl Bar {}");
         assert_eq!(unwrap_progress(p).extent, (0, 11))
+    }
+
+    #[test]
+    fn inherent_impl_with_function() {
+        let p = qp(p_impl, "impl Bar { fn foo() {} }");
+        assert_eq!(unwrap_progress(p).extent, (0, 24))
+    }
+
+    #[test]
+    fn inherent_impl_with_const_function() {
+        let p = qp(p_impl, "impl Bar { const fn foo() {} }");
+        assert_eq!(unwrap_progress(p).extent, (0, 30))
+    }
+
+    #[test]
+    fn inherent_impl_with_default_function() {
+        let p = qp(p_impl, "impl Bar { default fn foo() {} }");
+        assert_eq!(unwrap_progress(p).extent, (0, 32))
+    }
+
+    #[test]
+    fn inherent_impl_with_unsafe_function() {
+        let p = qp(p_impl, "impl Bar { unsafe fn foo() {} }");
+        assert_eq!(unwrap_progress(p).extent, (0, 31))
+    }
+
+    #[test]
+    fn inherent_impl_with_extern_function() {
+        let p = qp(p_impl, "impl Bar { extern fn foo() {} }");
+        assert_eq!(unwrap_progress(p).extent, (0, 31))
+    }
+
+    #[test]
+    fn inherent_impl_with_default_const_unsafe_function() {
+        let p = qp(p_impl, "impl Bar { default const unsafe fn foo() {} }");
+        assert_eq!(unwrap_progress(p).extent, (0, 45))
+    }
+
+    #[test]
+    fn inherent_impl_with_default_unsafe_extern_function() {
+        let p = qp(p_impl, "impl Bar { default unsafe extern fn foo() {} }");
+        assert_eq!(unwrap_progress(p).extent, (0, 46))
     }
 
     #[test]
