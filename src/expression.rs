@@ -19,7 +19,7 @@ pub fn expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expres
 #[derive(Debug, Copy, Clone)]
 enum ExpressionState {
     Prefix, // Also "beginning of expression"
-    Infix,
+    Infix { was_range: bool },
     Postfix,
     Atom,
     AtomPostfixOnly,
@@ -34,8 +34,21 @@ fn expression_shunting_yard<'s>(pm: &mut Master<'s>, mut pt: Point<'s>) ->
     loop {
         match state {
             ExpressionState::Prefix |
-            ExpressionState::Infix => {
-                match expression_prefix_or_atom(pm, pt) {
+            ExpressionState::Infix { .. } => {
+                let upgrade_ambiguity = match state {
+                    ExpressionState::Infix { was_range } => {
+                        pm.state.expression_ambiguity.is_ambiguous() && was_range
+                    }
+                    _ => false
+                };
+
+                let next = if upgrade_ambiguity {
+                    head_expression_maximally_ambiguous(expression_prefix_or_atom)(pm, pt)
+                } else {
+                    expression_prefix_or_atom(pm, pt)
+                };
+
+                match next {
                     peresil::Progress { status: peresil::Status::Success(op_or_atom), point } => {
                         match op_or_atom {
                             PrefixOrAtom::Prefix(op) => {
@@ -65,8 +78,9 @@ fn expression_shunting_yard<'s>(pm: &mut Master<'s>, mut pt: Point<'s>) ->
                     peresil::Progress { status: peresil::Status::Success(infix_or_postfix), point } => {
                         match infix_or_postfix {
                             InfixOrPostfix::Infix(op) => {
+                                let was_range = op.is_range();
                                 shunting_yard.add_infix(pm, op, pt, point)?;
-                                state = ExpressionState::Infix;
+                                state = ExpressionState::Infix { was_range };
                             }
                             InfixOrPostfix::Postfix(op) => {
                                 shunting_yard.add_postfix(pm, op, pt, point)?;
@@ -140,6 +154,16 @@ enum OperatorInfix {
     ShiftRightAssign(Extent),
     Sub(Extent),
     SubAssign(Extent),
+}
+
+impl OperatorInfix {
+    fn is_range(&self) -> bool {
+        use self::OperatorInfix::*;
+        match *self {
+            RangeInclusive(..) | RangeExclusive(..) => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -311,7 +335,7 @@ fn operator_postfix_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
 {
     sequence!(pm, pt, {
         _    = left_paren;
-        args = allow_struct_literals(zero_or_more_tailed_values(comma, expression));
+        args = head_expression_no_longer_ambiguous(zero_or_more_tailed_values(comma, expression));
         _    = right_paren;
     }, |_, _| OperatorPostfix::Call { args })
 }
@@ -343,7 +367,7 @@ fn operator_postfix_slice<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
 {
     sequence!(pm, pt, {
         _     = left_square;
-        index = allow_struct_literals(expression);
+        index = head_expression_no_longer_ambiguous(expression);
         _     = right_square;
     }, |_, _| OperatorPostfix::Slice { index })
 }
@@ -827,7 +851,7 @@ fn expr_if_else_end<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Bloc
 
 fn expr_followed_by_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, (Expression, Block)> {
     sequence!(pm, pt, {
-        condition = disallow_struct_literals(expression);
+        condition = control_flow_head_expression(expression);
         body      = block;
     }, |_, _| (condition, body))
 }
@@ -930,7 +954,7 @@ fn expr_match<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Match> {
     sequence!(pm, pt, {
         spt  = point;
         _    = kw_match;
-        head = disallow_struct_literals(expression);
+        head = control_flow_head_expression(expression);
         _    = left_curly;
         arms = zero_or_more_implicitly_tailed_values(comma, match_arm);
         _    = right_curly;
@@ -951,14 +975,14 @@ fn match_arm<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MatchArm> {
 fn match_arm_guard<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
     sequence!(pm, pt, {
         _     = kw_if;
-        guard = allow_struct_literals(expression);
+        guard = head_expression_no_longer_ambiguous(expression);
     }, |_, _| guard)
 }
 
 fn match_arm_hand<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MatchHand> {
     pm.alternate(pt)
-        .one(map(allow_struct_literals(expr_block), |b| MatchHand::Brace(Expression::Block(b))))
-        .one(map(allow_struct_literals(expression), MatchHand::Expression))
+        .one(map(head_expression_no_longer_ambiguous(expr_block), |b| MatchHand::Brace(Expression::Block(b))))
+        .one(map(head_expression_no_longer_ambiguous(expression), MatchHand::Expression))
         .finish()
 }
 
@@ -966,7 +990,7 @@ fn expr_tuple_or_parenthetical<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progre
     sequence!(pm, pt, {
         spt    = point;
         _      = left_paren;
-        values = allow_struct_literals(zero_or_more_tailed(comma, expression));
+        values = head_expression_no_longer_ambiguous(zero_or_more_tailed(comma, expression));
         _      = right_paren;
     }, move |pm: &mut Master, pt| {
         let extent = pm.state.ex(spt, pt);
@@ -996,7 +1020,7 @@ fn expr_array_explicit<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, A
     sequence!(pm, pt, {
         spt    = point;
         _      = left_square;
-        values = allow_struct_literals(zero_or_more_tailed_values(comma, expression));
+        values = head_expression_no_longer_ambiguous(zero_or_more_tailed_values(comma, expression));
         _      = right_square;
     }, |pm: &mut Master, pt| ArrayExplicit { extent: pm.state.ex(spt, pt), values })
 }
@@ -1005,7 +1029,7 @@ fn expr_array_repeated<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, A
     sequence!(pm, pt, {
         spt   = point;
         _     = left_square;
-        value = allow_struct_literals(expression);
+        value = head_expression_no_longer_ambiguous(expression);
         _     = semicolon;
         count = expression;
         _     = right_square;
@@ -1126,7 +1150,11 @@ fn expr_break<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Break> {
 }
 
 fn expr_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Box<Block>> {
-    block(pm, pt).map(Box::new)
+    if pm.state.expression_ambiguity == ExpressionAmbiguity::Maximum {
+        Progress::failure(pt, Error::BlockNotAllowedHere)
+    } else {
+        block(pm, pt).map(Box::new)
+    }
 }
 
 fn expr_unsafe_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, UnsafeBlock> {
@@ -1138,7 +1166,7 @@ fn expr_unsafe_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Uns
 }
 
 fn expr_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Value> {
-    if pm.state.ignore_struct_literals {
+    if pm.state.expression_ambiguity.is_ambiguous() {
         sequence!(pm, pt, {
             spt  = point;
             name = pathed_ident;
@@ -1188,7 +1216,7 @@ fn expr_value_struct_literal_field_value<'s>(pm: &mut Master<'s>, pt: Point<'s>)
 {
     sequence!(pm, pt, {
         _     = colon;
-        value = allow_struct_literals(expression);
+        value = head_expression_no_longer_ambiguous(expression);
     }, |_, _| value)
 }
 
@@ -1197,7 +1225,7 @@ fn expr_value_struct_literal_splat<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
 {
     sequence!(pm, pt, {
         _     = double_period;
-        value = allow_struct_literals(expression);
+        value = head_expression_no_longer_ambiguous(expression);
     }, |_, _| value)
 }
 
@@ -1213,6 +1241,78 @@ fn expr_disambiguation<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, D
         components,
         whitespace: core.whitespace,
     })
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum ExpressionAmbiguity {
+    Unambiguous,
+    OnlyStructLiterals,
+    Maximum,
+}
+
+impl ExpressionAmbiguity {
+    fn is_ambiguous(&self) -> bool {
+        use self::ExpressionAmbiguity::*;
+
+        match *self {
+            Unambiguous => false,
+            _ => true,
+        }
+    }
+}
+
+impl Default for ExpressionAmbiguity {
+    fn default() -> Self { ExpressionAmbiguity::Unambiguous }
+}
+
+fn control_flow_head_expression<'s, F, T>(parser: F) ->
+    impl FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, T>
+    where F: FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, T>
+{
+    set_ambiguity_level(parser, ExpressionAmbiguity::OnlyStructLiterals)
+}
+
+fn head_expression_maximally_ambiguous<'s, F, T>(parser: F) ->
+    impl FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, T>
+    where F: FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, T>
+{
+    set_ambiguity_level(parser, ExpressionAmbiguity::Maximum)
+}
+
+fn head_expression_no_longer_ambiguous<'s, F, T>(parser: F) ->
+    impl FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, T>
+    where F: FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, T>
+{
+    set_ambiguity_level(parser, ExpressionAmbiguity::Unambiguous)
+}
+
+// Constructs like `if foo {}` will greedily match the block as a
+// structure literal expression (e.g. `foo { a: 1 }`) and then fail
+// because the body isn't found.
+//
+// Constructs like `for i in 0.. {}` will greedily match the block as
+// the second part of the range (e.g. `0..{}`) and then fail because
+// the body isn't found.
+//
+// When we enter the head expression of these control flow
+// expressions, we immediately disable struct literals. If we enter
+// the RHS of a range, we also disable blocks. They should both be
+// re-enabled by entering some kind of enclosing container because it
+// is no longer ambiguous.
+fn set_ambiguity_level<'s, F, T>(parser: F, level: ExpressionAmbiguity) ->
+    impl FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, T>
+    where F: FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, T>
+{
+    move |pm, pt| {
+        let old = pm.state.expression_ambiguity;
+        pm.state.expression_ambiguity = level;
+
+        let res = parser(pm, pt);
+
+        pm.state.expression_ambiguity = old;
+
+        res
+    }
 }
 
 #[cfg(test)]
@@ -2065,6 +2165,24 @@ mod test {
         let p = e.into_parenthetical().unwrap();
         assert!(p.expression.is_value());
         assert_eq!(b.extent, (7, 9));
+    }
+
+    #[test]
+    fn expr_followed_by_block_with_open_ended_range() {
+        let p = qp(expr_followed_by_block, "0.. {}");
+        let (e, b) = unwrap_progress(p);
+        assert_eq!(e.extent(), (0, 3));
+        assert!(e.is_range());
+        assert_eq!(b.extent, (4, 6));
+    }
+
+    #[test]
+    fn expr_followed_by_block_with_range_with_curly_start() {
+        let p = qp(expr_followed_by_block, "{0}.. {}");
+        let (e, b) = unwrap_progress(p);
+        assert_eq!(e.extent(), (0, 5));
+        assert!(e.is_range());
+        assert_eq!(b.extent, (6, 8));
     }
 
     #[test]
