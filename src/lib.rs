@@ -392,7 +392,7 @@ pub struct File {
 
 #[derive(Debug, Visit, Decompose)]
 pub enum Item {
-    Attribute(Attribute),
+    Attribute(Attribute), // TODO: should be part of each item
     Const(Const),
     Enum(Enum),
     ExternCrate(Crate),
@@ -619,7 +619,7 @@ pub enum TypePointerKind {
 pub struct TypeArray {
     extent: Extent,
     typ: Box<Type>,
-    count: Box<Expression>,
+    count: Box<Attributed<Expression>>,
     whitespace: Vec<Whitespace>,
 }
 
@@ -793,7 +793,7 @@ pub struct Const {
     visibility: Option<Visibility>,
     name: Ident,
     typ: Type,
-    value: Expression,
+    value: Attributed<Expression>,
     whitespace: Vec<Whitespace>,
 }
 
@@ -804,7 +804,7 @@ pub struct Static {
     is_mut: Option<Extent>,
     name: Ident,
     typ: Type,
-    value: Expression,
+    value: Attributed<Expression>,
     whitespace: Vec<Whitespace>,
 }
 
@@ -893,7 +893,7 @@ pub struct EnumVariant {
 pub enum EnumVariantBody {
     Tuple(Vec<StructDefinitionFieldUnnamed>),
     Struct(StructDefinitionBodyBrace),
-    Unit(Option<Expression>),
+    Unit(Option<Attributed<Expression>>),
 }
 
 #[derive(Debug, Visit, Decompose)]
@@ -1024,7 +1024,7 @@ pub enum TraitBoundType {
 pub struct Block {
     extent: Extent,
     statements: Vec<Statement>,
-    expression: Option<Expression>,
+    expression: Option<Attributed<Expression>>,
     whitespace: Vec<Whitespace>,
 }
 
@@ -1038,12 +1038,12 @@ pub struct UnsafeBlock {
 #[derive(Debug, Visit)]
 pub struct Parenthetical {
     extent: Extent,
-    expression: Box<Expression>,
+    expression: Box<Attributed<Expression>>,
 }
 
 #[derive(Debug, Visit, Decompose)]
 pub enum Statement {
-    Expression(Expression),
+    Expression(Attributed<Expression>),
     Item(Item),
     Empty(Extent),
 }
@@ -1056,6 +1056,46 @@ impl Statement {
             Expression(ref e) => e.extent(),
             Item(ref i) => i.extent(),
             Empty(e) => e,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Attributed<T> {
+    extent: Extent,
+    attributes: Vec<Attribute>,
+    value: T,
+}
+
+impl<T> Attributed<T> {
+    fn extent(&self) -> Extent {
+        self.extent
+    }
+}
+
+impl<T> std::ops::Deref for Attributed<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target { &self.value }
+}
+
+impl Visit for Attributed<Expression> {
+    fn visit<V>(&self, v: &mut V)
+        where V: Visitor
+    {
+        v.visit_attributed_expression(self);
+        self.attributes.visit(v);
+        self.value.visit(v);
+        v.exit_attributed_expression(self);
+    }
+}
+
+// Assumes that there are no attributes
+impl From<Expression> for Attributed<Expression> {
+    fn from(value: Expression) -> Attributed<Expression> {
+        Attributed {
+            extent: value.extent(),
+            attributes: vec![],
+            value,
         }
     }
 }
@@ -1191,26 +1231,26 @@ pub struct Let {
     extent: Extent,
     pattern: Pattern,
     typ: Option<Type>,
-    value: Option<Box<Expression>>,
+    value: Option<Box<Attributed<Expression>>>,
     whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, Visit)]
 pub struct Tuple {
     extent: Extent,
-    members: Vec<Expression>,
+    members: Vec<Attributed<Expression>>,
 }
 
 #[derive(Debug, Visit)]
 pub struct TryOperator {
     extent: Extent,
-    target: Box<Expression>,
+    target: Box<Attributed<Expression>>,
 }
 
 #[derive(Debug, Visit)]
 pub struct FieldAccess {
     extent: Extent,
-    target: Box<Expression>,
+    target: Box<Attributed<Expression>>,
     field: FieldName,
 }
 
@@ -1302,22 +1342,22 @@ pub struct Value {
 pub struct StructLiteral {
     extent: Extent,
     fields: Vec<StructLiteralField>,
-    splat: Option<Box<Expression>>,
+    splat: Option<Box<Attributed<Expression>>>,
     whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, Visit)]
 pub struct StructLiteralField {
     name: Ident,
-    value: Expression,
+    value: Attributed<Expression>,
     whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, Visit)]
 pub struct Call {
     extent: Extent,
-    target: Box<Expression>,
-    args: Vec<Expression>,
+    target: Box<Attributed<Expression>>,
+    args: Vec<Attributed<Expression>>,
 }
 
 #[derive(Debug, Visit)]
@@ -1325,7 +1365,7 @@ pub struct ForLoop {
     extent: Extent,
     label: Option<Lifetime>,
     pattern: Pattern,
-    iter: Box<Expression>,
+    iter: Box<Attributed<Expression>>,
     body: Box<Block>,
     whitespace: Vec<Whitespace>,
 }
@@ -1342,7 +1382,7 @@ pub struct Loop {
 pub struct IfLet {
     extent: Extent,
     pattern: Pattern,
-    value: Box<Expression>,
+    value: Box<Attributed<Expression>>,
     body: Box<Block>,
     whitespace: Vec<Whitespace>,
 }
@@ -1351,7 +1391,7 @@ pub struct IfLet {
 pub struct While {
     extent: Extent,
     label: Option<Lifetime>,
-    value: Box<Expression>,
+    value: Box<Attributed<Expression>>,
     body: Box<Block>,
     whitespace: Vec<Whitespace>,
 }
@@ -1361,7 +1401,7 @@ pub struct WhileLet {
     extent: Extent,
     label: Option<Lifetime>,
     pattern: Pattern,
-    value: Box<Expression>,
+    value: Box<Attributed<Expression>>,
     body: Box<Block>,
     whitespace: Vec<Whitespace>,
 }
@@ -1371,7 +1411,7 @@ pub struct WhileLet {
 pub struct Unary {
     extent: Extent,
     op: UnaryOp,
-    value: Box<Expression>,
+    value: Box<Attributed<Expression>>,
     whitespace: Vec<Whitespace>,
 }
 
@@ -1385,8 +1425,8 @@ pub enum UnaryOp {
 pub struct Binary {
     extent: Extent,
     op: BinaryOp,
-    lhs: Box<Expression>,
-    rhs: Box<Expression>,
+    lhs: Box<Attributed<Expression>>,
+    rhs: Box<Attributed<Expression>>,
     whitespace: Vec<Whitespace>,
 }
 
@@ -1426,7 +1466,7 @@ pub enum BinaryOp {
 #[derive(Debug, Visit)]
 pub struct If {
     extent: Extent,
-    condition: Box<Expression>,
+    condition: Box<Attributed<Expression>>,
     body: Box<Block>,
     more: Vec<If>,
     else_body: Option<Box<Block>>,
@@ -1436,7 +1476,7 @@ pub struct If {
 #[derive(Debug, Visit)]
 pub struct Match {
     extent: Extent,
-    head: Box<Expression>,
+    head: Box<Attributed<Expression>>,
     arms: Vec<MatchArm>,
     whitespace: Vec<Whitespace>,
 }
@@ -1446,29 +1486,29 @@ pub struct MatchArm {
     extent: Extent,
     attributes: Vec<Attribute>,
     pattern: Vec<Pattern>,
-    guard: Option<Expression>,
+    guard: Option<Attributed<Expression>>,
     hand: MatchHand,
     whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, Visit, Decompose)]
 pub enum MatchHand {
-    Brace(Expression),
-    Expression(Expression),
+    Brace(Attributed<Expression>),
+    Expression(Attributed<Expression>),
 }
 
 #[derive(Debug, Visit)]
 pub struct Range {
     extent: Extent,
-    lhs: Option<Box<Expression>>,
-    rhs: Option<Box<Expression>>,
+    lhs: Option<Box<Attributed<Expression>>>,
+    rhs: Option<Box<Attributed<Expression>>>,
 }
 
 #[derive(Debug, Visit)]
 pub struct RangeInclusive {
     extent: Extent,
-    lhs: Option<Box<Expression>>,
-    rhs: Option<Box<Expression>>,
+    lhs: Option<Box<Attributed<Expression>>>,
+    rhs: Option<Box<Attributed<Expression>>>,
 }
 
 #[derive(Debug, Visit, Decompose)]
@@ -1489,14 +1529,14 @@ impl Array {
 #[derive(Debug, Visit)]
 pub struct ArrayExplicit {
     extent: Extent,
-    values: Vec<Expression>,
+    values: Vec<Attributed<Expression>>,
 }
 
 #[derive(Debug, Visit)]
 pub struct ArrayRepeated {
     extent: Extent,
-    value: Box<Expression>,
-    count: Box<Expression>,
+    value: Box<Attributed<Expression>>,
+    count: Box<Attributed<Expression>>,
     whitespace: Vec<Whitespace>,
 }
 
@@ -1504,20 +1544,20 @@ pub struct ArrayRepeated {
 #[derive(Debug, Visit)]
 pub struct ExpressionBox {
     extent: Extent,
-    target: Box<Expression>,
+    target: Box<Attributed<Expression>>,
 }
 
 #[derive(Debug, Visit)]
 pub struct AsType {
     extent: Extent,
-    target: Box<Expression>,
+    target: Box<Attributed<Expression>>,
     typ: Type,
 }
 
 #[derive(Debug, Visit)]
 pub struct Ascription {
     extent: Extent,
-    target: Box<Expression>,
+    target: Box<Attributed<Expression>>,
     typ: Type,
 }
 
@@ -1548,8 +1588,8 @@ pub struct ByteString {
 #[derive(Debug, Visit)]
 pub struct Slice {
     extent: Extent,
-    target: Box<Expression>,
-    index: Box<Expression>,
+    target: Box<Attributed<Expression>>,
+    index: Box<Attributed<Expression>>,
 }
 
 #[derive(Debug, Visit)]
@@ -1559,7 +1599,7 @@ pub struct Closure {
     is_move: bool,
     args: Vec<ClosureArg>,
     return_type: Option<Type>,
-    body: Box<Expression>,
+    body: Box<Attributed<Expression>>,
     whitespace: Vec<Whitespace>,
 }
 
@@ -1574,13 +1614,13 @@ pub struct ClosureArg {
 pub struct Reference {
     extent: Extent,
     is_mutable: Option<Extent>,
-    target: Box<Expression>,
+    target: Box<Attributed<Expression>>,
 }
 
 #[derive(Debug, Visit)]
 pub struct Dereference {
     extent: Extent,
-    target: Box<Expression>,
+    target: Box<Attributed<Expression>>,
     whitespace: Vec<Whitespace>,
 }
 
@@ -1596,7 +1636,7 @@ pub struct Disambiguation {
 #[derive(Debug, Visit)]
 pub struct Return {
     extent: Extent,
-    value: Option<Box<Expression>>,
+    value: Option<Box<Attributed<Expression>>>,
     whitespace: Vec<Whitespace>,
 }
 
@@ -1611,7 +1651,7 @@ pub struct Continue {
 pub struct Break {
     extent: Extent,
     label: Option<Lifetime>,
-    value: Option<Box<Expression>>,
+    value: Option<Box<Attributed<Expression>>>,
     whitespace: Vec<Whitespace>,
 }
 
@@ -1823,7 +1863,7 @@ pub struct Trait {
 
 #[derive(Debug, Visit, Decompose)]
 pub enum TraitMember {
-    Attribute(Attribute),
+    Attribute(Attribute), // TODO: should be part of each item
     Const(TraitMemberConst),
     Function(TraitMemberFunction),
     Type(TraitMemberType),
@@ -1850,7 +1890,7 @@ pub struct TraitMemberConst {
     extent: Extent,
     name: Ident,
     typ: Type,
-    value: Option<Expression>,
+    value: Option<Attributed<Expression>>,
     whitespace: Vec<Whitespace>,
 }
 
@@ -1895,7 +1935,7 @@ pub enum ImplOfTraitType {
 
 #[derive(Debug, Visit, Decompose)]
 pub enum ImplMember {
-    Attribute(Attribute),
+    Attribute(Attribute),  // TODO: should be part of each item
     Const(ImplConst),
     Function(ImplFunction),
     Type(ImplType),
@@ -1922,7 +1962,7 @@ pub struct ImplConst {
     extent: Extent,
     name: Ident,
     typ: Type,
-    value: Expression,
+    value: Attributed<Expression>,
     whitespace: Vec<Whitespace>,
 }
 
@@ -1945,7 +1985,7 @@ pub struct ExternBlock {
 
 #[derive(Debug, Visit, Decompose)]
 pub enum ExternBlockMember {
-    Attribute(Attribute),
+    Attribute(Attribute),  // TODO: should be part of each item
     Function(ExternBlockMemberFunction),
     Static(ExternBlockMemberStatic),
 }
@@ -2122,6 +2162,7 @@ pub trait Visitor {
     fn visit_ascription(&mut self, &Ascription) {}
     fn visit_associated_type(&mut self, &AssociatedType) {}
     fn visit_attribute(&mut self, &Attribute) {}
+    fn visit_attributed_expression(&mut self, &Attributed<Expression>) {}
     fn visit_binary(&mut self, &Binary) {}
     fn visit_block(&mut self, &Block) {}
     fn visit_break(&mut self, &Break) {}
@@ -2296,6 +2337,7 @@ pub trait Visitor {
     fn exit_ascription(&mut self, &Ascription) {}
     fn exit_associated_type(&mut self, &AssociatedType) {}
     fn exit_attribute(&mut self, &Attribute) {}
+    fn exit_attributed_expression(&mut self, &Attributed<Expression>) {}
     fn exit_binary(&mut self, &Binary) {}
     fn exit_block(&mut self, &Block) {}
     fn exit_break(&mut self, &Break) {}
@@ -3826,7 +3868,7 @@ fn enum_variant_body<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Enu
         .finish()
 }
 
-fn enum_discriminant<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
+fn enum_discriminant<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Attributed<Expression>> {
     sequence!(pm, pt, {
         _     = equals;
         value = expression;
@@ -3906,7 +3948,7 @@ fn trait_member_const<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Tr
     }, |pm: &mut Master, pt| TraitMemberConst { extent: pm.state.ex(spt, pt), name, typ, value, whitespace: Vec::new() })
 }
 
-fn trait_member_const_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
+fn trait_member_const_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Attributed<Expression>> {
     sequence!(pm, pt, {
         _     = equals;
         value = expression;
@@ -4640,11 +4682,28 @@ fn typ_function<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeFunc
     })
 }
 
-
 fn lifetime<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Lifetime> {
     lifetime_normal(pm, pt)
         .map(|extent| Lifetime { extent: extent, name: Ident { extent } })
     // FIXME: value; can we actually have whitespace here?
+}
+
+fn attributed<'s, F, T>(f: F) ->
+    impl FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, Attributed<T>>
+where
+    F: FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, T>
+{
+    move |pm, pt| {
+        sequence!(pm, pt, {
+            spt        = point;
+            attributes = zero_or_more(attribute);
+            value      = f;
+        }, |pm: &mut Master<'s>, pt| Attributed {
+            extent: pm.state.ex(spt, pt),
+            attributes,
+            value,
+        })
+    }
 }
 
 #[cfg(test)]

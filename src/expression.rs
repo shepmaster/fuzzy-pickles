@@ -9,7 +9,7 @@ use peresil::combinators::*;
 
 use super::*;
 
-pub fn expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
+pub fn expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Attributed<Expression>> {
     match expression_shunting_yard(pm, pt) {
         Ok(ShuntCar { value: expr, ept, .. }) => Progress::success(ept, expr),
         Err((failure_point, err)) => Progress::failure(failure_point, err),
@@ -26,7 +26,7 @@ enum ExpressionState {
 }
 
 fn expression_shunting_yard<'s>(pm: &mut Master<'s>, mut pt: Point<'s>) ->
-    ExprResult<'s, ShuntCar<'s, Expression>>
+    ExprResult<'s, ShuntCar<'s, Attributed<Expression>>>
 {
     let mut shunting_yard = ShuntingYard::new();
     let mut state = ExpressionState::Prefix;
@@ -170,15 +170,15 @@ impl OperatorInfix {
 enum OperatorPostfix {
     Ascription { typ: Type },
     AsType { typ: Type },
-    Call { args: Vec<Expression> },
+    Call { args: Vec<Attributed<Expression>> },
     FieldAccess { field: FieldName },
-    Slice { index: Expression },
+    Slice { index: Attributed<Expression> },
     Try(Extent),
 }
 
 #[derive(Debug)]
 enum OperatorKind {
-    Prefix(OperatorPrefix),
+    Prefix(Attributed<OperatorPrefix>),
     Infix(OperatorInfix),
     Postfix(OperatorPostfix),
 }
@@ -202,16 +202,16 @@ impl OperatorKind {
 
 #[derive(Debug)]
 enum PrefixOrAtom {
-    Prefix(OperatorPrefix),
-    Atom(Expression),
+    Prefix(Attributed<OperatorPrefix>),
+    Atom(Attributed<Expression>),
 }
 
 fn expression_prefix_or_atom<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
     Progress<'s, PrefixOrAtom>
 {
     pm.alternate(pt)
-        .one(map(operator_prefix, PrefixOrAtom::Prefix))
-        .one(map(expression_atom, PrefixOrAtom::Atom))
+        .one(map(attributed(operator_prefix), PrefixOrAtom::Prefix))
+        .one(map(attributed(expression_atom), PrefixOrAtom::Atom))
         .finish()
 }
 
@@ -409,7 +409,7 @@ struct ShuntCar<'s, T> {
 
 struct ShuntingYard<'s> {
     operators: Vec<ShuntCar<'s, OperatorKind>>,
-    result: Vec<ShuntCar<'s, Expression>>,
+    result: Vec<ShuntCar<'s, Attributed<Expression>>>,
 }
 
 type PointRange<'s> = std::ops::Range<Point<'s>>;
@@ -423,12 +423,12 @@ impl<'s> ShuntingYard<'s> {
         }
     }
 
-    fn add_expression(&mut self, expr: Expression, spt: Point<'s>, ept: Point<'s>) {
+    fn add_expression(&mut self, expr: Attributed<Expression>, spt: Point<'s>, ept: Point<'s>) {
         //println!("Pushing {:?}", expr);
         self.result.push(ShuntCar { value: expr, spt, ept });
     }
 
-    fn add_prefix(&mut self, pm: &Master, op: OperatorPrefix, spt: Point<'s>, ept: Point<'s>) ->
+    fn add_prefix(&mut self, pm: &Master, op: Attributed<OperatorPrefix>, spt: Point<'s>, ept: Point<'s>) ->
         ExprResult<'s, ()>
     {
         let op = OperatorKind::Prefix(op);
@@ -456,7 +456,7 @@ impl<'s> ShuntingYard<'s> {
     }
 
     fn finish(mut self, pm: &Master, failure_point: Point<'s>) ->
-        ExprResult<'s, ShuntCar<'s, Expression>>
+        ExprResult<'s, ShuntCar<'s, Attributed<Expression>>>
     {
         //println!("Finishing expression");
 
@@ -495,8 +495,8 @@ impl<'s> ShuntingYard<'s> {
 
         match op {
             // TODO: Make into unary ?
-            Prefix(OperatorPrefix::Dereference(..)) => {
-                self.apply_prefix(pm, op_range, |extent, expr| {
+            Prefix(Attributed { extent, attributes, value: OperatorPrefix::Dereference(..) }) => {
+                self.apply_prefix(pm, op_range, extent, attributes, |extent, expr| {
                     Expression::Dereference(Dereference {
                         extent,
                         target: Box::new(expr),
@@ -504,8 +504,8 @@ impl<'s> ShuntingYard<'s> {
                     })
                 })
             },
-            Prefix(OperatorPrefix::Reference { is_mutable }) => {
-                self.apply_prefix(pm, op_range, |extent, expr| {
+            Prefix(Attributed { extent, attributes, value: OperatorPrefix::Reference { is_mutable } }) => {
+                self.apply_prefix(pm, op_range, extent, attributes, |extent, expr| {
                     Expression::Reference(Reference {
                         extent,
                         is_mutable,
@@ -514,16 +514,16 @@ impl<'s> ShuntingYard<'s> {
                 })
             },
             // TODO: Make into unary ?
-            Prefix(OperatorPrefix::Box(..)) => {
-                self.apply_prefix(pm, op_range, |extent, expr| {
+            Prefix(Attributed { extent, attributes, value: OperatorPrefix::Box(..) }) => {
+                self.apply_prefix(pm, op_range, extent, attributes, |extent, expr| {
                     Expression::Box(ExpressionBox {
                         extent,
                         target: Box::new(expr),
                     })
                 })
             },
-            Prefix(OperatorPrefix::RangeInclusive(..)) => {
-                self.apply_maybe_prefix(pm, op_range, |extent, expr| {
+            Prefix(Attributed { extent, attributes, value: OperatorPrefix::RangeInclusive(..) }) => {
+                self.apply_maybe_prefix(pm, op_range, extent, attributes, |extent, expr| {
                     Expression::RangeInclusive(RangeInclusive {
                         extent,
                         lhs: None,
@@ -531,8 +531,8 @@ impl<'s> ShuntingYard<'s> {
                     })
                 })
             },
-            Prefix(OperatorPrefix::RangeExclusive(..)) => {
-                self.apply_maybe_prefix(pm, op_range, |extent, expr| {
+            Prefix(Attributed { extent, attributes, value: OperatorPrefix::RangeExclusive(..) }) => {
+                self.apply_maybe_prefix(pm, op_range, extent, attributes, |extent, expr| {
                     Expression::Range(Range {
                         extent,
                         lhs: None,
@@ -540,8 +540,12 @@ impl<'s> ShuntingYard<'s> {
                     })
                 })
             },
-            Prefix(OperatorPrefix::Negate(..)) => self.apply_unary(pm, op_range, UnaryOp::Negate),
-            Prefix(OperatorPrefix::Not(..)) => self.apply_unary(pm, op_range, UnaryOp::Not),
+            Prefix(Attributed { extent, attributes, value: OperatorPrefix::Negate(..) }) => {
+                self.apply_unary(pm, op_range, extent, attributes, UnaryOp::Negate)
+            },
+            Prefix(Attributed { extent, attributes, value: OperatorPrefix::Not(..) }) => {
+                self.apply_unary(pm, op_range, extent, attributes, UnaryOp::Not)
+            },
 
             Infix(OperatorInfix::Add(..)) => self.apply_binary(pm, op_range, BinaryOp::Add),
             Infix(OperatorInfix::AddAssign(..)) => self.apply_binary(pm, op_range, BinaryOp::AddAssign),
@@ -579,7 +583,7 @@ impl<'s> ShuntingYard<'s> {
                         extent,
                         lhs: Some(Box::new(lhs)),
                         rhs: rhs.map(Box::new),
-                    })
+                    }).into()
                 })
             },
             Infix(OperatorInfix::RangeExclusive(..)) => {
@@ -588,7 +592,7 @@ impl<'s> ShuntingYard<'s> {
                         extent,
                         lhs: Some(Box::new(lhs)),
                         rhs: rhs.map(Box::new),
-                    })
+                    }).into()
                 })
             },
 
@@ -598,7 +602,7 @@ impl<'s> ShuntingYard<'s> {
                         extent,
                         target: Box::new(expr),
                         field,
-                    })
+                    }).into()
                 })
             },
             Postfix(OperatorPostfix::Call { args }) => {
@@ -607,7 +611,7 @@ impl<'s> ShuntingYard<'s> {
                         extent,
                         target: Box::new(expr),
                         args,
-                    })
+                    }).into()
                 })
             },
             Postfix(OperatorPostfix::Slice { index }) => {
@@ -616,7 +620,7 @@ impl<'s> ShuntingYard<'s> {
                         extent,
                         target: Box::new(expr),
                         index: Box::new(index),
-                    })
+                    }).into()
                 })
             },
             Postfix(OperatorPostfix::AsType { typ }) => {
@@ -625,7 +629,7 @@ impl<'s> ShuntingYard<'s> {
                         extent,
                         target: Box::new(expr),
                         typ,
-                    })
+                    }).into()
                 })
             },
             Postfix(OperatorPostfix::Ascription { typ }) => {
@@ -634,7 +638,7 @@ impl<'s> ShuntingYard<'s> {
                         extent,
                         target: Box::new(expr),
                         typ,
-                    })
+                    }).into()
                 })
             },
             Postfix(OperatorPostfix::Try(..)) => {
@@ -642,41 +646,59 @@ impl<'s> ShuntingYard<'s> {
                     Expression::TryOperator(TryOperator {
                         extent,
                         target: Box::new(expr),
-                    })
+                    }).into()
                 })
             },
         }
     }
 
-    fn apply_maybe_prefix<F>(&mut self, pm: &Master, op_range: PointRange<'s>, f: F) ->
+    fn apply_maybe_prefix<F>(
+        &mut self,
+        pm: &Master,
+        op_range: PointRange<'s>,
+        extent_of_prefix: Extent,
+        attributes: Vec<Attribute>,
+        f: F
+    ) ->
         ExprResult<'s, ()>
-        where F: FnOnce(Extent, Option<Expression>) -> Expression
+        where F: FnOnce(Extent, Option<Attributed<Expression>>) -> Expression
     {
         if self.result.is_empty() {
-            let extent = pm.state.ex(op_range.start, op_range.end);
-            let new_expr = f(extent, None);
+            let extent_of_inner_expression = pm.state.ex(op_range.start, op_range.end);
+            let value = f(extent_of_inner_expression, None);
+            let extent = (extent_of_prefix.0, extent_of_inner_expression.1);
+            let new_expr = Attributed { extent, attributes, value };
             self.result.push(ShuntCar { value: new_expr, spt: op_range.start, ept: op_range.end });
             Ok(())
         } else {
-            self.apply_prefix(pm, op_range, |extent, expr| f(extent, Some(expr)))
+            self.apply_prefix(pm, op_range, extent_of_prefix, attributes, |extent, expr| f(extent, Some(expr)))
         }
     }
 
-    fn apply_prefix<F>(&mut self, pm: &Master, op_range: PointRange<'s>, f: F) ->
+    fn apply_prefix<F>(
+        &mut self,
+        pm: &Master,
+        op_range: PointRange<'s>,
+        extent_of_prefix: Extent,
+        attributes: Vec<Attribute>,
+        f: F
+    ) ->
         ExprResult<'s, ()>
-        where F: FnOnce(Extent, Expression) -> Expression
+        where F: FnOnce(Extent, Attributed<Expression>) -> Expression
     {
         let ShuntCar { value: expr, ept: expr_ept, .. } = self.pop_expression(op_range.start)?;
-        let extent = pm.state.ex(op_range.start, expr_ept);
-        let new_expr = f(extent, expr);
+        let extent_of_inner_expression = pm.state.ex(op_range.start, expr_ept);
+        let value = f(extent_of_inner_expression, expr);
+        let extent = (extent_of_prefix.0, extent_of_inner_expression.1);
+        let new_expr = Attributed { extent, attributes, value };
         self.result.push(ShuntCar { value: new_expr, spt: op_range.start, ept: expr_ept });
         Ok(())
     }
 
-    fn apply_unary(&mut self, pm: &Master, op_range: PointRange<'s>, op: UnaryOp) ->
+    fn apply_unary(&mut self, pm: &Master, op_range: PointRange<'s>, extent: Extent, attributes: Vec<Attribute>, op: UnaryOp) ->
         ExprResult<'s, ()>
     {
-        self.apply_prefix(pm, op_range, |extent, expr| {
+        self.apply_prefix(pm, op_range, extent, attributes, |extent, expr| {
             Expression::Unary(Unary {
                 extent,
                 op,
@@ -688,13 +710,13 @@ impl<'s> ShuntingYard<'s> {
 
     fn apply_maybe_infix<F>(&mut self, pm: &Master, op_range: PointRange<'s>, f: F) ->
         ExprResult<'s, ()>
-        where F: FnOnce(Extent, Expression, Option<Expression>) -> Expression
+        where F: FnOnce(Extent, Attributed<Expression>, Option<Attributed<Expression>>) -> Expression
     {
         if self.result.len() <= 1 {
             let ShuntCar { value: lhs, spt: lexpr_spt, .. } = self.pop_expression(op_range.end)?;
             let extent = pm.state.ex(lexpr_spt, op_range.end);
             let new_expr = f(extent, lhs, None);
-            self.result.push(ShuntCar { value: new_expr, spt: lexpr_spt, ept: op_range.end });
+            self.result.push(ShuntCar { value: new_expr.into(), spt: lexpr_spt, ept: op_range.end });
             Ok(())
         } else {
             self.apply_infix(pm, op_range, |extent, lhs, rhs| f(extent, lhs, Some(rhs)))
@@ -703,13 +725,13 @@ impl<'s> ShuntingYard<'s> {
 
     fn apply_infix<F>(&mut self, pm: &Master, op_range: PointRange<'s>, f: F) ->
         ExprResult<'s, ()>
-        where F: FnOnce(Extent, Expression, Expression) -> Expression
+        where F: FnOnce(Extent, Attributed<Expression>, Attributed<Expression>) -> Expression
     {
         let ShuntCar { value: rhs, ept: rexpr_ept, .. } = self.pop_expression(op_range.end)?;
         let ShuntCar { value: lhs, spt: lexpr_spt, .. } = self.pop_expression(op_range.start)?;
         let extent = pm.state.ex(lexpr_spt, rexpr_ept);
         let new_expr = f(extent, lhs, rhs);
-        self.result.push(ShuntCar { value: new_expr, spt: lexpr_spt, ept: rexpr_ept });
+        self.result.push(ShuntCar { value: new_expr.into(), spt: lexpr_spt, ept: rexpr_ept });
         Ok(())
     }
 
@@ -723,24 +745,24 @@ impl<'s> ShuntingYard<'s> {
                 lhs: Box::new(lhs),
                 rhs: Box::new(rhs),
                 whitespace: Vec::new(),
-            })
+            }).into()
         })
     }
 
     fn apply_postfix<F>(&mut self, pm: &Master, op_range: PointRange<'s>, f: F) ->
         ExprResult<'s, ()>
-        where F: FnOnce(Extent, Expression) -> Expression
+        where F: FnOnce(Extent, Attributed<Expression>) -> Expression
     {
         let ShuntCar { value: expr, spt, ept: expr_ept } = self.pop_expression(op_range.start)?;
         let ept = max(expr_ept, op_range.end);
         let extent = pm.state.ex(spt, ept);
         let new_expr = f(extent, expr);
-        self.result.push(ShuntCar { value: new_expr, spt, ept });
+        self.result.push(ShuntCar { value: new_expr.into(), spt, ept });
         Ok(())
     }
 
     fn pop_expression(&mut self, location: Point<'s>) ->
-        ExprResult<'s, ShuntCar<'s, Expression>>
+        ExprResult<'s, ShuntCar<'s, Attributed<Expression>>>
     {
         self.result.pop().ok_or((location, Error::ExpectedExpression))
     }
@@ -811,7 +833,7 @@ fn expr_let_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Type> {
     }, |_, _| typ)
 }
 
-fn expr_let_rhs<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
+fn expr_let_rhs<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Attributed<Expression>> {
     sequence!(pm, pt, {
         _     = equals;
         value = expression;
@@ -849,7 +871,7 @@ fn expr_if_else_end<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Bloc
     }, |_, _| else_body)
 }
 
-fn expr_followed_by_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, (Expression, Block)> {
+fn expr_followed_by_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, (Attributed<Expression>, Block)> {
     sequence!(pm, pt, {
         condition = control_flow_head_expression(expression);
         body      = block;
@@ -972,7 +994,7 @@ fn match_arm<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MatchArm> {
     }, |pm: &mut Master, pt| MatchArm { extent: pm.state.ex(spt, pt), attributes, pattern, guard, hand, whitespace: Vec::new() })
 }
 
-fn match_arm_guard<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
+fn match_arm_guard<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Attributed<Expression>> {
     sequence!(pm, pt, {
         _     = kw_if;
         guard = head_expression_no_longer_ambiguous(expression);
@@ -981,7 +1003,7 @@ fn match_arm_guard<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expre
 
 fn match_arm_hand<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MatchHand> {
     pm.alternate(pt)
-        .one(map(head_expression_no_longer_ambiguous(expr_block), |b| MatchHand::Brace(Expression::Block(b))))
+        .one(map(head_expression_no_longer_ambiguous(expr_block), |b| MatchHand::Brace(Expression::Block(b).into())))
         .one(map(head_expression_no_longer_ambiguous(expression), MatchHand::Expression))
         .finish()
 }
@@ -1089,29 +1111,37 @@ fn expr_closure_arg_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s,
     }, |_, _| typ)
 }
 
-fn expr_closure_return<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, (Option<Type>, Expression)> {
+fn expr_closure_return<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, (Option<Type>, Attributed<Expression>)>
+{
     pm.alternate(pt)
         .one(expr_closure_return_explicit)
         .one(expr_closure_return_inferred)
         .finish()
 }
 
-fn expr_closure_return_explicit<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, (Option<Type>, Expression)> {
+fn expr_closure_return_explicit<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, (Option<Type>, Attributed<Expression>)>
+{
     sequence!(pm, pt, {
         _    = thin_arrow;
         typ  = typ;
         body = expr_closure_return_body;
-    }, |_, _| (Some(typ), body))
+    }, |_, _| (Some(typ), body.into()))
 }
 
-fn expr_closure_return_body<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
+fn expr_closure_return_body<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, Expression>
+{
     pm.alternate(pt)
         .one(expr_tuple_or_parenthetical)
         .one(map(expr_block, Expression::Block))
         .finish()
 }
 
-fn expr_closure_return_inferred<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, (Option<Type>, Expression)> {
+fn expr_closure_return_inferred<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, (Option<Type>, Attributed<Expression>)>
+{
     map(expression, |body| (None, body))(pm, pt)
 }
 
@@ -1206,13 +1236,13 @@ fn expr_value_struct_literal_field<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Pr
             extent: pm.state.ex(spt, mpt),
             name: name.into(),
             literal: None,
-        }));
+        }).into());
         StructLiteralField { name, value, whitespace: Vec::new() }
     })
 }
 
 fn expr_value_struct_literal_field_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
-    Progress<'s, Expression>
+    Progress<'s, Attributed<Expression>>
 {
     sequence!(pm, pt, {
         _     = colon;
@@ -1221,7 +1251,7 @@ fn expr_value_struct_literal_field_value<'s>(pm: &mut Master<'s>, pt: Point<'s>)
 }
 
 fn expr_value_struct_literal_splat<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
-    Progress<'s, Expression>
+    Progress<'s, Attributed<Expression>>
 {
     sequence!(pm, pt, {
         _     = double_period;
@@ -1319,6 +1349,18 @@ fn set_ambiguity_level<'s, F, T>(parser: F, level: ExpressionAmbiguity) ->
 mod test {
     use super::*;
     use test_utils::*;
+
+    #[test]
+    fn expression_atom_can_have_attributes() {
+        let p = qp(expression, "#[moo] 42");
+        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+    }
+
+    #[test]
+    fn expression_operator_prefix_can_have_attributes() {
+        let p = qp(expression, "#[moo] *42");
+        assert_eq!(unwrap_progress(p).extent(), (0, 10))
+    }
 
     #[test]
     fn expr_true() {
@@ -2010,7 +2052,7 @@ mod test {
     #[test]
     fn expr_as_type_followed_by_addition() {
         let p = unwrap_progress(qp(expression, "42 as u8 + 1"));
-        let p = p.into_binary().unwrap();
+        let p = p.value.into_binary().unwrap();
         assert!(p.lhs.is_as_type());
         assert_eq!(p.extent, (0, 12));
     }
@@ -2162,7 +2204,7 @@ mod test {
         let p = qp(expr_followed_by_block, "(a {}) {}");
         let (e, b) = unwrap_progress(p);
         assert_eq!(e.extent(), (0, 6));
-        let p = e.into_parenthetical().unwrap();
+        let p = e.value.into_parenthetical().unwrap();
         assert!(p.expression.is_value());
         assert_eq!(b.extent, (7, 9));
     }
