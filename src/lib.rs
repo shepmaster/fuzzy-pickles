@@ -18,7 +18,7 @@ use std::fmt;
 use peresil::combinators::*;
 
 use tokenizer::{Token, Tokens};
-use expression::{expression, expr_byte, expr_byte_string, expr_macro_call};
+use expression::{expression, statement_expression, expr_byte, expr_byte_string, expr_macro_call};
 
 type Point<'s> = TokenPoint<'s, Token>;
 type Master<'s> = peresil::ParseMaster<Point<'s>, Error, State<'s>>;
@@ -1188,23 +1188,17 @@ impl Expression {
         }
     }
 
-    fn may_terminate_implicit_statement(&self) -> bool {
+    fn may_terminate_statement(&self) -> bool {
         match *self {
             Expression::Block(_)       |
+            Expression::ForLoop(_)     |
+            Expression::If(_)          |
+            Expression::IfLet(_)       |
+            Expression::Loop(_)        |
             Expression::Match(_)       |
-            Expression::UnsafeBlock(_) => true,
-            _ => self.may_only_be_followed_by_postfix(),
-        }
-    }
-
-    fn may_only_be_followed_by_postfix(&self) -> bool {
-        match *self {
-            Expression::ForLoop(_)  |
-            Expression::If(_)       |
-            Expression::IfLet(_)    |
-            Expression::Loop(_)     |
-            Expression::While(_)    |
-            Expression::WhileLet(_) |
+            Expression::UnsafeBlock(_) |
+            Expression::While(_)       |
+            Expression::WhileLet(_)    |
             Expression::MacroCall(MacroCall { args: MacroCallArgs::Curly(_), .. }) => true,
             _ => false,
         }
@@ -3367,7 +3361,7 @@ fn block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Block> {
 
 fn statement<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Statement> {
     pm.alternate(pt)
-        .one(map(expression, Statement::Expression))
+        .one(map(statement_expression, Statement::Expression))
         .one(map(item, Statement::Item))
         .one(map(statement_empty, Statement::Empty))
         .finish()
@@ -3383,7 +3377,7 @@ fn statement_empty<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Exten
 impl ImplicitSeparator for Statement {
     fn is_implicit_separator(&self) -> bool {
         match *self {
-            Statement::Expression(ref e) => e.may_terminate_implicit_statement(),
+            Statement::Expression(ref e) => e.may_terminate_statement(),
             Statement::Item(_)           => true,
             Statement::Empty(_)          => false,
         }
