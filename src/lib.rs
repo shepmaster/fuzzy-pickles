@@ -385,12 +385,28 @@ pub fn parse_rust_file(file: &str) -> Result<File, ErrorDetail> {
 
 pub type Extent = (usize, usize);
 
+trait HasExtent {
+    fn extent(&self) -> Extent;
+}
+
+impl<T: HasExtent> HasExtent for Box<T>{
+    fn extent(&self) -> Extent { (**self).extent() }
+}
+
+impl<'a, T: HasExtent> HasExtent for &'a T {
+    fn extent(&self) -> Extent { (**self).extent() }
+}
+
+impl HasExtent for Extent {
+    fn extent(&self) -> Extent { *self }
+}
+
 #[derive(Debug, Visit)]
 pub struct File {
     items: Vec<Item>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum Item {
     Attribute(Attribute), // TODO: should be part of each item
     Const(Const),
@@ -409,55 +425,32 @@ pub enum Item {
     Union(Union),
 }
 
-impl Item {
-    #[allow(dead_code)]
-    pub fn extent(&self) -> Extent {
-        match *self {
-            Item::Attribute(Attribute { extent, .. })     |
-            Item::Const(Const { extent, .. })             |
-            Item::Enum(Enum { extent, .. })               |
-            Item::ExternCrate(Crate { extent, .. })       |
-            Item::ExternBlock(ExternBlock { extent, .. }) |
-            Item::Function(Function { extent, .. })       |
-            Item::Impl(Impl { extent, .. })               |
-            Item::MacroCall(MacroCall { extent, .. })     |
-            Item::Module(Module { extent, .. })           |
-            Item::Static(Static { extent, .. })           |
-            Item::Struct(Struct { extent, .. })           |
-            Item::Trait(Trait { extent, .. })             |
-            Item::TypeAlias(TypeAlias { extent, .. })     |
-            Item::Union(Union { extent, .. })             |
-            Item::Use(Use { extent, .. })                 => extent,
-        }
-    }
-}
-
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Attribute {
     extent: Extent,
     is_containing: Option<Extent>,
     text: Extent,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Lifetime {
     extent: Extent,
     name: Ident,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum Whitespace {
     Comment(Comment),
     Whitespace(Extent),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Comment {
     extent: Extent,
     text: Extent,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Use {
     extent: Extent,
     visibility: Option<Visibility>,
@@ -466,32 +459,32 @@ pub struct Use {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum UseTail {
     Ident(UseTailIdent),
     Glob(UseTailGlob),
     Multi(UseTailMulti),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct UseTailIdent {
     extent: Extent,
     name: Ident,
     rename: Option<Ident>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct UseTailGlob {
     extent: Extent,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct UseTailMulti {
     extent: Extent,
     names: Vec<UseTailIdent>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Function {
     pub extent: Extent,
     pub header: FunctionHeader,
@@ -499,7 +492,7 @@ pub struct Function {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct FunctionHeader {
     pub extent: Extent,
     visibility: Option<Visibility>,
@@ -512,7 +505,7 @@ pub struct FunctionHeader {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct FunctionQualifiers {
     pub extent: Extent,
     is_default: Option<Extent>,
@@ -522,7 +515,7 @@ pub struct FunctionQualifiers {
     abi: Option<String>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TraitImplFunctionHeader {
     extent: Extent,
     visibility: Option<Visibility>,
@@ -535,14 +528,14 @@ pub struct TraitImplFunctionHeader {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct GenericDeclarations {
     pub extent: Extent,
     lifetimes: Vec<GenericDeclarationLifetime>,
     types: Vec<GenericDeclarationType>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct GenericDeclarationLifetime {
     extent: Extent,
     attributes: Vec<Attribute>,
@@ -550,7 +543,7 @@ pub struct GenericDeclarationLifetime {
     bounds: Vec<Lifetime>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct GenericDeclarationType {
     extent: Extent,
     attributes: Vec<Attribute>,
@@ -559,20 +552,14 @@ pub struct GenericDeclarationType {
     default: Option<Type>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Type {
     extent: Extent,
     kind: TypeKind,
     additional: Vec<TypeAdditional>,
 }
 
-impl Type {
-    pub fn extent(&self) -> Extent {
-        self.extent
-    }
-}
-
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum TypeKind {
     Array(TypeArray),
     Disambiguation(TypeDisambiguation),
@@ -587,32 +574,14 @@ pub enum TypeKind {
     Uninhabited(Extent),
 }
 
-impl TypeKind {
-    pub fn extent(&self) -> Extent {
-        match *self {
-            TypeKind::Disambiguation(TypeDisambiguation { extent, .. })                   |
-            TypeKind::HigherRankedTraitBounds(TypeHigherRankedTraitBounds { extent, .. }) |
-            TypeKind::ImplTrait(TypeImplTrait { extent, .. })                             |
-            TypeKind::Named(TypeNamed { extent, .. })                                     |
-            TypeKind::Array(TypeArray { extent, .. })                                     |
-            TypeKind::Function(TypeFunction { extent, .. })                               |
-            TypeKind::Pointer(TypePointer { extent, .. })                                 |
-            TypeKind::Reference(TypeReference { extent, .. })                             |
-            TypeKind::Slice(TypeSlice { extent, .. })                                     |
-            TypeKind::Tuple(TypeTuple { extent, .. })                                     |
-            TypeKind::Uninhabited(extent)                                                 => extent,
-        }
-    }
-}
-
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeReference {
     extent: Extent,
     kind: TypeReferenceKind,
     typ: Box<Type>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeReferenceKind {
     extent: Extent,
     lifetime: Option<Lifetime>,
@@ -620,7 +589,7 @@ pub struct TypeReferenceKind {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypePointer {
     extent: Extent,
     kind: TypePointerKind,
@@ -634,7 +603,7 @@ pub enum TypePointerKind {
     Mutable,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeArray {
     extent: Extent,
     typ: Box<Type>,
@@ -642,7 +611,7 @@ pub struct TypeArray {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeHigherRankedTraitBounds {
     extent: Extent,
     lifetimes: Vec<Lifetime>,
@@ -650,40 +619,40 @@ pub struct TypeHigherRankedTraitBounds {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum TypeHigherRankedTraitBoundsChild {
     Named(TypeNamed),
     Function(TypeFunction),
     Reference(TypeReference),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeImplTrait {
     extent: Extent,
     name: TypeNamed,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum TypeAdditional {
     Named(TypeNamed),
     Lifetime(Lifetime),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeNamed {
     extent: Extent,
     path: Vec<TypeNamedComponent>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeNamedComponent {
     extent: Extent,
     ident: Ident,
     generics: Option<TypeGenerics>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeDisambiguation {
     extent: Extent,
     from_type: Box<Type>,
@@ -692,26 +661,26 @@ pub struct TypeDisambiguation {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeSlice {
     extent: Extent,
     typ: Box<Type>,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeTuple {
     extent: Extent,
     types: Vec<Type>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum TypeGenerics {
     Function(TypeGenericsFunction),
     Angle(TypeGenericsAngle),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeGenericsFunction {
     extent: Extent,
     types: Vec<Type>,
@@ -719,21 +688,21 @@ pub struct TypeGenericsFunction {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeGenericsAngle {
     extent: Extent,
     members: Vec<TypeGenericsAngleMember>,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum TypeGenericsAngleMember {
     Lifetime(Lifetime),
     Type(Type),
     AssociatedType(AssociatedType)
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct AssociatedType {
     extent: Extent,
     name: Ident,
@@ -741,7 +710,7 @@ pub struct AssociatedType {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeFunction {
     extent: Extent,
     qualifiers: FunctionQualifiers,
@@ -750,33 +719,33 @@ pub struct TypeFunction {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Copy, Clone, Visit)]
+#[derive(Debug, Copy, Clone, HasExtent, Visit)]
 pub struct Ident {
     pub extent: Extent,
 }
 
 // TODO: Can we reuse the path from the `use` statement?
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Path {
     extent: Extent,
     components: Vec<Ident>,
 }
 
 // TODO: Can we reuse the path from the `use` statement?
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PathedIdent {
     extent: Extent,
     components: Vec<PathComponent>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PathComponent {
     extent: Extent,
     ident: Ident,
     turbofish: Option<Turbofish>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Turbofish {
     extent: Extent,
     lifetimes: Vec<Lifetime>,
@@ -791,7 +760,7 @@ impl From<Ident> for PathedIdent {
     }
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Const {
     extent: Extent,
     visibility: Option<Visibility>,
@@ -801,7 +770,7 @@ pub struct Const {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Static {
     extent: Extent,
     visibility: Option<Visibility>,
@@ -812,7 +781,7 @@ pub struct Static {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Struct {
     pub extent: Extent,
     visibility: Option<Visibility>,
@@ -823,21 +792,21 @@ pub struct Struct {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum StructDefinitionBody {
     Brace(StructDefinitionBodyBrace),
     Tuple(StructDefinitionBodyTuple),
     Empty(Extent),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct StructDefinitionBodyBrace {
     pub extent: Extent,
     fields: Vec<StructDefinitionFieldNamed>,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct StructDefinitionFieldNamed {
     extent: Extent,
     attributes: Vec<Attribute>,
@@ -847,14 +816,14 @@ pub struct StructDefinitionFieldNamed {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct StructDefinitionBodyTuple {
     pub extent: Extent,
     fields: Vec<StructDefinitionFieldUnnamed>,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct StructDefinitionFieldUnnamed {
     extent: Extent,
     attributes: Vec<Attribute>,
@@ -862,7 +831,7 @@ pub struct StructDefinitionFieldUnnamed {
     typ: Type,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Union {
     pub extent: Extent,
     visibility: Option<Visibility>,
@@ -873,7 +842,7 @@ pub struct Union {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Enum {
     pub extent: Extent,
     visibility: Option<Visibility>,
@@ -884,7 +853,7 @@ pub struct Enum {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct EnumVariant {
     extent: Extent,
     attributes: Vec<Attribute>,
@@ -893,26 +862,26 @@ pub struct EnumVariant {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, Visit, Decompose)] // HasExtent?
 pub enum EnumVariantBody {
     Tuple(Vec<StructDefinitionFieldUnnamed>),
     Struct(StructDefinitionBodyBrace),
     Unit(Option<Attributed<Expression>>),
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, Visit, Decompose)] // HasExtent?
 pub enum Argument {
     SelfArgument(SelfArgument),
     Named(NamedArgument),
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum SelfArgument {
     Longhand(SelfArgumentLonghand),
     Shorthand(SelfArgumentShorthand),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct SelfArgumentLonghand {
     extent: Extent,
     is_mut: Option<Extent>,
@@ -921,7 +890,7 @@ pub struct SelfArgumentLonghand {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct SelfArgumentShorthand {
     extent: Extent,
     qualifier: Option<SelfArgumentShorthandQualifier>,
@@ -929,94 +898,85 @@ pub struct SelfArgumentShorthand {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum SelfArgumentShorthandQualifier {
     Reference(TypeReferenceKind),
     Mut(Extent),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, Visit)] // HasExtent?
 pub struct NamedArgument {
     name: Pattern,
     typ: Type,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, Visit, Decompose)] // HasExtent?
 pub enum TraitImplArgument {
     SelfArgument(SelfArgument),
     Named(TraitImplArgumentNamed),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, Visit)] // HasExtent?
 pub struct TraitImplArgumentNamed {
     name: Option<Pattern>,
     typ: Type,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum Where {
     Lifetime(WhereLifetime),
     Type(WhereType),
 }
 
-impl Where {
-    pub fn extent(&self) -> Extent {
-        match *self {
-            Where::Lifetime(WhereLifetime { extent, .. }) |
-            Where::Type(WhereType { extent, .. })         => extent,
-        }
-    }
-}
-
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct WhereLifetime {
     pub extent: Extent,
     name: Lifetime,
     bounds: Vec<Lifetime>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct WhereType {
     pub extent: Extent,
     name: Type,
     bounds: TraitBounds,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TraitBounds {
     pub extent: Extent,
     types: Vec<TraitBound>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum TraitBound {
     Lifetime(TraitBoundLifetime),
     Normal(TraitBoundNormal),
     Relaxed(TraitBoundRelaxed),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TraitBoundLifetime {
     pub extent: Extent,
     lifetime: Lifetime,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TraitBoundNormal {
     pub extent: Extent,
     typ: TraitBoundType,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TraitBoundRelaxed {
     pub extent: Extent,
     typ: TraitBoundType,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum TraitBoundType {
     Named(TypeNamed),
     // TODO: HRTB Trait bounds don't really allow references or fn types, just named
@@ -1024,7 +984,7 @@ pub enum TraitBoundType {
     HigherRankedTraitBounds(TypeHigherRankedTraitBounds),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Block {
     extent: Extent,
     statements: Vec<Statement>,
@@ -1032,36 +992,24 @@ pub struct Block {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct UnsafeBlock {
     extent: Extent,
     body: Box<Block>,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Parenthetical {
     extent: Extent,
     expression: Box<Attributed<Expression>>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum Statement {
     Expression(Attributed<Expression>),
     Item(Item),
     Empty(Extent),
-}
-
-impl Statement {
-    #[allow(dead_code)]
-    pub fn extent(&self) -> Extent {
-        use Statement::*;
-        match *self {
-            Expression(ref e) => e.extent(),
-            Item(ref i) => i.extent(),
-            Empty(e) => e,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -1071,7 +1019,7 @@ pub struct Attributed<T> {
     value: T,
 }
 
-impl<T> Attributed<T> {
+impl<T> HasExtent for Attributed<T> {
     fn extent(&self) -> Extent {
         self.extent
     }
@@ -1104,7 +1052,7 @@ impl From<Expression> for Attributed<Expression> {
     }
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum Expression {
     Array(Array),
     AsType(AsType),
@@ -1147,51 +1095,6 @@ pub enum Expression {
 }
 
 impl Expression {
-    pub fn extent(&self) -> Extent {
-        match *self {
-            Expression::Block(ref x) => x.extent,
-
-            Expression::Array(ref x) => x.extent(),
-            Expression::Number(ref x) => x.extent(),
-
-            Expression::AsType(AsType { extent, .. })                 |
-            Expression::Ascription(Ascription { extent, .. })         |
-            Expression::Binary(Binary { extent, .. })                 |
-            Expression::Box(ExpressionBox { extent, .. })             |
-            Expression::Break(Break { extent, .. })                   |
-            Expression::Byte(Byte { extent, .. })                     |
-            Expression::ByteString(ByteString { extent, .. })         |
-            Expression::Call(Call { extent, .. })                     |
-            Expression::Character(Character { extent, .. })           |
-            Expression::Closure(Closure { extent, .. })               |
-            Expression::Continue(Continue { extent, .. })             |
-            Expression::Dereference(Dereference { extent, .. })       |
-            Expression::Disambiguation(Disambiguation { extent, .. }) |
-            Expression::FieldAccess(FieldAccess { extent, .. })       |
-            Expression::ForLoop(ForLoop { extent, .. })               |
-            Expression::If(If { extent, .. })                         |
-            Expression::IfLet(IfLet { extent, .. })                   |
-            Expression::Let(Let { extent, .. })                       |
-            Expression::Loop(Loop { extent, .. })                     |
-            Expression::MacroCall(MacroCall { extent, .. })           |
-            Expression::Match(Match { extent, .. })                   |
-            Expression::Parenthetical(Parenthetical { extent, .. })   |
-            Expression::Range(Range { extent, .. })                   |
-            Expression::RangeInclusive(RangeInclusive { extent, .. }) |
-            Expression::Reference(Reference { extent, .. })           |
-            Expression::Return(Return { extent, .. })                 |
-            Expression::Slice(Slice { extent, .. })                   |
-            Expression::String(String { extent, .. })                 |
-            Expression::TryOperator(TryOperator { extent, .. })       |
-            Expression::Tuple(Tuple { extent, .. })                   |
-            Expression::Unary(Unary { extent, .. })                   |
-            Expression::UnsafeBlock(UnsafeBlock { extent, .. })       |
-            Expression::Value(Value { extent, .. })                   |
-            Expression::While(While { extent, .. })                   |
-            Expression::WhileLet(WhileLet { extent, .. })             => extent,
-        }
-    }
-
     fn may_terminate_statement(&self) -> bool {
         match *self {
             Expression::Block(_)       |
@@ -1209,7 +1112,7 @@ impl Expression {
     }
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct MacroCall {
     extent: Extent,
     name: Ident,
@@ -1217,14 +1120,14 @@ pub struct MacroCall {
     args: MacroCallArgs,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum MacroCallArgs {
     Paren(Extent),
     Curly(Extent),
     Square(Extent),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Let {
     extent: Extent,
     pattern: Pattern,
@@ -1233,19 +1136,19 @@ pub struct Let {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Tuple {
     extent: Extent,
     members: Vec<Attributed<Expression>>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TryOperator {
     extent: Extent,
     target: Box<Attributed<Expression>>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct FieldAccess {
     extent: Extent,
     target: Box<Attributed<Expression>>,
@@ -1258,7 +1161,7 @@ pub enum FieldName {
     Number(Extent),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Number {
     extent: Extent,
     is_negative: Option<Extent>,
@@ -1266,14 +1169,7 @@ pub struct Number {
     whitespace: Vec<Whitespace>,
 }
 
-impl Number {
-    #[allow(dead_code)]
-    fn extent(&self) -> Extent {
-        self.extent
-    }
-}
-
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum NumberValue {
     Binary(NumberBinary),
     Decimal(NumberDecimal),
@@ -1281,19 +1177,7 @@ pub enum NumberValue {
     Octal(NumberOctal),
 }
 
-impl NumberValue {
-    #[allow(dead_code)]
-    fn extent(&self) -> Extent {
-        match *self {
-            NumberValue::Binary(NumberBinary { extent, .. })           |
-            NumberValue::Decimal(NumberDecimal { extent, .. })         |
-            NumberValue::Hexadecimal(NumberHexadecimal { extent, .. }) |
-            NumberValue::Octal(NumberOctal { extent, .. })             => extent,
-        }
-    }
-}
-
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct NumberBinary {
     extent: Extent,
     decimal: Extent,
@@ -1302,7 +1186,7 @@ pub struct NumberBinary {
     suffix: Option<Extent>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct NumberDecimal {
     extent: Extent,
     decimal: Extent,
@@ -1311,7 +1195,7 @@ pub struct NumberDecimal {
     suffix: Option<Extent>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct NumberHexadecimal {
     extent: Extent,
     decimal: Extent,
@@ -1320,7 +1204,7 @@ pub struct NumberHexadecimal {
     suffix: Option<Extent>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct NumberOctal {
     extent: Extent,
     decimal: Extent,
@@ -1329,14 +1213,14 @@ pub struct NumberOctal {
     suffix: Option<Extent>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Value {
     extent: Extent,
     name: PathedIdent,
     literal: Option<StructLiteral>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct StructLiteral {
     extent: Extent,
     fields: Vec<StructLiteralField>,
@@ -1344,21 +1228,21 @@ pub struct StructLiteral {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, Visit)] // HasExtent?
 pub struct StructLiteralField {
     name: Ident,
     value: Attributed<Expression>,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Call {
     extent: Extent,
     target: Box<Attributed<Expression>>,
     args: Vec<Attributed<Expression>>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ForLoop {
     extent: Extent,
     label: Option<Lifetime>,
@@ -1368,7 +1252,7 @@ pub struct ForLoop {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Loop {
     extent: Extent,
     label: Option<Lifetime>,
@@ -1376,7 +1260,7 @@ pub struct Loop {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct IfLet {
     extent: Extent,
     pattern: Pattern,
@@ -1385,7 +1269,7 @@ pub struct IfLet {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct While {
     extent: Extent,
     label: Option<Lifetime>,
@@ -1394,7 +1278,7 @@ pub struct While {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct WhileLet {
     extent: Extent,
     label: Option<Lifetime>,
@@ -1405,7 +1289,7 @@ pub struct WhileLet {
 }
 
 // TODO: Should this be the same as dereference? What about reference?
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Unary {
     extent: Extent,
     op: UnaryOp,
@@ -1419,7 +1303,7 @@ pub enum UnaryOp {
     Not,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Binary {
     extent: Extent,
     op: BinaryOp,
@@ -1461,7 +1345,7 @@ pub enum BinaryOp {
     SubAssign,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct If {
     extent: Extent,
     condition: Box<Attributed<Expression>>,
@@ -1471,7 +1355,7 @@ pub struct If {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Match {
     extent: Extent,
     head: Box<Attributed<Expression>>,
@@ -1479,7 +1363,7 @@ pub struct Match {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct MatchArm {
     extent: Extent,
     attributes: Vec<Attribute>,
@@ -1489,48 +1373,39 @@ pub struct MatchArm {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum MatchHand {
     Brace(Attributed<Expression>),
     Expression(Attributed<Expression>),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Range {
     extent: Extent,
     lhs: Option<Box<Attributed<Expression>>>,
     rhs: Option<Box<Attributed<Expression>>>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct RangeInclusive {
     extent: Extent,
     lhs: Option<Box<Attributed<Expression>>>,
     rhs: Option<Box<Attributed<Expression>>>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum Array {
     Explicit(ArrayExplicit),
     Repeated(ArrayRepeated),
 }
 
-impl Array {
-    fn extent(&self) -> Extent {
-        match *self {
-            Array::Explicit(ArrayExplicit { extent, .. }) |
-            Array::Repeated(ArrayRepeated { extent, .. }) => extent,
-        }
-    }
-}
-
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ArrayExplicit {
     extent: Extent,
     values: Vec<Attributed<Expression>>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ArrayRepeated {
     extent: Extent,
     value: Box<Attributed<Expression>>,
@@ -1539,58 +1414,58 @@ pub struct ArrayRepeated {
 }
 
 // TODO: Rename this visitor function?
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ExpressionBox {
     extent: Extent,
     target: Box<Attributed<Expression>>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct AsType {
     extent: Extent,
     target: Box<Attributed<Expression>>,
     typ: Type,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Ascription {
     extent: Extent,
     target: Box<Attributed<Expression>>,
     typ: Type,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Character {
     extent: Extent,
     value: Extent,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct String {
     extent: Extent,
     value: Extent,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Byte {
     extent: Extent,
     value: Character,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ByteString {
     extent: Extent,
     value: String,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Slice {
     extent: Extent,
     target: Box<Attributed<Expression>>,
     index: Box<Attributed<Expression>>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Closure {
     extent: Extent,
     #[visit(ignore)]
@@ -1601,28 +1476,28 @@ pub struct Closure {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, Visit)] // HasExtent?
 pub struct ClosureArg {
     name: Pattern,
     typ: Option<Type>,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Reference {
     extent: Extent,
     is_mutable: Option<Extent>,
     target: Box<Attributed<Expression>>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Dereference {
     extent: Extent,
     target: Box<Attributed<Expression>>,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Disambiguation {
     extent: Extent,
     from_type: Type,
@@ -1631,21 +1506,21 @@ pub struct Disambiguation {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Return {
     extent: Extent,
     value: Option<Box<Attributed<Expression>>>,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Continue {
     extent: Extent,
     label: Option<Lifetime>,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Break {
     extent: Extent,
     label: Option<Lifetime>,
@@ -1653,14 +1528,14 @@ pub struct Break {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Pattern {
     extent: Extent,
     name: Option<PatternName>,
     kind: PatternKind,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternName {
     extent: Extent,
     is_ref: Option<Extent>,
@@ -1669,14 +1544,7 @@ pub struct PatternName {
     whitespace: Vec<Whitespace>,
 }
 
-impl Pattern {
-    #[allow(dead_code)]
-    fn extent(&self) -> Extent {
-        self.extent
-    }
-}
-
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum PatternKind {
     Byte(PatternByte),
     ByteString(PatternByteString),
@@ -1693,30 +1561,7 @@ pub enum PatternKind {
     Tuple(PatternTuple),
 }
 
-impl PatternKind {
-    #[allow(dead_code)]
-    fn extent(&self) -> Extent {
-        use PatternKind::*;
-
-        match *self {
-            Byte(PatternByte { extent, .. })                     |
-            ByteString(PatternByteString { extent, .. })         |
-            Character(PatternCharacter { extent, .. })           |
-            Ident(PatternIdent { extent, .. })                   |
-            Number(PatternNumber { extent, .. })                 |
-            MacroCall(PatternMacroCall { extent, .. })           |
-            RangeExclusive(PatternRangeExclusive { extent, .. }) |
-            RangeInclusive(PatternRangeInclusive { extent, .. }) |
-            Reference(PatternReference { extent, .. })           |
-            Slice(PatternSlice { extent, .. })                   |
-            String(PatternString { extent, .. })                 |
-            Struct(PatternStruct { extent, .. })                 |
-            Tuple(PatternTuple { extent, .. })                   => extent,
-        }
-    }
-}
-
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternIdent {
     extent: Extent,
     is_ref: Option<Extent>,
@@ -1725,7 +1570,7 @@ pub struct PatternIdent {
     tuple: Option<PatternTuple>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternStruct {
     extent: Extent,
     name: PathedIdent,
@@ -1735,13 +1580,13 @@ pub struct PatternStruct {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, Visit, Decompose)] // HasExtent?
 pub enum PatternStructField {
     Long(PatternStructFieldLong),
     Short(PatternStructFieldShort),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternStructFieldLong {
     extent: Extent,
     name: Ident,
@@ -1749,72 +1594,72 @@ pub struct PatternStructFieldLong {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, Visit)] // HasExtent?
 pub struct PatternStructFieldShort {
     ident: PatternIdent
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternTuple {
     extent: Extent,
     members: Vec<PatternBundleMember>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternSlice {
     extent: Extent,
     members: Vec<PatternBundleMember>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum PatternBundleMember {
     Pattern(Pattern),
     Wildcard(Extent),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternWildcard {
     extent: Extent,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternByte {
     extent: Extent,
     value: Byte,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternCharacter {
     extent: Extent,
     value: Character,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternByteString {
     extent: Extent,
     value: ByteString,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternString {
     extent: Extent,
     value: String,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternNumber {
     extent: Extent,
     is_negative: Option<Extent>,
     value: Number,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternMacroCall {
     extent: Extent,
     value: MacroCall,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternRangeExclusive {
     extent: Extent,
     start: PatternRangeComponent,
@@ -1822,7 +1667,7 @@ pub struct PatternRangeExclusive {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternRangeInclusive {
     extent: Extent,
     start: PatternRangeComponent,
@@ -1838,7 +1683,7 @@ pub enum PatternRangeComponent {
     Number(PatternNumber),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternReference {
     extent: Extent,
     is_mut: Option<Extent>,
@@ -1846,7 +1691,7 @@ pub struct PatternReference {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Trait {
     extent: Extent,
     visibility: Option<Visibility>,
@@ -1859,7 +1704,7 @@ pub struct Trait {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum TraitMember {
     Attribute(Attribute), // TODO: should be part of each item
     Const(TraitMemberConst),
@@ -1867,14 +1712,14 @@ pub enum TraitMember {
     Type(TraitMemberType),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TraitMemberFunction {
     extent: Extent,
     header: TraitImplFunctionHeader,
     body: Option<Block>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TraitMemberType {
     extent: Extent,
     name: Ident,
@@ -1883,7 +1728,7 @@ pub struct TraitMemberType {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TraitMemberConst {
     extent: Extent,
     name: Ident,
@@ -1892,7 +1737,7 @@ pub struct TraitMemberConst {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Impl {
     extent: Extent,
     is_unsafe: Option<Extent>,
@@ -1903,13 +1748,13 @@ pub struct Impl {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum ImplKind {
     Trait(ImplOfTrait),
     Inherent(ImplOfInherent),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ImplOfTrait {
     extent: Extent,
     is_negative: Option<Extent>,
@@ -1918,20 +1763,20 @@ pub struct ImplOfTrait {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ImplOfInherent {
     extent: Extent,
     type_name: Type,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum ImplOfTraitType {
     Type(Type),
     Wildcard(Extent),
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum ImplMember {
     Attribute(Attribute),  // TODO: should be part of each item
     Const(ImplConst),
@@ -1940,14 +1785,14 @@ pub enum ImplMember {
     MacroCall(MacroCall),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ImplFunction {
     extent: Extent,
     header: FunctionHeader,
     body: Block,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ImplType {
     extent: Extent,
     name: Ident,
@@ -1955,7 +1800,7 @@ pub struct ImplType {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ImplConst {
     extent: Extent,
     name: Ident,
@@ -1964,7 +1809,7 @@ pub struct ImplConst {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Crate {
     extent: Extent,
     visibility: Option<Visibility>,
@@ -1973,7 +1818,7 @@ pub struct Crate {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ExternBlock {
     extent: Extent,
     abi: Option<String>,
@@ -1981,14 +1826,14 @@ pub struct ExternBlock {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum ExternBlockMember {
     Attribute(Attribute),  // TODO: should be part of each item
     Function(ExternBlockMemberFunction),
     Static(ExternBlockMemberStatic),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ExternBlockMemberStatic {
     extent: Extent,
     visibility: Option<Visibility>,
@@ -1998,7 +1843,7 @@ pub struct ExternBlockMemberStatic {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ExternBlockMemberFunction {
     extent: Extent,
     visibility: Option<Visibility>,
@@ -2010,13 +1855,13 @@ pub struct ExternBlockMemberFunction {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum ExternBlockMemberFunctionArgument {
     Named(ExternBlockMemberFunctionArgumentNamed),
     Variadic(ExternBlockMemberFunctionArgumentVariadic),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ExternBlockMemberFunctionArgumentNamed {
     extent: Extent,
     name: Pattern,
@@ -2024,12 +1869,12 @@ pub struct ExternBlockMemberFunctionArgumentNamed {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ExternBlockMemberFunctionArgumentVariadic {
     extent: Extent,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeAlias {
     extent: Extent,
     visibility: Option<Visibility>,
@@ -2040,7 +1885,7 @@ pub struct TypeAlias {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Module {
     extent: Extent,
     visibility: Option<Visibility>,
@@ -2049,7 +1894,7 @@ pub struct Module {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Visibility {
     extent: Extent,
     #[visit(ignore)]
