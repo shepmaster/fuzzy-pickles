@@ -8,6 +8,10 @@ extern crate peresil;
 
 extern crate unicode_xid;
 
+#[cfg(test)]
+#[macro_use]
+mod test_utils;
+
 pub mod tokenizer;
 mod expression;
 
@@ -4547,49 +4551,6 @@ where
 }
 
 #[cfg(test)]
-mod test_utils {
-    use super::*;
-
-    type TestResult<T> = Result<(usize, T), (usize, Vec<Error>)>;
-
-    pub fn qp<'s, F, T>(f: F, s: &'s str) -> TestResult<T>
-        where F: for<'a> FnOnce(&mut Master<'a>, Point<'a>) -> Progress<'a, T>
-    {
-        // TODO: Master::once()?
-        let tokens = Tokens::new(s).collect::<Result<Vec<_>, _>>().expect("Unable to tokenize");
-        let (_ws, tokens): (Vec<_>, Vec<_>) = tokens.into_iter().partition(|t| {
-            t.is_whitespace() || t.is_comment() || t.is_doc_comment() || t.is_comment_block() || t.is_doc_comment_block()
-        });
-
-        let mut pm = Master::with_state(State::new(&tokens));
-        let pt = Point::new(&tokens);
-        let r = f(&mut pm, pt);
-        match pm.finish(r) {
-            peresil::Progress { status: peresil::Status::Success(v), point } => {
-                Ok((point.offset, v))
-            }
-            peresil::Progress { status: peresil::Status::Failure(v), point } => {
-                Err((point.offset, v))
-            }
-        }
-    }
-
-    pub fn unwrap_progress<T>(p: TestResult<T>) -> T {
-        match p {
-            Ok((_, v)) => v,
-            Err((offset, e)) => panic!("Failed parsing at token at index {}: {:?}", offset, e),
-        }
-    }
-
-    pub fn unwrap_progress_err<T>(p: TestResult<T>) -> (usize, Vec<Error>) {
-        match p {
-            Ok(_) => panic!("Parsing should have failed, but it did not"),
-            Err(x) => x
-        }
-    }
-}
-
-#[cfg(test)]
 mod test {
     use super::*;
     use test_utils::*;
@@ -4597,722 +4558,721 @@ mod test {
     #[test]
     fn parse_use() {
         let p = qp(p_use, "use foo::Bar;");
-        assert_eq!(unwrap_progress(p).extent, (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn parse_use_public() {
         let p = qp(p_use, "pub use foo::Bar;");
-        assert_eq!(unwrap_progress(p).extent, (0, 17))
+        assert_extent!(p, (0, 17))
     }
 
     #[test]
     fn parse_use_glob() {
         let p = qp(p_use, "use foo::*;");
-        assert_eq!(unwrap_progress(p).extent, (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn parse_use_with_multi() {
         let p = qp(p_use, "use foo::{Bar, Baz};");
-        assert_eq!(unwrap_progress(p).extent, (0, 20))
+        assert_extent!(p, (0, 20))
     }
 
     #[test]
     fn parse_use_no_path() {
         let p = qp(p_use, "use {Bar, Baz};");
-        assert_eq!(unwrap_progress(p).extent, (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn parse_use_absolute_path() {
         let p = qp(p_use, "use ::{Bar, Baz};");
-        assert_eq!(unwrap_progress(p).extent, (0, 17))
+        assert_extent!(p, (0, 17))
     }
 
     #[test]
     fn parse_use_rename() {
         let p = qp(p_use, "use foo as bar;");
-        assert_eq!(unwrap_progress(p).extent, (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn parse_use_with_multi_rename() {
         let p = qp(p_use, "use foo::{bar as a, baz as b};");
-        assert_eq!(unwrap_progress(p).extent, (0, 30))
+        assert_extent!(p, (0, 30))
     }
 
     #[test]
     fn parse_use_all_space() {
         let p = qp(p_use, "use foo :: { bar as a , baz as b } ;");
-        assert_eq!(unwrap_progress(p).extent, (0, 36))
+        assert_extent!(p, (0, 36))
     }
 
     #[test]
     fn item_mod_multiple() {
         let p = qp(item, "mod foo { use super::*; }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 25))
+        assert_extent!(p, (0, 25))
     }
 
     #[test]
     fn item_macro_call_with_parens() {
         let p = qp(item, "foo!();");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn item_macro_call_with_square_brackets() {
         let p = qp(item, "foo![];");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn item_macro_call_with_curly_braces() {
         let p = qp(item, "foo! { }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn item_macro_call_with_ident() {
         let p = qp(item, "macro_rules! name { }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 21))
+        assert_extent!(p, (0, 21))
     }
 
     #[test]
     fn item_macro_call_all_space() {
         let p = qp(item, "foo ! bar [ ] ;");
-        assert_eq!(unwrap_progress(p).extent(), (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn item_mod() {
         let p = qp(module, "mod foo { }");
-        assert_eq!(unwrap_progress(p).extent, (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn item_mod_public() {
         let p = qp(module, "pub mod foo;");
-        assert_eq!(unwrap_progress(p).extent, (0, 12))
+        assert_extent!(p, (0, 12))
     }
 
     #[test]
     fn item_mod_another_file() {
         let p = qp(module, "mod foo;");
-        assert_eq!(unwrap_progress(p).extent, (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn item_trait() {
         let p = qp(item, "trait Foo {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 12))
+        assert_extent!(p, (0, 12))
     }
 
     #[test]
     fn item_trait_public() {
         let p = qp(item, "pub trait Foo {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 16))
+        assert_extent!(p, (0, 16))
     }
 
     #[test]
     fn item_trait_unsafe() {
         let p = qp(item, "unsafe trait Foo {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 19))
+        assert_extent!(p, (0, 19))
     }
 
     #[test]
     fn item_trait_with_generics() {
         let p = qp(item, "trait Foo<T> {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn item_trait_with_members() {
         let p = qp(item, "trait Foo { fn bar(&self) -> u8; }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 34))
+        assert_extent!(p, (0, 34))
     }
 
     #[test]
     fn item_trait_with_members_with_patterns() {
         let p = qp(item, "trait Foo { fn bar(&self, &a: &u8) -> u8; }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 43))
+        assert_extent!(p, (0, 43))
     }
 
     #[test]
     fn item_trait_with_members_with_body() {
         let p = qp(item, "trait Foo { fn bar(&self) -> u8 { 42 } }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 40))
+        assert_extent!(p, (0, 40))
     }
 
     #[test]
     fn item_trait_with_unnamed_parameters() {
         let p = qp(item, "trait Foo { fn bar(&self, u8); }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 32))
+        assert_extent!(p, (0, 32))
     }
 
     #[test]
     fn item_trait_with_qualified_function() {
         let p = qp(item, r#"trait Foo { const unsafe extern "C" fn bar(); }"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 47))
+        assert_extent!(p, (0, 47))
     }
 
     #[test]
     fn item_trait_with_associated_type() {
         let p = qp(item, "trait Foo { type Bar; }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 23))
+        assert_extent!(p, (0, 23))
     }
 
     #[test]
     fn item_trait_with_associated_type_with_bounds() {
         let p = qp(item, "trait Foo { type Bar: Baz; }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 28))
+        assert_extent!(p, (0, 28))
     }
 
     #[test]
     fn item_trait_with_associated_type_with_default() {
         let p = qp(item, "trait Foo { type Bar = (); }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 28))
+        assert_extent!(p, (0, 28))
     }
 
     #[test]
     fn item_trait_with_associated_type_with_bounds_and_default() {
         let p = qp(item, "trait Foo { type Bar: Baz = (); }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 33))
+        assert_extent!(p, (0, 33))
     }
 
     #[test]
     fn item_trait_with_associated_const() {
         let p = qp(item, "trait Foo { const Bar: u8; }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 28))
+        assert_extent!(p, (0, 28))
     }
 
     #[test]
     fn item_trait_with_associated_const_with_default() {
         let p = qp(item, "trait Foo { const Bar: u8 = 42; }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 33))
+        assert_extent!(p, (0, 33))
     }
 
     #[test]
     fn item_trait_with_supertraits() {
         let p = qp(item, "trait Foo: Bar + Baz {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 23))
+        assert_extent!(p, (0, 23))
     }
 
     #[test]
     fn item_trait_with_where_clause() {
         let p = qp(item, "trait Foo where A: B {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 23))
+        assert_extent!(p, (0, 23))
     }
 
     #[test]
     fn item_trait_all_space() {
         let p = qp(item, "trait Foo : Bar { type A : B ; fn a ( a : u8) -> u8 { a } }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 59))
+        assert_extent!(p, (0, 59))
     }
 
     #[test]
     fn item_type_alias() {
         let p = qp(item, "type Foo<T> = Bar<T, u8>;");
-        assert_eq!(unwrap_progress(p).extent(), (0, 25))
+        assert_extent!(p, (0, 25))
     }
 
     #[test]
     fn item_type_alias_public() {
         let p = qp(item, "pub type Foo<T> = Bar<T, u8>;");
-        assert_eq!(unwrap_progress(p).extent(), (0, 29))
+        assert_extent!(p, (0, 29))
     }
 
     #[test]
     fn item_type_alias_with_trait_bounds() {
         let p = qp(item, "type X<T: Foo> where T: Bar = Option<T>;");
-        assert_eq!(unwrap_progress(p).extent(), (0, 40))
+        assert_extent!(p, (0, 40))
     }
 
     #[test]
     fn item_const() {
         let p = qp(item, r#"const FOO: &'static str = "hi";"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 31))
+        assert_extent!(p, (0, 31))
     }
 
     #[test]
     fn item_const_public() {
         let p = qp(item, "pub const FOO: u8 = 42;");
-        assert_eq!(unwrap_progress(p).extent(), (0, 23))
+        assert_extent!(p, (0, 23))
     }
 
     #[test]
     fn item_static() {
         let p = qp(item, r#"static FOO: &'static str = "hi";"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 32))
+        assert_extent!(p, (0, 32))
     }
 
     #[test]
     fn item_static_mut() {
         let p = qp(item, r#"static mut FOO: &'static str = "hi";"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 36))
+        assert_extent!(p, (0, 36))
     }
 
     #[test]
     fn item_static_public() {
         let p = qp(item, "pub static FOO: u8 = 42;");
-        assert_eq!(unwrap_progress(p).extent(), (0, 24))
+        assert_extent!(p, (0, 24))
     }
 
     #[test]
     fn item_extern_crate() {
         let p = qp(item, "extern crate foo;");
-        assert_eq!(unwrap_progress(p).extent(), (0, 17))
+        assert_extent!(p, (0, 17))
     }
 
     #[test]
     fn item_extern_crate_public() {
         let p = qp(item, "pub extern crate foo;");
-        assert_eq!(unwrap_progress(p).extent(), (0, 21))
+        assert_extent!(p, (0, 21))
     }
 
     #[test]
     fn item_extern_crate_rename() {
         let p = qp(item, "extern crate foo as bar;");
-        assert_eq!(unwrap_progress(p).extent(), (0, 24))
+        assert_extent!(p, (0, 24))
     }
 
     #[test]
     fn item_extern_block() {
         let p = qp(item, r#"extern {}"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn item_extern_block_with_abi() {
         let p = qp(item, r#"extern "C" {}"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn item_extern_block_with_fn() {
         let p = qp(item, r#"extern { fn foo(bar: u8) -> bool; }"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 35))
+        assert_extent!(p, (0, 35))
     }
 
     #[test]
     fn item_extern_block_with_variadic_fn() {
         let p = qp(item, r#"extern { fn foo(bar: u8, ...) -> bool; }"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 40))
+        assert_extent!(p, (0, 40))
     }
 
     #[test]
     fn item_extern_block_with_fn_and_generics() {
         let p = qp(item, r#"extern { fn foo<A, B>(bar: A) -> B; }"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 37))
+        assert_extent!(p, (0, 37))
     }
 
     #[test]
     fn item_extern_block_with_attribute() {
         let p = qp(item, r#"extern { #[wow] }"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 17))
+        assert_extent!(p, (0, 17))
     }
 
     #[test]
     fn item_extern_block_with_static() {
         let p = qp(item, r#"extern { static FOO: u32; }"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 27))
+        assert_extent!(p, (0, 27))
     }
 
     #[test]
     fn item_extern_block_with_static_and_qualifiers() {
         let p = qp(item, r#"extern { pub static mut FOO: u32; }"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 35))
+        assert_extent!(p, (0, 35))
     }
 
     #[test]
     fn inherent_impl() {
         let p = qp(p_impl, "impl Bar {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn inherent_impl_with_function() {
         let p = qp(p_impl, "impl Bar { fn foo() {} }");
-        assert_eq!(unwrap_progress(p).extent, (0, 24))
+        assert_extent!(p, (0, 24))
     }
 
     #[test]
     fn inherent_impl_with_const_function() {
         let p = qp(p_impl, "impl Bar { const fn foo() {} }");
-        assert_eq!(unwrap_progress(p).extent, (0, 30))
+        assert_extent!(p, (0, 30))
     }
 
     #[test]
     fn inherent_impl_with_default_function() {
         let p = qp(p_impl, "impl Bar { default fn foo() {} }");
-        assert_eq!(unwrap_progress(p).extent, (0, 32))
+        assert_extent!(p, (0, 32))
     }
 
     #[test]
     fn inherent_impl_with_unsafe_function() {
         let p = qp(p_impl, "impl Bar { unsafe fn foo() {} }");
-        assert_eq!(unwrap_progress(p).extent, (0, 31))
+        assert_extent!(p, (0, 31))
     }
 
     #[test]
     fn inherent_impl_with_extern_function() {
         let p = qp(p_impl, "impl Bar { extern fn foo() {} }");
-        assert_eq!(unwrap_progress(p).extent, (0, 31))
+        assert_extent!(p, (0, 31))
     }
 
     #[test]
     fn inherent_impl_with_default_const_unsafe_function() {
         let p = qp(p_impl, "impl Bar { default const unsafe fn foo() {} }");
-        assert_eq!(unwrap_progress(p).extent, (0, 45))
+        assert_extent!(p, (0, 45))
     }
 
     #[test]
     fn inherent_impl_with_default_unsafe_extern_function() {
         let p = qp(p_impl, "impl Bar { default unsafe extern fn foo() {} }");
-        assert_eq!(unwrap_progress(p).extent, (0, 46))
+        assert_extent!(p, (0, 46))
     }
 
     #[test]
     fn impl_with_trait() {
         let p = qp(p_impl, "impl Foo for Bar {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 19))
+        assert_extent!(p, (0, 19))
     }
 
     #[test]
     fn impl_with_negative_trait() {
         let p = qp(p_impl, "impl !Foo for Bar {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 20))
+        assert_extent!(p, (0, 20))
     }
 
     #[test]
     fn impl_trait_with_wildcard_type() {
         let p = qp(p_impl, "impl Foo for .. {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 18))
+        assert_extent!(p, (0, 18))
     }
 
     #[test]
     fn impl_with_generics() {
         let p = qp(p_impl, "impl<'a, T> Foo<'a, T> for Bar<'a, T> {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 40))
+        assert_extent!(p, (0, 40))
     }
 
     #[test]
     fn impl_with_generics_no_space() {
         let p = qp(p_impl, "impl<'a,T>Foo<'a,T>for Bar<'a,T>{}");
-        assert_eq!(unwrap_progress(p).extent, (0, 34))
+        assert_extent!(p, (0, 34))
     }
 
     #[test]
     fn impl_with_trait_bounds() {
         let p = qp(p_impl, "impl<T> Foo for Bar<T> where T: Quux {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 39))
+        assert_extent!(p, (0, 39))
     }
 
     #[test]
     fn impl_with_attribute() {
         let p = qp(p_impl, "impl Foo { #[attribute] fn bar() {} }");
-        assert_eq!(unwrap_progress(p).extent, (0, 37))
+        assert_extent!(p, (0, 37))
     }
 
     #[test]
     fn impl_with_attributes() {
         let p = qp(p_impl, "impl Foo { #[a] #[b] fn bar() {} }");
-        assert_eq!(unwrap_progress(p).extent, (0, 34))
+        assert_extent!(p, (0, 34))
     }
 
     #[test]
     fn impl_with_associated_type() {
         let p = qp(p_impl, "impl Foo { type A = B; }");
-        assert_eq!(unwrap_progress(p).extent, (0, 24))
+        assert_extent!(p, (0, 24))
     }
 
     #[test]
     fn impl_with_associated_const() {
         let p = qp(p_impl, "impl Foo { const A: i32 = 42; }");
-        assert_eq!(unwrap_progress(p).extent, (0, 31))
+        assert_extent!(p, (0, 31))
     }
 
     #[test]
     fn impl_with_unsafe() {
         let p = qp(p_impl, "unsafe impl Foo {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 18))
+        assert_extent!(p, (0, 18))
     }
 
     #[test]
     fn impl_with_macro_call() {
         let p = qp(p_impl, "impl Foo { bar!(); }");
-        assert_eq!(unwrap_progress(p).extent, (0, 20))
+        assert_extent!(p, (0, 20))
     }
 
     #[test]
     fn enum_with_trailing_stuff() {
         let p = qp(p_enum, "enum A {} impl Foo for Bar {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn enum_with_generic_types() {
         let p = qp(p_enum, "enum A { Foo(Vec<u8>) }");
-        assert_eq!(unwrap_progress(p).extent, (0, 23))
+        assert_extent!(p, (0, 23))
     }
 
     #[test]
     fn enum_with_generic_declarations() {
         let p = qp(p_enum, "enum A<T> { Foo(Vec<T>) }");
-        assert_eq!(unwrap_progress(p).extent, (0, 25))
+        assert_extent!(p, (0, 25))
     }
 
     #[test]
     fn enum_with_struct_variant() {
         let p = qp(p_enum, "enum A { Foo { a: u8 } }");
-        assert_eq!(unwrap_progress(p).extent, (0, 24))
+        assert_extent!(p, (0, 24))
     }
 
     #[test]
     fn enum_with_attribute() {
         let p = qp(p_enum, "enum Foo { #[attr] A(u8)}");
-        assert_eq!(unwrap_progress(p).extent, (0, 25))
+        assert_extent!(p, (0, 25))
     }
 
     #[test]
     fn enum_with_attribute_on_value() {
         let p = qp(p_enum, "enum Foo { A(#[attr] u8) }");
-        assert_eq!(unwrap_progress(p).extent, (0, 26))
+        assert_extent!(p, (0, 26))
     }
 
     #[test]
     fn enum_with_discriminant() {
         let p = qp(p_enum, "enum Foo { A = 1, B = 2 }");
-        assert_eq!(unwrap_progress(p).extent, (0, 25))
+        assert_extent!(p, (0, 25))
     }
 
     #[test]
     fn enum_with_where_clause() {
         let p = qp(p_enum, "enum Foo<A> where A: Bar { Z }");
-        assert_eq!(unwrap_progress(p).extent, (0, 30))
+        assert_extent!(p, (0, 30))
     }
 
     #[test]
     fn enum_public() {
         let p = qp(p_enum, "pub enum A {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn fn_with_public_modifier() {
         let p = qp(function_header, "pub fn foo()");
-        assert_eq!(unwrap_progress(p).extent, (0, 12))
+        assert_extent!(p, (0, 12))
     }
 
     #[test]
     fn fn_with_const_modifier() {
         let p = qp(function_header, "const fn foo()");
-        assert_eq!(unwrap_progress(p).extent, (0, 14))
+        assert_extent!(p, (0, 14))
     }
 
     #[test]
     fn fn_with_extern_modifier() {
         let p = qp(function_header, "extern fn foo()");
-        assert_eq!(unwrap_progress(p).extent, (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn fn_with_extern_modifier_and_abi() {
         let p = qp(function_header, r#"extern "C" fn foo()"#);
-        assert_eq!(unwrap_progress(p).extent, (0, 19))
+        assert_extent!(p, (0, 19))
     }
 
     #[test]
     fn fn_with_self_type_reference() {
         let p = qp(function_header, "fn foo(&self)");
-        assert_eq!(unwrap_progress(p).extent, (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn fn_with_self_type_value() {
         let p = qp(function_header, "fn foo(self)");
-        assert_eq!(unwrap_progress(p).extent, (0, 12))
+        assert_extent!(p, (0, 12))
     }
 
     #[test]
     fn fn_with_self_type_value_mut() {
         let p = qp(function_header, "fn foo(mut self)");
-        assert_eq!(unwrap_progress(p).extent, (0, 16))
+        assert_extent!(p, (0, 16))
     }
 
     #[test]
     fn fn_with_self_type_reference_mut() {
         let p = qp(function_header, "fn foo(&mut self)");
-        assert_eq!(unwrap_progress(p).extent, (0, 17))
+        assert_extent!(p, (0, 17))
     }
 
     #[test]
     fn fn_with_self_type_with_lifetime() {
         let p = qp(function_header, "fn foo<'a>(&'a self)");
-        assert_eq!(unwrap_progress(p).extent, (0, 20))
+        assert_extent!(p, (0, 20))
     }
 
     #[test]
     fn fn_with_self_type_and_regular() {
         let p = qp(function_header, "fn foo(&self, a: u8)");
-        assert_eq!(unwrap_progress(p).extent, (0, 20))
+        assert_extent!(p, (0, 20))
     }
 
     #[test]
     fn fn_with_self_type_explicit_type() {
         let p = qp(function_header, "fn foo(self: &mut Self)");
-        assert_eq!(unwrap_progress(p).extent, (0, 23))
+        assert_extent!(p, (0, 23))
     }
 
     #[test]
     fn fn_with_self_type_explicit_type_mutable() {
         let p = qp(function_header, "fn foo(mut self: &mut Self)");
-        assert_eq!(unwrap_progress(p).extent, (0, 27))
+        assert_extent!(p, (0, 27))
     }
 
     #[test]
     fn fn_with_argument() {
         let p = qp(function_header, "fn foo(a: u8)");
-        assert_eq!(unwrap_progress(p).extent, (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn fn_with_arguments_all_space() {
         let p = qp(function_header, "fn foo ( a : u8 )");
-        assert_eq!(unwrap_progress(p).extent, (0, 17))
+        assert_extent!(p, (0, 17))
     }
 
     #[test]
     fn fn_with_argument_with_generic() {
         let p = qp(function_header, "fn foo(a: Vec<u8>)");
-        assert_eq!(unwrap_progress(p).extent, (0, 18))
+        assert_extent!(p, (0, 18))
     }
 
     #[test]
     fn fn_with_arguments() {
         let p = qp(function_header, "fn foo(a: u8, b: u8)");
-        assert_eq!(unwrap_progress(p).extent, (0, 20))
+        assert_extent!(p, (0, 20))
     }
 
     #[test]
     fn fn_with_arguments_with_patterns() {
         let p = qp(function_header, "fn foo(&a: &u8)");
-        assert_eq!(unwrap_progress(p).extent, (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn fn_with_return_type() {
         let p = qp(function_header, "fn foo() -> bool");
-        assert_eq!(unwrap_progress(p).extent, (0, 16))
+        assert_extent!(p, (0, 16))
     }
 
     #[test]
     fn fn_with_generics() {
         let p = qp(function_header, "fn foo<A, B>()");
-        assert_eq!(unwrap_progress(p).extent, (0, 14))
+        assert_extent!(p, (0, 14))
     }
 
     #[test]
     fn fn_with_lifetimes() {
         let p = qp(function_header, "fn foo<'a, 'b>()");
-        assert_eq!(unwrap_progress(p).extent, (0, 16))
+        assert_extent!(p, (0, 16))
     }
 
     #[test]
     fn fn_with_lifetimes_and_generics() {
         let p = qp(function_header, "fn foo<'a, T>()");
-        assert_eq!(unwrap_progress(p).extent, (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn fn_with_whitespace_before_arguments() {
         let p = qp(function_header, "fn foo () -> ()");
-        assert_eq!(unwrap_progress(p).extent, (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn fn_with_whitespace_before_generics() {
         let p = qp(function_header, "fn foo <'a, T>() -> ()");
-        assert_eq!(unwrap_progress(p).extent, (0, 22))
+        assert_extent!(p, (0, 22))
     }
 
     #[test]
     fn fn_with_unsafe_qualifier() {
         let p = qp(function_header, "unsafe fn foo()");
-        assert_eq!(unwrap_progress(p).extent, (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn block_with_multiple_implicit_statement_macro_calls() {
         let p = qp(block, "{ a! {} b! {} }");
-        assert_eq!(unwrap_progress(p).extent, (0, 15));
+        assert_extent!(p, (0, 15));
     }
 
     #[test]
     fn block_promotes_implicit_statement_to_expression() {
         let p = qp(block, "{ if a {} }");
-        let p = unwrap_progress(p);
         assert!(p.statements.is_empty());
-        assert_eq!(p.expression.unwrap().extent(), (2, 9));
+        assert_extent!(p.expression.unwrap(), (2, 9));
     }
 
     #[test]
     fn block_with_multiple_empty_statements() {
         let p = qp(block, "{ ; ; ; }");
-        assert_eq!(unwrap_progress(p).extent, (0, 9));
+        assert_extent!(p, (0, 9));
     }
 
     #[test]
     fn statement_match_no_semicolon() {
         let p = qp(statement, "match a { _ => () }");
-        assert_eq!(unwrap_progress(p).into_expression().unwrap().extent(), (0, 19))
+        assert_extent!(p.into_expression().unwrap(), (0, 19))
     }
 
     #[test]
     fn statement_use() {
         let p = qp(statement, "use foo::Bar;");
-        assert_eq!(unwrap_progress(p).extent(), (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn statement_any_item() {
         let p = qp(statement, "struct Foo {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn statement_braced_expression_followed_by_method() {
         let p = qp(statement, "match 1 { _ => 1u8 }.count_ones()");
-        assert_eq!(unwrap_progress(p).extent(), (0, 33))
+        assert_extent!(p, (0, 33))
     }
 
     #[test]
     fn pathed_ident_with_leading_separator() {
         let p = qp(pathed_ident, "::foo");
-        assert_eq!(unwrap_progress(p).extent, (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn pathed_ident_with_turbofish() {
         let p = qp(pathed_ident, "foo::<Vec<u8>>");
-        assert_eq!(unwrap_progress(p).extent, (0, 14))
+        assert_extent!(p, (0, 14))
     }
 
     #[test]
     fn pathed_ident_with_turbofish_with_lifetime() {
         let p = qp(pathed_ident, "StructWithLifetime::<'a, u8>");
-        assert_eq!(unwrap_progress(p).extent, (0, 28))
+        assert_extent!(p, (0, 28))
     }
 
     #[test]
     fn pathed_ident_all_space() {
         let p = qp(pathed_ident, "foo :: < Vec < u8 > , Option < bool > >");
-        assert_eq!(unwrap_progress(p).extent, (0, 39))
+        assert_extent!(p, (0, 39))
     }
 
     #[test]
     fn number_decimal_cannot_start_with_underscore() {
-        let p = qp(number_literal, "_123");
+        let p = parse_full(number_literal, "_123");
         let (err_loc, errs) = unwrap_progress_err(p);
         assert_eq!(err_loc, 0);
         assert!(errs.contains(&Error::ExpectedNumber));
@@ -5321,705 +5281,704 @@ mod test {
     #[test]
     fn number_with_exponent() {
         let p = qp(number_literal, "1e2");
-        assert_eq!(unwrap_progress(p).extent(), (0, 3))
+        assert_extent!(p, (0, 3))
     }
 
     #[test]
     fn number_with_prefix_and_exponent() {
         let p = qp(number_literal, "0x1e2");
-        assert_eq!(unwrap_progress(p).extent(), (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn number_with_fractional() {
         let p = qp(number_literal, "1.2");
-        assert_eq!(unwrap_progress(p).extent(), (0, 3))
+        assert_extent!(p, (0, 3))
     }
 
     #[test]
     fn number_with_fractional_with_suffix() {
         let p = qp(number_literal, "1.2f32");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn number_with_prefix_and_fractional() {
         let p = qp(number_literal, "0x1.2");
-        assert_eq!(unwrap_progress(p).extent(), (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn number_with_prefix_exponent_and_fractional() {
         let p = qp(number_literal, "0o7.3e9");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn number_with_prefix_can_have_underscore_after_prefix() {
         let p = qp(number_literal, "0x_123");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn number_binary_can_have_suffix() {
         let p = qp(number_literal, "0b111u8");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn number_decimal_can_have_suffix() {
         let p = qp(number_literal, "123i16");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn number_hexadecimal_can_have_suffix() {
         let p = qp(number_literal, "0xBEEF__u32");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn number_octal_can_have_suffix() {
         let p = qp(number_literal, "0o777_isize");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn pattern_with_path() {
         let p = qp(pattern, "foo::Bar::Baz");
-        assert_eq!(unwrap_progress(p).extent(), (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn pattern_with_ref() {
         let p = qp(pattern, "ref a");
-        assert_eq!(unwrap_progress(p).extent(), (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn pattern_with_tuple() {
         let p = qp(pattern, "(a, b)");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn pattern_with_enum_tuple() {
         let p = qp(pattern, "Baz(a)");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn pattern_with_tuple_wildcard() {
         let p = qp(pattern, "(..)");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn pattern_with_tuple_wildcard_anywhere() {
         let p = qp(pattern, "(a, .., b)");
-        assert_eq!(unwrap_progress(p).extent(), (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn pattern_with_tuple_all_space() {
         let p = qp(pattern, "( a , .. , b )");
-        assert_eq!(unwrap_progress(p).extent(), (0, 14))
+        assert_extent!(p, (0, 14))
     }
 
     #[test]
     fn pattern_with_enum_struct() {
         let p = qp(pattern, "Baz { a: a }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 12))
+        assert_extent!(p, (0, 12))
     }
 
     #[test]
     fn pattern_with_enum_struct_shorthand() {
         let p = qp(pattern, "Baz { a }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn pattern_with_enum_struct_shorthand_with_ref() {
         let p = qp(pattern, "Baz { ref a }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn pattern_with_enum_struct_wildcard() {
         let p = qp(pattern, "Baz { .. }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn pattern_with_byte_literal() {
         let p = qp(pattern, "b'a'");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn pattern_with_char_literal() {
         let p = qp(pattern, "'a'");
-        assert_eq!(unwrap_progress(p).extent(), (0, 3))
+        assert_extent!(p, (0, 3))
     }
 
     #[test]
     fn pattern_with_byte_string_literal() {
         let p = qp(pattern, r#"b"hello""#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn pattern_with_string_literal() {
         let p = qp(pattern, r#""hello""#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn pattern_with_numeric_literal() {
         let p = qp(pattern, "42");
-        assert_eq!(unwrap_progress(p).extent(), (0, 2))
+        assert_extent!(p, (0, 2))
     }
 
     #[test]
     fn pattern_with_numeric_literal_negative() {
         let p = qp(pattern, "- 42");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn pattern_with_slice() {
         let p = qp(pattern, "[]");
-        assert_eq!(unwrap_progress(p).extent(), (0, 2))
+        assert_extent!(p, (0, 2))
     }
 
     #[test]
     fn pattern_with_reference() {
         let p = qp(pattern, "&a");
-        assert_eq!(unwrap_progress(p).extent(), (0, 2))
+        assert_extent!(p, (0, 2))
     }
 
     #[test]
     fn pattern_with_reference_mutable() {
-        let p = unwrap_progress(qp(pattern, "&mut ()"));
+        let p = qp(pattern, "&mut ()");
         assert!(p.kind.is_reference());
-        assert_eq!(p.extent(), (0, 7));
+        assert_extent!(p, (0, 7));
     }
 
     #[test]
     fn pattern_with_named_subpattern() {
-        let p = unwrap_progress(qp(pattern, "a @ 1"));
-        assert_eq!(p.extent(), (0, 5));
+        let p = qp(pattern, "a @ 1");
+        assert_extent!(p, (0, 5));
     }
 
     #[test]
     fn pattern_with_named_subpattern_qualifiers() {
-        let p = unwrap_progress(qp(pattern, "ref mut a @ 1"));
-        assert_eq!(p.extent(), (0, 13));
+        let p = qp(pattern, "ref mut a @ 1");
+        assert_extent!(p, (0, 13));
     }
 
     #[test]
     fn pattern_with_numeric_inclusive_range() {
         let p = qp(pattern, "1 ... 10");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn pattern_with_numeric_inclusive_range_negative() {
         let p = qp(pattern, "-10 ... -1");
-        assert_eq!(unwrap_progress(p).extent(), (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn pattern_with_character_inclusive_range() {
         let p = qp(pattern, "'a'...'z'");
-        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn pattern_with_byte_inclusive_range() {
         let p = qp(pattern, "b'a'...b'z'");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn pattern_with_pathed_ident_inclusive_range() {
         let p = qp(pattern, "foo::a...z");
-        assert_eq!(unwrap_progress(p).extent(), (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn pattern_with_numeric_exclusive_range() {
         let p = qp(pattern, "1 .. 10");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn pattern_with_numeric_exclusive_range_negative() {
         let p = qp(pattern, "-10 .. -1");
-        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn pattern_with_character_exclusive_range() {
         let p = qp(pattern, "'a'..'z'");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn pattern_with_byte_exclusive_range() {
         let p = qp(pattern, "b'a'..b'z'");
-        assert_eq!(unwrap_progress(p).extent(), (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn pattern_with_pathed_ident_exclusive_range() {
         let p = qp(pattern, "foo::a..z");
-        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn pattern_with_macro_call() {
         let p = qp(pattern, "foo![]");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn type_tuple() {
         let p = qp(typ, "(u8, u8)");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn type_tuple_all_space() {
         let p = qp(typ, "( u8 , u8 )");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn type_with_generics() {
         let p = qp(typ, "A<T>");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn type_with_generics_all_space() {
         let p = qp(typ, "A < T >");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn type_impl_trait() {
         let p = qp(typ, "impl Foo");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn type_fn_trait() {
         let p = qp(typ, "Fn(u8) -> u8");
-        assert_eq!(unwrap_progress(p).extent(), (0, 12))
+        assert_extent!(p, (0, 12))
     }
 
     #[test]
     fn type_ref() {
         let p = qp(typ, "&mut Foo");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn type_mut_ref() {
         let p = qp(typ, "&mut Foo");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn type_mut_ref_with_lifetime() {
         let p = qp(typ, "&'a mut Foo");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn type_const_pointer() {
         let p = qp(typ, "*const Foo");
-        assert_eq!(unwrap_progress(p).extent(), (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn type_mut_pointer() {
         let p = qp(typ, "*mut Foo");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn type_uninhabited() {
         let p = qp(typ, "!");
-        assert_eq!(unwrap_progress(p).extent(), (0, 1))
+        assert_extent!(p, (0, 1))
     }
 
     #[test]
     fn type_slice() {
         let p = qp(typ, "[u8]");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn type_array() {
         let p = qp(typ, "[u8; 42]");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn type_array_allows_expressions() {
         let p = qp(typ, "[u8; 1 + 1]");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn type_fn() {
         let p = qp(typ, "fn(u8) -> u8");
-        assert_eq!(unwrap_progress(p).extent(), (0, 12))
+        assert_extent!(p, (0, 12))
     }
 
     #[test]
     fn type_fn_with_names() {
         let p = qp(typ, "fn(a: u8) -> u8");
-        assert_eq!(unwrap_progress(p).extent(), (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn type_fn_with_const() {
         let p = qp(typ, "const fn()");
-        assert_eq!(unwrap_progress(p).extent(), (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn type_fn_with_unsafe() {
         let p = qp(typ, "unsafe fn()");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn type_fn_with_extern() {
         let p = qp(typ, "extern fn()");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn type_fn_with_extern_and_abi() {
         let p = qp(typ, r#"extern "C" fn()"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn type_higher_ranked_trait_bounds() {
         let p = qp(typ, "for <'a> Foo<'a>");
-        assert_eq!(unwrap_progress(p).extent(), (0, 16))
+        assert_extent!(p, (0, 16))
     }
 
     #[test]
     fn type_higher_ranked_trait_bounds_on_functions() {
         let p = qp(typ, "for <'a> fn(&'a u8)");
-        assert_eq!(unwrap_progress(p).extent(), (0, 19))
+        assert_extent!(p, (0, 19))
     }
 
     #[test]
     fn type_higher_ranked_trait_bounds_on_references() {
         let p = qp(typ, "for <'a> &'a u8");
-        assert_eq!(unwrap_progress(p).extent(), (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn type_with_additional_named_type() {
         let p = qp(typ, "Foo + Bar");
-        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn type_with_additional_lifetimes() {
         let p = qp(typ, "Foo + 'a");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn type_disambiguation() {
         let p = qp(typ, "<Foo as Bar>");
-        assert_eq!(unwrap_progress(p).extent(), (0, 12))
+        assert_extent!(p, (0, 12))
     }
 
     #[test]
     fn type_disambiguation_with_associated_type() {
         let p = qp(typ, "<Foo as Bar>::Quux");
-        assert_eq!(unwrap_progress(p).extent(), (0, 18))
+        assert_extent!(p, (0, 18))
     }
 
     #[test]
     fn type_disambiguation_without_disambiguation() {
         let p = qp(typ, "<Foo>");
-        assert_eq!(unwrap_progress(p).extent(), (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn type_disambiguation_with_double_angle_brackets() {
         let p = qp(typ, "<<A as B> as Option<T>>");
-        assert_eq!(unwrap_progress(p).extent(), (0, 23))
+        assert_extent!(p, (0, 23))
     }
 
     #[test]
     fn struct_basic() {
         let p = qp(p_struct, "struct S { field: TheType, other: OtherType }");
-        assert_eq!(unwrap_progress(p).extent, (0, 45))
+        assert_extent!(p, (0, 45))
     }
 
     #[test]
     fn struct_with_generic_fields() {
         let p = qp(p_struct, "struct S { field: Option<u8> }");
-        assert_eq!(unwrap_progress(p).extent, (0, 30))
+        assert_extent!(p, (0, 30))
     }
 
     #[test]
     fn struct_with_fields_with_no_space() {
         let p = qp(p_struct, "struct S{a:u8}");
-        assert_eq!(unwrap_progress(p).extent, (0, 14))
+        assert_extent!(p, (0, 14))
     }
 
     #[test]
     fn struct_with_fields_with_all_space() {
         let p = qp(p_struct, "struct S { a : u8 }");
-        assert_eq!(unwrap_progress(p).extent, (0, 19))
+        assert_extent!(p, (0, 19))
     }
 
     #[test]
     fn struct_with_generic_declarations() {
         let p = qp(p_struct, "struct S<T> { field: Option<T> }");
-        assert_eq!(unwrap_progress(p).extent, (0, 32))
+        assert_extent!(p, (0, 32))
     }
 
     #[test]
     fn struct_public() {
         let p = qp(p_struct, "pub struct S {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn struct_public_field() {
         let p = qp(p_struct, "struct S { pub age: u8 }");
-        assert_eq!(unwrap_progress(p).extent, (0, 24))
+        assert_extent!(p, (0, 24))
     }
 
     #[test]
     fn struct_with_attributed_field() {
         let p = qp(p_struct, "struct S { #[foo(bar)] #[baz(quux)] field: u8 }");
-        assert_eq!(unwrap_progress(p).extent, (0, 47))
+        assert_extent!(p, (0, 47))
     }
 
     #[test]
     fn struct_with_tuple() {
         let p = qp(p_struct, "struct S(u8);");
-        assert_eq!(unwrap_progress(p).extent, (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn struct_with_tuple_and_annotation() {
         let p = qp(p_struct, "struct S(#[foo] u8);");
-        assert_eq!(unwrap_progress(p).extent, (0, 20))
+        assert_extent!(p, (0, 20))
     }
 
     #[test]
     fn struct_with_tuple_and_visibility() {
         let p = qp(p_struct, "struct S(pub u8);");
-        assert_eq!(unwrap_progress(p).extent, (0, 17))
+        assert_extent!(p, (0, 17))
     }
 
     #[test]
     fn struct_empty() {
         let p = qp(p_struct, "struct S;");
-        assert_eq!(unwrap_progress(p).extent, (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn struct_with_where_clause() {
         let p = qp(p_struct, "struct S<A> where A: Foo { a: A }");
-        assert_eq!(unwrap_progress(p).extent, (0, 33))
+        assert_extent!(p, (0, 33))
     }
 
     #[test]
     fn struct_with_tuple_and_where_clause() {
         let p = qp(p_struct, "struct S<A>(A) where A: Foo;");
-        assert_eq!(unwrap_progress(p).extent, (0, 28))
+        assert_extent!(p, (0, 28))
     }
 
     #[test]
     fn union_basic() {
         let p = qp(p_union, "union U { field: TheType, other: OtherType }");
-        assert_eq!(unwrap_progress(p).extent, (0, 44))
+        assert_extent!(p, (0, 44))
     }
 
     #[test]
     fn union_is_still_an_ident() {
         let p = qp(p_union, "union union { union: union }");
-        assert_eq!(unwrap_progress(p).extent, (0, 28))
+        assert_extent!(p, (0, 28))
     }
 
     #[test]
     fn union_with_generic_declarations() {
         let p = qp(p_union, "union S<T> { field: Option<T> }");
-        assert_eq!(unwrap_progress(p).extent, (0, 31))
+        assert_extent!(p, (0, 31))
     }
 
     #[test]
     fn union_with_where_clause() {
         let p = qp(p_union, "union S<A> where A: Foo { a: A }");
-        assert_eq!(unwrap_progress(p).extent, (0, 32))
+        assert_extent!(p, (0, 32))
     }
 
     #[test]
     fn union_public() {
         let p = qp(p_union, "pub union S {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 14))
+        assert_extent!(p, (0, 14))
     }
 
     #[test]
     fn union_public_field() {
         let p = qp(p_union, "union S { pub age: u8 }");
-        assert_eq!(unwrap_progress(p).extent, (0, 23))
+        assert_extent!(p, (0, 23))
     }
 
     #[test]
     fn union_with_attributed_field() {
         let p = qp(p_union, "union S { #[foo(bar)] #[baz(quux)] field: u8 }");
-        assert_eq!(unwrap_progress(p).extent, (0, 46))
+        assert_extent!(p, (0, 46))
     }
 
     #[test]
     fn where_clause_with_path() {
         let p = qp(where_clause_item, "P: foo::bar::baz::Quux<'a>");
-        assert_eq!(unwrap_progress(p).extent(), (0, 26))
+        assert_extent!(p, (0, 26))
     }
 
     #[test]
     fn where_clause_with_multiple_bounds() {
         let p = qp(where_clause_item, "P: A + B");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn where_clause_with_multiple_types() {
         let p = qp(where_clause, "where P: A, Q: B");
-        let p = unwrap_progress(p);
-        assert_eq!(p[1].extent(), (12, 16))
+        assert_extent!(p[1], (12, 16))
     }
 
     #[test]
     fn where_clause_with_lifetimes() {
         let p = qp(where_clause_item, "'a: 'b + 'c");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn ident_with_leading_underscore() {
         let p = qp(ident, "_foo");
-        assert_eq!(unwrap_progress(p).extent, (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn ident_can_have_keyword_substring() {
         let p = qp(ident, "form");
-        assert_eq!(unwrap_progress(p).extent, (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn lifetime_ident() {
         let p = qp(lifetime, "'a");
-        assert_eq!(unwrap_progress(p).extent, (0, 2))
+        assert_extent!(p, (0, 2))
     }
 
     #[test]
     fn lifetime_static() {
         let p = qp(lifetime, "'static");
-        assert_eq!(unwrap_progress(p).extent, (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn generic_declarations_() {
         let p = qp(generic_declarations, "<A>");
-        assert_eq!(unwrap_progress(p).extent, (0, 3))
+        assert_extent!(p, (0, 3))
     }
 
     #[test]
     fn generic_declarations_allow_type_bounds() {
         let p = qp(generic_declarations, "<A: Foo>");
-        assert_eq!(unwrap_progress(p).extent, (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn generic_declarations_with_default_types() {
         let p = qp(generic_declarations, "<A = Bar>");
-        assert_eq!(unwrap_progress(p).extent, (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn generic_declarations_with_type_bounds_and_default_types() {
         let p = qp(generic_declarations, "<A: Foo = Bar>");
-        assert_eq!(unwrap_progress(p).extent, (0, 14))
+        assert_extent!(p, (0, 14))
     }
 
     #[test]
     fn generic_declarations_allow_lifetime_bounds() {
         let p = qp(generic_declarations, "<'a: 'b>");
-        assert_eq!(unwrap_progress(p).extent, (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn generic_declarations_with_attributes() {
         let p = qp(generic_declarations, "<#[foo] 'a, #[bar] B>");
-        assert_eq!(unwrap_progress(p).extent, (0, 21))
+        assert_extent!(p, (0, 21))
     }
 
     #[test]
     fn generic_declarations_all_space() {
         let p = qp(generic_declarations, "< 'a : 'b , A : Foo >");
-        assert_eq!(unwrap_progress(p).extent, (0, 21))
+        assert_extent!(p, (0, 21))
     }
 
     #[test]
     fn trait_bounds_with_lifetime() {
         let p = qp(trait_bounds, "'a + 'b");
-        assert_eq!(unwrap_progress(p).extent, (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn trait_bounds_with_relaxed() {
         let p = qp(trait_bounds, "?A + ?B");
-        assert_eq!(unwrap_progress(p).extent, (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn trait_bounds_with_associated_types() {
         let p = qp(trait_bounds, "A<B, C = D>");
-        assert_eq!(unwrap_progress(p).extent, (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn visibility_self() {
         let p = qp(visibility, "pub(self)");
-        assert_eq!(unwrap_progress(p).extent, (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn visibility_super() {
         let p = qp(visibility, "pub(super)");
-        assert_eq!(unwrap_progress(p).extent, (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn visibility_crate() {
         let p = qp(visibility, "pub(crate)");
-        assert_eq!(unwrap_progress(p).extent, (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn visibility_path() {
         let p = qp(visibility, "pub(::foo::bar)");
-        assert_eq!(unwrap_progress(p).extent, (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     fn zero_or_more_tailed_test<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
@@ -6031,7 +5990,6 @@ mod test {
     #[test]
     fn zero_or_more_tailed_with_zero() {
         let p = qp(zero_or_more_tailed_test, "");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 0);
         assert_eq!(p.separator_count, 0);
     }
@@ -6039,7 +5997,6 @@ mod test {
     #[test]
     fn zero_or_more_tailed_with_one() {
         let p = qp(zero_or_more_tailed_test, "X");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 1);
         assert_eq!(p.separator_count, 0);
     }
@@ -6047,7 +6004,6 @@ mod test {
     #[test]
     fn zero_or_more_tailed_with_one_trailing() {
         let p = qp(zero_or_more_tailed_test, "X,");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 1);
         assert_eq!(p.separator_count, 1);
     }
@@ -6055,7 +6011,6 @@ mod test {
     #[test]
     fn zero_or_more_tailed_with_two() {
         let p = qp(zero_or_more_tailed_test, "X, X");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 2);
         assert_eq!(p.separator_count, 1);
     }
@@ -6063,7 +6018,6 @@ mod test {
     #[test]
     fn zero_or_more_tailed_with_two_trailing() {
         let p = qp(zero_or_more_tailed_test, "X, X,");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 2);
         assert_eq!(p.separator_count, 2);
     }
@@ -6071,7 +6025,6 @@ mod test {
     #[test]
     fn zero_or_more_tailed_with_all_space() {
         let p = qp(zero_or_more_tailed_test, "X , X , ");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 2);
         assert_eq!(p.separator_count, 2);
     }
@@ -6079,7 +6032,6 @@ mod test {
     #[test]
     fn zero_or_more_tailed_doesnt_allow_space_separator() {
         let p = qp(zero_or_more_tailed_test, "X X");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 1);
         assert_eq!(p.separator_count, 0);
     }
@@ -6092,7 +6044,7 @@ mod test {
 
     #[test]
     fn one_or_more_tailed_with_zero() {
-        let p = qp(one_or_more_tailed_test, "");
+        let p = parse_full(one_or_more_tailed_test, "");
         let (err_loc, errs) = unwrap_progress_err(p);
         assert_eq!(err_loc, 0);
         assert!(errs.contains(&Error::ExpectedIdent));
@@ -6101,7 +6053,6 @@ mod test {
     #[test]
     fn one_or_more_tailed_with_one() {
         let p = qp(one_or_more_tailed_test, "X");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 1);
         assert_eq!(p.separator_count, 0);
     }
@@ -6109,7 +6060,6 @@ mod test {
     #[test]
     fn one_or_more_tailed_with_one_trailing() {
         let p = qp(one_or_more_tailed_test, "X,");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 1);
         assert_eq!(p.separator_count, 1);
     }
@@ -6117,7 +6067,6 @@ mod test {
     #[test]
     fn one_or_more_tailed_with_two() {
         let p = qp(one_or_more_tailed_test, "X, X");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 2);
         assert_eq!(p.separator_count, 1);
     }
@@ -6125,7 +6074,6 @@ mod test {
     #[test]
     fn one_or_more_tailed_with_two_trailing() {
         let p = qp(one_or_more_tailed_test, "X, X,");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 2);
         assert_eq!(p.separator_count, 2);
     }
@@ -6133,7 +6081,6 @@ mod test {
     #[test]
     fn one_or_more_tailed_with_all_space() {
         let p = qp(one_or_more_tailed_test, "X , X , ");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 2);
         assert_eq!(p.separator_count, 2);
     }
@@ -6141,7 +6088,6 @@ mod test {
     #[test]
     fn one_or_more_tailed_with_two_doesnt_allow_space_separator() {
         let p = qp(one_or_more_tailed_test, "X X");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 1);
         assert_eq!(p.separator_count, 0);
     }
