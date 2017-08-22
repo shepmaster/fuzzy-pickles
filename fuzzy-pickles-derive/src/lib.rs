@@ -22,6 +22,21 @@ pub fn visit_derive(input: TokenStream) -> TokenStream {
     gen.parse().expect("Unable to generate")
 }
 
+#[proc_macro_derive(HasExtent)]
+pub fn has_extent_derive(input: TokenStream) -> TokenStream {
+    // Construct a string representation of the type definition
+    let s = input.to_string();
+
+    // Parse the string representation
+    let ast = syn::parse_macro_input(&s).expect("Unable to parse input");
+
+    // Build the impl
+    let gen = impl_has_extent(&ast);
+
+    // Return the generated impl
+    gen.parse().expect("Unable to generate")
+}
+
 fn camelcase_to_snake_case(camelcase: &str) -> String {
     let mut s = String::new();
 
@@ -215,6 +230,48 @@ fn impl_decompose(ast: &syn::MacroInput) -> quote::Tokens {
             #(#into_fns)*
             #(#as_fns)*
             #(#is_fns)*
+        }
+    }
+}
+
+fn impl_has_extent(ast: &syn::MacroInput) -> quote::Tokens {
+    let name = &ast.ident;
+
+    use syn::{Body, VariantData};
+
+    let body = match ast.body {
+        Body::Enum(ref e) => {
+            let enum_name = &ast.ident;
+
+            let mut variants = quote! {};
+
+            variants.append_all(e.iter().map(|variant| {
+                let variant_name = &variant.ident;
+                quote! { #enum_name::#variant_name(ref x) => HasExtent::extent(x), }
+            }));
+
+            quote! {
+                match *self {
+                    #variants
+                }
+            }
+        }
+        Body::Struct(VariantData::Struct(..)) => {
+            quote! {
+                self.extent
+            }
+        }
+        Body::Struct(VariantData::Tuple(..)) |
+        Body::Struct(VariantData::Unit) => {
+            panic!("Don't know how to implement HasExtent for tuple or unit structs");
+        }
+    };
+
+    quote! {
+        impl HasExtent for #name {
+            fn extent(&self) -> Extent {
+                #body
+            }
         }
     }
 }

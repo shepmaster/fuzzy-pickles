@@ -1401,202 +1401,202 @@ mod test {
     #[test]
     fn expression_atom_can_have_attributes() {
         let p = qp(expression, "#[moo] 42");
-        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn expression_operator_prefix_can_have_attributes() {
         let p = qp(expression, "#[moo] *42");
-        assert_eq!(unwrap_progress(p).extent(), (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn expr_true() {
         let p = qp(expression, "true");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn expr_number_binary() {
         let p = qp(expression, "0x0101");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn expr_number_decimal() {
         let p = qp(expression, "123");
-        assert_eq!(unwrap_progress(p).extent(), (0, 3))
+        assert_extent!(p, (0, 3))
     }
 
     #[test]
     fn expr_number_hexadecimal() {
         let p = qp(expression, "0xDEADBEEF");
-        assert_eq!(unwrap_progress(p).extent(), (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn expr_number_octal() {
         let p = qp(expression, "0o777");
-        assert_eq!(unwrap_progress(p).extent(), (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn expr_number_negative() {
         let p = qp(expression, "-0x1");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn expr_number_with_spacers() {
         let p = qp(expression, "1_000_000");
-        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn expr_let_explicit_type() {
         let p = qp(expression, "let foo: bool");
-        assert_eq!(unwrap_progress(p).extent(), (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn expr_let_explicit_type_and_value_not_confused_with_greater_than_or_equal() {
-        let p = unwrap_progress(qp(expression, "let foo: Vec<u8>=vec![]"));
+        let p = qp(expression, "let foo: Vec<u8>=vec![]");
         assert!(p.is_let());
-        assert_eq!(p.extent(), (0, 23));
+        assert_extent!(p, (0, 23));
     }
 
     #[test]
     fn expr_let_explicit_type_and_value_not_confused_with_shift_right_assign() {
-        let p = unwrap_progress(qp(expression, "let foo: Vec<Vec<u8>>=vec![]"));
+        let p = qp(expression, "let foo: Vec<Vec<u8>>=vec![]");
         assert!(p.is_let());
-        assert_eq!(p.extent(), (0, 28));
+        assert_extent!(p, (0, 28));
     }
 
     #[test]
     fn expr_let_mut() {
         let p = qp(expression, "let mut pm = Master::new()");
-        assert_eq!(unwrap_progress(p).extent(), (0, 26))
+        assert_extent!(p, (0, 26))
     }
 
     #[test]
     fn expr_let_no_value() {
         let p = qp(expression, "let pm");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn expr_assign() {
         let p = qp(expression, "a = b");
-        assert_eq!(unwrap_progress(p).extent(), (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn expr_assign_to_field() {
         let p = qp(expression, "a.b = c");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn expr_value_with_path() {
         let p = qp(expression, "Master::new()");
-        assert_eq!(unwrap_progress(p).extent(), (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn expr_field_access_name() {
         let p = qp(expression, "foo.bar");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn expr_field_access_number() {
         let p = qp(expression, "foo.0");
-        assert_eq!(unwrap_progress(p).extent(), (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn expr_field_access_multiple() {
         let p = qp(expression, "foo.bar.baz");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn expr_call_function() {
-        let p = unwrap_progress(qp(expression, "foo()"));
+        let p = qp(expression, "foo()");
         assert!(p.is_call());
-        assert_eq!(p.extent(), (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn expr_call_method() {
-        let p = unwrap_progress(qp(expression, "foo.bar()"));
+        let p = qp(expression, "foo.bar()");
         assert!(p.is_call());
-        assert_eq!(p.extent(), (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn expr_call_method_multiple() {
-        let p = unwrap_progress(qp(expression, "foo.bar().baz()"));
+        let p = qp(expression, "foo.bar().baz()");
         assert!(p.is_call());
-        assert_eq!(p.extent(), (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn expr_call_method_with_turbofish() {
-        let p = unwrap_progress(qp(expression, "foo.bar::<u8>()"));
+        let p = qp(expression, "foo.bar::<u8>()");
         assert!(p.is_call());
-        assert_eq!(p.extent(), (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn expr_call_method_with_turbofish_nested() {
-        let p = unwrap_progress(qp(expression, "e.into_iter().collect::<BTreeSet<_>>()"));
+        let p = qp(expression, "e.into_iter().collect::<BTreeSet<_>>()");
         assert!(p.is_call());
-        assert_eq!(p.extent(), (0, 38))
+        assert_extent!(p, (0, 38))
     }
 
     #[test]
     fn expr_call_method_with_turbofish_on_type_and_method() {
-        let p = unwrap_progress(qp(expression, "Foo::<u8>::bar()"));
+        let p = qp(expression, "Foo::<u8>::bar()");
         assert!(p.is_call());
-        assert_eq!(p.extent(), (0, 16))
+        assert_extent!(p, (0, 16))
     }
 
     #[test]
     fn expr_call_of_expr() {
-        let p = unwrap_progress(qp(expression, "{foo}()"));
+        let p = qp(expression, "{foo}()");
         assert!(p.is_call());
-        assert_eq!(p.extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn expr_for_loop() {
         let p = qp(expression, "for (a, b) in c {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 18))
+        assert_extent!(p, (0, 18))
     }
 
     #[test]
     fn expr_for_loop_with_label() {
         let p = qp(expression, "'a: for (a, b) in c {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 22))
+        assert_extent!(p, (0, 22))
     }
 
     #[test]
     fn expr_loop() {
         let p = qp(expression, "loop {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn expr_loop_with_label() {
         let p = qp(expression, "'a: loop {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn expr_match() {
         let p = qp(expression, "match foo { _ => () }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 21))
+        assert_extent!(p, (0, 21))
     }
 
     #[test]
@@ -1604,733 +1604,722 @@ mod test {
         // `_ => {} (_,)` is ambiguous from a function call
         // `{foo}(arg)`. We must check blocks specifically.
         let p = qp(expression, "match (1,) { (1,) => {} (_,) => {} }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 36))
+        assert_extent!(p, (0, 36))
     }
 
     #[test]
     fn expr_match_expr_trailing_comma_and_whitespace() {
         let p = qp(expression, "match 1 { 1 => 2, _ => 3, }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 27))
+        assert_extent!(p, (0, 27))
     }
 
     #[test]
     fn expr_match_head_followed_by_block() {
         let p = qp(expression, "match foo {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 12))
+        assert_extent!(p, (0, 12))
     }
 
     #[test]
     fn expr_tuple() {
         let p = qp(expression, "(1, 2)");
-        let t = unwrap_progress(p);
-        assert_eq!(t.extent(), (0, 6));
-        assert!(t.is_tuple())
+        assert_extent!(p, (0, 6));
+        assert!(p.is_tuple())
     }
 
     #[test]
     fn expr_tuple_of_none() {
         let p = qp(expression, "()");
-        let t = unwrap_progress(p);
-        assert_eq!(t.extent(), (0, 2));
-        assert!(t.is_tuple())
+        assert_extent!(p, (0, 2));
+        assert!(p.is_tuple())
     }
 
     #[test]
     fn expr_tuple_of_one() {
         let p = qp(expression, "(1,)");
-        let t = unwrap_progress(p);
-        assert_eq!(t.extent(), (0, 4));
-        assert!(t.is_tuple())
+        assert_extent!(p, (0, 4));
+        assert!(p.is_tuple())
     }
 
     #[test]
     fn expr_parens() {
         let p = qp(expression, "(a && b)");
-        let t = unwrap_progress(p);
-        assert_eq!(t.extent(), (0, 8));
-        assert!(t.is_parenthetical())
+        assert_extent!(p, (0, 8));
+        assert!(p.is_parenthetical())
     }
 
     #[test]
     fn expr_parens_with_one_value_is_not_tuple() {
         let p = qp(expression, "(1)");
-        let t = unwrap_progress(p);
-        assert_eq!(t.extent(), (0, 3));
-        assert!(t.is_parenthetical())
+        assert_extent!(p, (0, 3));
+        assert!(p.is_parenthetical())
     }
 
     #[test]
     fn expr_block() {
         let p = qp(expression, "{}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 2))
+        assert_extent!(p, (0, 2))
     }
 
     #[test]
     fn expr_unsafe_block() {
         let p = qp(expression, "unsafe {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn expr_if_() {
         let p = qp(expression, "if a {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn expr_if_else() {
         let p = qp(expression, "if a {} else {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn expr_if_else_if() {
         let p = qp(expression, "if a {} else if b {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 20))
+        assert_extent!(p, (0, 20))
     }
 
 
     #[test]
     fn expr_if_let() {
         let p = qp(expression, "if let Some(a) = None {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 24))
+        assert_extent!(p, (0, 24))
     }
 
     #[test]
     fn expr_while() {
         let p = qp(expression, "while is_awesome() {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 21))
+        assert_extent!(p, (0, 21))
     }
 
     #[test]
     fn expr_while_with_label() {
         let p = qp(expression, "'a: while is_awesome() {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 25))
+        assert_extent!(p, (0, 25))
     }
 
     #[test]
     fn expr_while_let() {
         let p = qp(expression, "while let Some(a) = None {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 27))
+        assert_extent!(p, (0, 27))
     }
 
     #[test]
     fn expr_while_let_with_label() {
         let p = qp(expression, "'a: while let Some(a) = None {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 31))
+        assert_extent!(p, (0, 31))
     }
 
     #[test]
     fn expr_binary_op() {
         let p = qp(expression, "a < b");
-        assert_eq!(unwrap_progress(p).extent(), (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn expr_binary_multiple() {
         let p = qp(expression, "1 + 2 + 3");
-        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn expr_binary_op_two_char() {
         let p = qp(expression, "a >= b");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn expr_binary_op_equality() {
         let p = qp(expression, "a == b != c");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn expr_binary_op_math() {
         let p = qp(expression, "a + b - c / d % e");
-        assert_eq!(unwrap_progress(p).extent(), (0, 17))
+        assert_extent!(p, (0, 17))
     }
 
     #[test]
     fn expr_binary_op_boolean_logic() {
         let p = qp(expression, "a && b || c");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn expr_binary_op_shifting() {
         let p = qp(expression, "a >> b << c");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn expr_binary_op_shift_assign() {
         let p = qp(expression, "a >>= b <<= c");
-        assert_eq!(unwrap_progress(p).extent(), (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn expr_binary_op_bitwise() {
         let p = qp(expression, "a & b | c ^ d");
-        assert_eq!(unwrap_progress(p).extent(), (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn expr_binary_op_bitwise_assign() {
         let p = qp(expression, "a &= b |= c ^= d");
-        assert_eq!(unwrap_progress(p).extent(), (0, 16))
+        assert_extent!(p, (0, 16))
     }
 
     #[test]
     fn expr_braced_true() {
         let p = qp(expression, "{ true }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn expr_macro_call_with_nested_parens() {
         let p = qp(expression, "foo!(())");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn expr_macro_call_with_quoted_parens() {
         let p = qp(expression, r#"foo!("(")"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn expr_macro_call_with_square_brackets() {
         let p = qp(expression, "vec![]");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn expr_macro_call_with_curly_brackets() {
         let p = qp(expression, "foo! { }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn expr_macro_call_with_ident() {
         let p = qp(expression, "macro_rules! foo { }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 20))
+        assert_extent!(p, (0, 20))
     }
 
     #[test]
     fn expr_range_both() {
         let p = qp(expression, "1..2");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn expr_range_left() {
         let p = qp(expression, "3..");
-        assert_eq!(unwrap_progress(p).extent(), (0, 3))
+        assert_extent!(p, (0, 3))
     }
 
     #[test]
     fn expr_range_right() {
         let p = qp(expression, "..4");
-        assert_eq!(unwrap_progress(p).extent(), (0, 3))
+        assert_extent!(p, (0, 3))
     }
 
     #[test]
     fn expr_range_none() {
         let p = qp(expression, "..");
-        assert_eq!(unwrap_progress(p).extent(), (0, 2))
+        assert_extent!(p, (0, 2))
     }
 
     #[test]
     fn expr_range_after_infix() {
         let p = qp(expression, "1 + 2..");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn expr_range_inclusive_both() {
         let p = qp(expression, "1...2");
-        assert_eq!(unwrap_progress(p).extent(), (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn expr_range_inclusive_left() {
         let p = qp(expression, "3...");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn expr_range_inclusive_right() {
         let p = qp(expression, "...4");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn expr_range_inclusive_none() {
         let p = qp(expression, "...");
-        assert_eq!(unwrap_progress(p).extent(), (0, 3))
+        assert_extent!(p, (0, 3))
     }
 
     #[test]
     fn expr_value_struct_literal() {
         let p = qp(expression, "Point { a: 1 }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 14))
+        assert_extent!(p, (0, 14))
     }
 
     #[test]
     fn expr_value_struct_literal_shorthand() {
         let p = qp(expression, "Point { a }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn expr_value_struct_literal_with_splat() {
         let p = qp(expression, "Point { x: 1, ..point }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 23))
+        assert_extent!(p, (0, 23))
     }
 
     #[test]
     fn expr_value_starts_with_keyword() {
         let p = qp(expression, "continuez");
-        assert_eq!(unwrap_progress(p).extent(), (0, 9));
+        assert_extent!(p, (0, 9));
     }
 
     #[test]
     fn expr_closure() {
         let p = qp(expression, "|a| a");
-        assert_eq!(unwrap_progress(p).extent(), (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn expr_closure_no_args() {
         let p = qp(expression, "|| 42");
-        assert_eq!(unwrap_progress(p).extent(), (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn expr_closure_multiple() {
         let p = qp(expression, "|a, b| a + b");
-        assert_eq!(unwrap_progress(p).extent(), (0, 12))
+        assert_extent!(p, (0, 12))
     }
 
     #[test]
     fn expr_closure_explicit_type() {
         let p = qp(expression, "|a: u8| a");
-        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn expr_closure_return_type() {
         let p = qp(expression, "|a| -> u8 { a }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn expr_closure_pattern() {
         let p = qp(expression, "|&a| a");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn expr_closure_move() {
         let p = qp(expression, "move || 42");
-        assert_eq!(unwrap_progress(p).extent(), (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn expr_return() {
         let p = qp(expression, "return 1");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn expr_return_no_value() {
         let p = qp(expression, "return");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn expr_continue() {
-        let p = unwrap_progress(qp(expression, "continue"));
+        let p = qp(expression, "continue");
         assert!(p.is_continue());
-        assert_eq!(p.extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn expr_continue_with_label() {
-        let p = unwrap_progress(qp(expression, "continue 'outer"));
+        let p = qp(expression, "continue 'outer");
         assert!(p.is_continue());
-        assert_eq!(p.extent(), (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn expr_break() {
-        let p = unwrap_progress(qp(expression, "break"));
+        let p = qp(expression, "break");
         assert!(p.is_break());
-        assert_eq!(p.extent(), (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn expr_break_with_label() {
-        let p = unwrap_progress(qp(expression, "break 'outer"));
+        let p = qp(expression, "break 'outer");
         assert!(p.is_break());
-        assert_eq!(p.extent(), (0, 12))
+        assert_extent!(p, (0, 12))
     }
 
     #[test]
     fn expr_break_with_value() {
-        let p = unwrap_progress(qp(expression, "break 42"));
+        let p = qp(expression, "break 42");
         assert!(p.is_break());
-        assert_eq!(p.extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn expr_break_with_label_and_value() {
-        let p = unwrap_progress(qp(expression, "break 'outer 42"));
+        let p = qp(expression, "break 'outer 42");
         assert!(p.is_break());
-        assert_eq!(p.extent(), (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn expr_array_explicit() {
         let p = qp(expression, "[1, 1]");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn expr_array_repeated() {
         let p = qp(expression, "[1; 2*3]");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn expr_char_literal() {
         let p = qp(expression, "'a'");
-        assert_eq!(unwrap_progress(p).extent(), (0, 3))
+        assert_extent!(p, (0, 3))
     }
 
     #[test]
     fn expr_char_literal_escape() {
         let p = qp(expression, r"'\''");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn expr_string_literal() {
         let p = qp(expression, r#""a""#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 3))
+        assert_extent!(p, (0, 3))
     }
 
     #[test]
     fn expr_string_literal_escape() {
         let p = qp(expression, r#""\"""#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn expr_string_literal_raw() {
         let p = qp(expression, r###"r#"foo"#"###);
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn expr_slice_index() {
         let p = qp(expression, "a[..2]");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn expr_reference() {
         let p = qp(expression, "&foo");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn expr_reference_double() {
         let p = qp(expression, "&&foo");
-        assert_eq!(unwrap_progress(p).extent(), (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn expr_reference_mut() {
         let p = qp(expression, "&mut foo");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn expr_dereference() {
         let p = qp(expression, "*foo");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn expr_unary_not() {
         let p = qp(expression, "!foo");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn expr_unary_negate() {
         let p = qp(expression, "-foo");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn expr_as_type() {
         let p = qp(expression, "42 as u8");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn expr_as_type_followed_by_addition() {
-        let p = unwrap_progress(qp(expression, "42 as u8 + 1"));
+        let p = qp(expression, "42 as u8 + 1");
         let p = p.value.into_binary().unwrap();
         assert!(p.lhs.is_as_type());
-        assert_eq!(p.extent, (0, 12));
+        assert_extent!(p, (0, 12));
     }
 
     #[test]
     fn expr_as_type_followed_by_addition_of_variable() {
-        let p = unwrap_progress(qp(expression, "42 as u8 + a"));
+        let p = qp(expression, "42 as u8 + a");
         let p = p.value.into_binary().unwrap();
         assert!(p.lhs.is_as_type());
-        assert_eq!(p.extent, (0, 12));
+        assert_extent!(p, (0, 12));
     }
 
     #[test]
     fn expr_as_type_of_value() {
         let p = qp(expression, "bits as u64");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn expr_type_ascription() {
         let p = qp(expression, "42 : u8");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn expr_infix_with_left_hand_prefix_operator() {
         let p = qp(expression, "*a + b");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn expr_infix_with_right_hand_prefix_operator() {
         let p = qp(expression, "a + *b");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn expr_infix_with_left_and_right_hand_prefix_operator() {
         let p = qp(expression, "*a + *b");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn expr_infix_with_left_hand_postfix_operator() {
         let p = qp(expression, "a? + b");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn expr_infix_with_right_hand_postfix_operator() {
         let p = qp(expression, "a + b?");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn expr_infix_with_left_and_right_hand_postfix_operator() {
         let p = qp(expression, "a? + b?");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn expr_infix_with_left_hand_prefix_and_postfix_operator() {
         let p = qp(expression, "*a? + b");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn expr_infix_with_right_hand_prefix_and_postfix_operator() {
         let p = qp(expression, "a + *b?");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn expr_infix_with_left_and_right_hand_prefix_and_postfix_operator() {
         let p = qp(expression, "*a? + *b?");
-        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn expr_multiple_prefix_operator() {
         let p = qp(expression, "&*a");
-        assert_eq!(unwrap_progress(p).extent(), (0, 3))
+        assert_extent!(p, (0, 3))
     }
 
     #[test]
     fn expr_try_operator() {
         let p = qp(expression, "foo?");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn expr_box() {
         let p = qp(expression, "box foo");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn expr_byte_string() {
         let p = qp(expression, r#"b"hello""#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn expr_byte_string_escape() {
         let p = qp(expression, r#"b"he\"llo""#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn expr_byte_string_raw() {
         let p = qp(expression, r###"br#"hello"#"###);
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn expr_byte() {
         let p = qp(expression, r#"b'a'"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn expr_byte_escape() {
         let p = qp(expression, r#"b'\''"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn expr_disambiguation() {
         let p = qp(expression, "<Foo as Bar>::quux");
-        assert_eq!(unwrap_progress(p).extent(), (0, 18))
+        assert_extent!(p, (0, 18))
     }
 
     #[test]
     fn expr_disambiguation_without_disambiguation() {
         let p = qp(expression, "<Foo>::quux");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn implicit_statement_followed_by_infix() {
         let p = qp(statement_expression, "if a {} + c");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn implicit_statement_followed_by_infix_with_infix_inside() {
         let p = qp(statement_expression, "for a in b + c {} + d");
-        assert_eq!(unwrap_progress(p).extent(), (0, 17))
+        assert_extent!(p, (0, 17))
     }
 
     #[test]
     fn implicit_statement_followed_by_infix_with_braced_infix_inside() {
         let p = qp(statement_expression, "if {a} < b {} &mut c");
-        assert_eq!(unwrap_progress(p).extent(), (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn implicit_statement_in_infix() {
         let p = qp(statement_expression, "a + loop {} + d");
-        assert_eq!(unwrap_progress(p).extent(), (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn implicit_statement_with_prefix_followed_by_infix() {
         let p = qp(statement_expression, "*match a { _ => b } = c");
-        assert_eq!(unwrap_progress(p).extent(), (0, 23))
+        assert_extent!(p, (0, 23))
     }
 
     #[test]
     fn implicit_statement_followed_by_field_access() {
         let p = qp(statement_expression, "{ a }.foo()");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn implicit_statement_followed_by_question_mark() {
         let p = qp(statement_expression, "unsafe { a }?");
-        assert_eq!(unwrap_progress(p).extent(), (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn implicit_statement_followed_by_tuple_is_not_call() {
         let p = qp(statement_expression, "if let Some(a) = b {} (c, d)");
-        let p = unwrap_progress(p);
-        assert_eq!(p.extent(), (0, 21));
+        assert_extent!(p, (0, 21));
         assert!(p.is_if());
     }
 
     #[test]
     fn expr_followed_by_block_disallows_struct_literal() {
-        let p = qp(expr_followed_by_block, "a {}");
-        let (e, b) = unwrap_progress(p);
-        assert_eq!(e.extent(), (0, 1));
-        assert_eq!(b.extent, (2, 4));
+        let (e, b) = qp(expr_followed_by_block, "a {}");
+        assert_extent!(e, (0, 1));
+        assert_extent!(b, (2, 4));
     }
 
     #[test]
     fn expr_followed_by_block_with_compound_condition() {
-        let p = qp(expr_followed_by_block, "a && b {}");
-        let (e, b) = unwrap_progress(p);
-        assert_eq!(e.extent(), (0, 6));
-        assert_eq!(b.extent, (7, 9));
+        let (e, b) = qp(expr_followed_by_block, "a && b {}");
+        assert_extent!(e, (0, 6));
+        assert_extent!(b, (7, 9));
     }
 
     #[test]
     fn expr_followed_by_block_with_parenthesized_struct_literal() {
-        let p = qp(expr_followed_by_block, "(a {}) {}");
-        let (e, b) = unwrap_progress(p);
-        assert_eq!(e.extent(), (0, 6));
+        let (e, b) = qp(expr_followed_by_block, "(a {}) {}");
+        assert_extent!(e, (0, 6));
         let p = e.value.into_parenthetical().unwrap();
         assert!(p.expression.is_value());
-        assert_eq!(b.extent, (7, 9));
+        assert_extent!(b, (7, 9));
     }
 
     #[test]
     fn expr_followed_by_block_with_open_ended_range() {
-        let p = qp(expr_followed_by_block, "0.. {}");
-        let (e, b) = unwrap_progress(p);
-        assert_eq!(e.extent(), (0, 3));
+        let (e, b) = qp(expr_followed_by_block, "0.. {}");
+        assert_extent!(e, (0, 3));
         assert!(e.is_range());
-        assert_eq!(b.extent, (4, 6));
+        assert_extent!(b, (4, 6));
     }
 
     #[test]
     fn expr_followed_by_block_with_range_with_curly_start() {
-        let p = qp(expr_followed_by_block, "{0}.. {}");
-        let (e, b) = unwrap_progress(p);
-        assert_eq!(e.extent(), (0, 5));
+        let (e, b) = qp(expr_followed_by_block, "{0}.. {}");
+        assert_extent!(e, (0, 5));
         assert!(e.is_range());
-        assert_eq!(b.extent, (6, 8));
+        assert_extent!(b, (6, 8));
     }
 
     #[test]
     fn match_arm_with_alternate() {
         let p = qp(match_arm, "a | b => 1");
-        assert_eq!(unwrap_progress(p).extent, (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn match_arm_with_guard() {
         let p = qp(match_arm, "a if a > 2 => 1");
-        assert_eq!(unwrap_progress(p).extent, (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn match_arm_with_attribute() {
         let p = qp(match_arm, "#[cfg(cool)] _ => 1");
-        assert_eq!(unwrap_progress(p).extent, (0, 19))
+        assert_extent!(p, (0, 19))
     }
 }

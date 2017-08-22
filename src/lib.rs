@@ -8,6 +8,10 @@ extern crate peresil;
 
 extern crate unicode_xid;
 
+#[cfg(test)]
+#[macro_use]
+mod test_utils;
+
 pub mod tokenizer;
 mod expression;
 
@@ -385,12 +389,28 @@ pub fn parse_rust_file(file: &str) -> Result<File, ErrorDetail> {
 
 pub type Extent = (usize, usize);
 
+trait HasExtent {
+    fn extent(&self) -> Extent;
+}
+
+impl<T: HasExtent> HasExtent for Box<T>{
+    fn extent(&self) -> Extent { (**self).extent() }
+}
+
+impl<'a, T: HasExtent> HasExtent for &'a T {
+    fn extent(&self) -> Extent { (**self).extent() }
+}
+
+impl HasExtent for Extent {
+    fn extent(&self) -> Extent { *self }
+}
+
 #[derive(Debug, Visit)]
 pub struct File {
     items: Vec<Item>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum Item {
     Attribute(Attribute), // TODO: should be part of each item
     Const(Const),
@@ -409,55 +429,32 @@ pub enum Item {
     Union(Union),
 }
 
-impl Item {
-    #[allow(dead_code)]
-    pub fn extent(&self) -> Extent {
-        match *self {
-            Item::Attribute(Attribute { extent, .. })     |
-            Item::Const(Const { extent, .. })             |
-            Item::Enum(Enum { extent, .. })               |
-            Item::ExternCrate(Crate { extent, .. })       |
-            Item::ExternBlock(ExternBlock { extent, .. }) |
-            Item::Function(Function { extent, .. })       |
-            Item::Impl(Impl { extent, .. })               |
-            Item::MacroCall(MacroCall { extent, .. })     |
-            Item::Module(Module { extent, .. })           |
-            Item::Static(Static { extent, .. })           |
-            Item::Struct(Struct { extent, .. })           |
-            Item::Trait(Trait { extent, .. })             |
-            Item::TypeAlias(TypeAlias { extent, .. })     |
-            Item::Union(Union { extent, .. })             |
-            Item::Use(Use { extent, .. })                 => extent,
-        }
-    }
-}
-
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Attribute {
     extent: Extent,
     is_containing: Option<Extent>,
     text: Extent,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Lifetime {
     extent: Extent,
     name: Ident,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum Whitespace {
     Comment(Comment),
     Whitespace(Extent),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Comment {
     extent: Extent,
     text: Extent,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Use {
     extent: Extent,
     visibility: Option<Visibility>,
@@ -466,32 +463,32 @@ pub struct Use {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum UseTail {
     Ident(UseTailIdent),
     Glob(UseTailGlob),
     Multi(UseTailMulti),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct UseTailIdent {
     extent: Extent,
     name: Ident,
     rename: Option<Ident>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct UseTailGlob {
     extent: Extent,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct UseTailMulti {
     extent: Extent,
     names: Vec<UseTailIdent>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Function {
     pub extent: Extent,
     pub header: FunctionHeader,
@@ -499,7 +496,7 @@ pub struct Function {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct FunctionHeader {
     pub extent: Extent,
     visibility: Option<Visibility>,
@@ -512,7 +509,7 @@ pub struct FunctionHeader {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct FunctionQualifiers {
     pub extent: Extent,
     is_default: Option<Extent>,
@@ -522,7 +519,7 @@ pub struct FunctionQualifiers {
     abi: Option<String>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TraitImplFunctionHeader {
     extent: Extent,
     visibility: Option<Visibility>,
@@ -535,14 +532,14 @@ pub struct TraitImplFunctionHeader {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct GenericDeclarations {
     pub extent: Extent,
     lifetimes: Vec<GenericDeclarationLifetime>,
     types: Vec<GenericDeclarationType>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct GenericDeclarationLifetime {
     extent: Extent,
     attributes: Vec<Attribute>,
@@ -550,7 +547,7 @@ pub struct GenericDeclarationLifetime {
     bounds: Vec<Lifetime>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct GenericDeclarationType {
     extent: Extent,
     attributes: Vec<Attribute>,
@@ -559,20 +556,14 @@ pub struct GenericDeclarationType {
     default: Option<Type>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Type {
     extent: Extent,
     kind: TypeKind,
     additional: Vec<TypeAdditional>,
 }
 
-impl Type {
-    pub fn extent(&self) -> Extent {
-        self.extent
-    }
-}
-
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum TypeKind {
     Array(TypeArray),
     Disambiguation(TypeDisambiguation),
@@ -587,32 +578,14 @@ pub enum TypeKind {
     Uninhabited(Extent),
 }
 
-impl TypeKind {
-    pub fn extent(&self) -> Extent {
-        match *self {
-            TypeKind::Disambiguation(TypeDisambiguation { extent, .. })                   |
-            TypeKind::HigherRankedTraitBounds(TypeHigherRankedTraitBounds { extent, .. }) |
-            TypeKind::ImplTrait(TypeImplTrait { extent, .. })                             |
-            TypeKind::Named(TypeNamed { extent, .. })                                     |
-            TypeKind::Array(TypeArray { extent, .. })                                     |
-            TypeKind::Function(TypeFunction { extent, .. })                               |
-            TypeKind::Pointer(TypePointer { extent, .. })                                 |
-            TypeKind::Reference(TypeReference { extent, .. })                             |
-            TypeKind::Slice(TypeSlice { extent, .. })                                     |
-            TypeKind::Tuple(TypeTuple { extent, .. })                                     |
-            TypeKind::Uninhabited(extent)                                                 => extent,
-        }
-    }
-}
-
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeReference {
     extent: Extent,
     kind: TypeReferenceKind,
     typ: Box<Type>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeReferenceKind {
     extent: Extent,
     lifetime: Option<Lifetime>,
@@ -620,7 +593,7 @@ pub struct TypeReferenceKind {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypePointer {
     extent: Extent,
     kind: TypePointerKind,
@@ -634,7 +607,7 @@ pub enum TypePointerKind {
     Mutable,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeArray {
     extent: Extent,
     typ: Box<Type>,
@@ -642,7 +615,7 @@ pub struct TypeArray {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeHigherRankedTraitBounds {
     extent: Extent,
     lifetimes: Vec<Lifetime>,
@@ -650,40 +623,40 @@ pub struct TypeHigherRankedTraitBounds {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum TypeHigherRankedTraitBoundsChild {
     Named(TypeNamed),
     Function(TypeFunction),
     Reference(TypeReference),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeImplTrait {
     extent: Extent,
     name: TypeNamed,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum TypeAdditional {
     Named(TypeNamed),
     Lifetime(Lifetime),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeNamed {
     extent: Extent,
     path: Vec<TypeNamedComponent>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeNamedComponent {
     extent: Extent,
     ident: Ident,
     generics: Option<TypeGenerics>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeDisambiguation {
     extent: Extent,
     from_type: Box<Type>,
@@ -692,26 +665,26 @@ pub struct TypeDisambiguation {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeSlice {
     extent: Extent,
     typ: Box<Type>,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeTuple {
     extent: Extent,
     types: Vec<Type>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum TypeGenerics {
     Function(TypeGenericsFunction),
     Angle(TypeGenericsAngle),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeGenericsFunction {
     extent: Extent,
     types: Vec<Type>,
@@ -719,21 +692,21 @@ pub struct TypeGenericsFunction {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeGenericsAngle {
     extent: Extent,
     members: Vec<TypeGenericsAngleMember>,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum TypeGenericsAngleMember {
     Lifetime(Lifetime),
     Type(Type),
     AssociatedType(AssociatedType)
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct AssociatedType {
     extent: Extent,
     name: Ident,
@@ -741,7 +714,7 @@ pub struct AssociatedType {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeFunction {
     extent: Extent,
     qualifiers: FunctionQualifiers,
@@ -750,33 +723,33 @@ pub struct TypeFunction {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Copy, Clone, Visit)]
+#[derive(Debug, Copy, Clone, HasExtent, Visit)]
 pub struct Ident {
     pub extent: Extent,
 }
 
 // TODO: Can we reuse the path from the `use` statement?
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Path {
     extent: Extent,
     components: Vec<Ident>,
 }
 
 // TODO: Can we reuse the path from the `use` statement?
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PathedIdent {
     extent: Extent,
     components: Vec<PathComponent>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PathComponent {
     extent: Extent,
     ident: Ident,
     turbofish: Option<Turbofish>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Turbofish {
     extent: Extent,
     lifetimes: Vec<Lifetime>,
@@ -791,7 +764,7 @@ impl From<Ident> for PathedIdent {
     }
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Const {
     extent: Extent,
     visibility: Option<Visibility>,
@@ -801,7 +774,7 @@ pub struct Const {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Static {
     extent: Extent,
     visibility: Option<Visibility>,
@@ -812,7 +785,7 @@ pub struct Static {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Struct {
     pub extent: Extent,
     visibility: Option<Visibility>,
@@ -823,21 +796,21 @@ pub struct Struct {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum StructDefinitionBody {
     Brace(StructDefinitionBodyBrace),
     Tuple(StructDefinitionBodyTuple),
     Empty(Extent),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct StructDefinitionBodyBrace {
     pub extent: Extent,
     fields: Vec<StructDefinitionFieldNamed>,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct StructDefinitionFieldNamed {
     extent: Extent,
     attributes: Vec<Attribute>,
@@ -847,14 +820,14 @@ pub struct StructDefinitionFieldNamed {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct StructDefinitionBodyTuple {
     pub extent: Extent,
     fields: Vec<StructDefinitionFieldUnnamed>,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct StructDefinitionFieldUnnamed {
     extent: Extent,
     attributes: Vec<Attribute>,
@@ -862,7 +835,7 @@ pub struct StructDefinitionFieldUnnamed {
     typ: Type,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Union {
     pub extent: Extent,
     visibility: Option<Visibility>,
@@ -873,7 +846,7 @@ pub struct Union {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Enum {
     pub extent: Extent,
     visibility: Option<Visibility>,
@@ -884,7 +857,7 @@ pub struct Enum {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct EnumVariant {
     extent: Extent,
     attributes: Vec<Attribute>,
@@ -893,26 +866,26 @@ pub struct EnumVariant {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, Visit, Decompose)] // HasExtent?
 pub enum EnumVariantBody {
     Tuple(Vec<StructDefinitionFieldUnnamed>),
     Struct(StructDefinitionBodyBrace),
     Unit(Option<Attributed<Expression>>),
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, Visit, Decompose)] // HasExtent?
 pub enum Argument {
     SelfArgument(SelfArgument),
     Named(NamedArgument),
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum SelfArgument {
     Longhand(SelfArgumentLonghand),
     Shorthand(SelfArgumentShorthand),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct SelfArgumentLonghand {
     extent: Extent,
     is_mut: Option<Extent>,
@@ -921,7 +894,7 @@ pub struct SelfArgumentLonghand {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct SelfArgumentShorthand {
     extent: Extent,
     qualifier: Option<SelfArgumentShorthandQualifier>,
@@ -929,94 +902,85 @@ pub struct SelfArgumentShorthand {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum SelfArgumentShorthandQualifier {
     Reference(TypeReferenceKind),
     Mut(Extent),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, Visit)] // HasExtent?
 pub struct NamedArgument {
     name: Pattern,
     typ: Type,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, Visit, Decompose)] // HasExtent?
 pub enum TraitImplArgument {
     SelfArgument(SelfArgument),
     Named(TraitImplArgumentNamed),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, Visit)] // HasExtent?
 pub struct TraitImplArgumentNamed {
     name: Option<Pattern>,
     typ: Type,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum Where {
     Lifetime(WhereLifetime),
     Type(WhereType),
 }
 
-impl Where {
-    pub fn extent(&self) -> Extent {
-        match *self {
-            Where::Lifetime(WhereLifetime { extent, .. }) |
-            Where::Type(WhereType { extent, .. })         => extent,
-        }
-    }
-}
-
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct WhereLifetime {
     pub extent: Extent,
     name: Lifetime,
     bounds: Vec<Lifetime>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct WhereType {
     pub extent: Extent,
     name: Type,
     bounds: TraitBounds,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TraitBounds {
     pub extent: Extent,
     types: Vec<TraitBound>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum TraitBound {
     Lifetime(TraitBoundLifetime),
     Normal(TraitBoundNormal),
     Relaxed(TraitBoundRelaxed),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TraitBoundLifetime {
     pub extent: Extent,
     lifetime: Lifetime,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TraitBoundNormal {
     pub extent: Extent,
     typ: TraitBoundType,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TraitBoundRelaxed {
     pub extent: Extent,
     typ: TraitBoundType,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum TraitBoundType {
     Named(TypeNamed),
     // TODO: HRTB Trait bounds don't really allow references or fn types, just named
@@ -1024,7 +988,7 @@ pub enum TraitBoundType {
     HigherRankedTraitBounds(TypeHigherRankedTraitBounds),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Block {
     extent: Extent,
     statements: Vec<Statement>,
@@ -1032,36 +996,24 @@ pub struct Block {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct UnsafeBlock {
     extent: Extent,
     body: Box<Block>,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Parenthetical {
     extent: Extent,
     expression: Box<Attributed<Expression>>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum Statement {
     Expression(Attributed<Expression>),
     Item(Item),
     Empty(Extent),
-}
-
-impl Statement {
-    #[allow(dead_code)]
-    pub fn extent(&self) -> Extent {
-        use Statement::*;
-        match *self {
-            Expression(ref e) => e.extent(),
-            Item(ref i) => i.extent(),
-            Empty(e) => e,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -1071,7 +1023,7 @@ pub struct Attributed<T> {
     value: T,
 }
 
-impl<T> Attributed<T> {
+impl<T> HasExtent for Attributed<T> {
     fn extent(&self) -> Extent {
         self.extent
     }
@@ -1104,7 +1056,7 @@ impl From<Expression> for Attributed<Expression> {
     }
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum Expression {
     Array(Array),
     AsType(AsType),
@@ -1147,51 +1099,6 @@ pub enum Expression {
 }
 
 impl Expression {
-    pub fn extent(&self) -> Extent {
-        match *self {
-            Expression::Block(ref x) => x.extent,
-
-            Expression::Array(ref x) => x.extent(),
-            Expression::Number(ref x) => x.extent(),
-
-            Expression::AsType(AsType { extent, .. })                 |
-            Expression::Ascription(Ascription { extent, .. })         |
-            Expression::Binary(Binary { extent, .. })                 |
-            Expression::Box(ExpressionBox { extent, .. })             |
-            Expression::Break(Break { extent, .. })                   |
-            Expression::Byte(Byte { extent, .. })                     |
-            Expression::ByteString(ByteString { extent, .. })         |
-            Expression::Call(Call { extent, .. })                     |
-            Expression::Character(Character { extent, .. })           |
-            Expression::Closure(Closure { extent, .. })               |
-            Expression::Continue(Continue { extent, .. })             |
-            Expression::Dereference(Dereference { extent, .. })       |
-            Expression::Disambiguation(Disambiguation { extent, .. }) |
-            Expression::FieldAccess(FieldAccess { extent, .. })       |
-            Expression::ForLoop(ForLoop { extent, .. })               |
-            Expression::If(If { extent, .. })                         |
-            Expression::IfLet(IfLet { extent, .. })                   |
-            Expression::Let(Let { extent, .. })                       |
-            Expression::Loop(Loop { extent, .. })                     |
-            Expression::MacroCall(MacroCall { extent, .. })           |
-            Expression::Match(Match { extent, .. })                   |
-            Expression::Parenthetical(Parenthetical { extent, .. })   |
-            Expression::Range(Range { extent, .. })                   |
-            Expression::RangeInclusive(RangeInclusive { extent, .. }) |
-            Expression::Reference(Reference { extent, .. })           |
-            Expression::Return(Return { extent, .. })                 |
-            Expression::Slice(Slice { extent, .. })                   |
-            Expression::String(String { extent, .. })                 |
-            Expression::TryOperator(TryOperator { extent, .. })       |
-            Expression::Tuple(Tuple { extent, .. })                   |
-            Expression::Unary(Unary { extent, .. })                   |
-            Expression::UnsafeBlock(UnsafeBlock { extent, .. })       |
-            Expression::Value(Value { extent, .. })                   |
-            Expression::While(While { extent, .. })                   |
-            Expression::WhileLet(WhileLet { extent, .. })             => extent,
-        }
-    }
-
     fn may_terminate_statement(&self) -> bool {
         match *self {
             Expression::Block(_)       |
@@ -1209,7 +1116,7 @@ impl Expression {
     }
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct MacroCall {
     extent: Extent,
     name: Ident,
@@ -1217,14 +1124,14 @@ pub struct MacroCall {
     args: MacroCallArgs,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum MacroCallArgs {
     Paren(Extent),
     Curly(Extent),
     Square(Extent),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Let {
     extent: Extent,
     pattern: Pattern,
@@ -1233,19 +1140,19 @@ pub struct Let {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Tuple {
     extent: Extent,
     members: Vec<Attributed<Expression>>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TryOperator {
     extent: Extent,
     target: Box<Attributed<Expression>>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct FieldAccess {
     extent: Extent,
     target: Box<Attributed<Expression>>,
@@ -1258,7 +1165,7 @@ pub enum FieldName {
     Number(Extent),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Number {
     extent: Extent,
     is_negative: Option<Extent>,
@@ -1266,14 +1173,7 @@ pub struct Number {
     whitespace: Vec<Whitespace>,
 }
 
-impl Number {
-    #[allow(dead_code)]
-    fn extent(&self) -> Extent {
-        self.extent
-    }
-}
-
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum NumberValue {
     Binary(NumberBinary),
     Decimal(NumberDecimal),
@@ -1281,19 +1181,7 @@ pub enum NumberValue {
     Octal(NumberOctal),
 }
 
-impl NumberValue {
-    #[allow(dead_code)]
-    fn extent(&self) -> Extent {
-        match *self {
-            NumberValue::Binary(NumberBinary { extent, .. })           |
-            NumberValue::Decimal(NumberDecimal { extent, .. })         |
-            NumberValue::Hexadecimal(NumberHexadecimal { extent, .. }) |
-            NumberValue::Octal(NumberOctal { extent, .. })             => extent,
-        }
-    }
-}
-
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct NumberBinary {
     extent: Extent,
     decimal: Extent,
@@ -1302,7 +1190,7 @@ pub struct NumberBinary {
     suffix: Option<Extent>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct NumberDecimal {
     extent: Extent,
     decimal: Extent,
@@ -1311,7 +1199,7 @@ pub struct NumberDecimal {
     suffix: Option<Extent>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct NumberHexadecimal {
     extent: Extent,
     decimal: Extent,
@@ -1320,7 +1208,7 @@ pub struct NumberHexadecimal {
     suffix: Option<Extent>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct NumberOctal {
     extent: Extent,
     decimal: Extent,
@@ -1329,14 +1217,14 @@ pub struct NumberOctal {
     suffix: Option<Extent>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Value {
     extent: Extent,
     name: PathedIdent,
     literal: Option<StructLiteral>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct StructLiteral {
     extent: Extent,
     fields: Vec<StructLiteralField>,
@@ -1344,21 +1232,21 @@ pub struct StructLiteral {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, Visit)] // HasExtent?
 pub struct StructLiteralField {
     name: Ident,
     value: Attributed<Expression>,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Call {
     extent: Extent,
     target: Box<Attributed<Expression>>,
     args: Vec<Attributed<Expression>>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ForLoop {
     extent: Extent,
     label: Option<Lifetime>,
@@ -1368,7 +1256,7 @@ pub struct ForLoop {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Loop {
     extent: Extent,
     label: Option<Lifetime>,
@@ -1376,7 +1264,7 @@ pub struct Loop {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct IfLet {
     extent: Extent,
     pattern: Pattern,
@@ -1385,7 +1273,7 @@ pub struct IfLet {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct While {
     extent: Extent,
     label: Option<Lifetime>,
@@ -1394,7 +1282,7 @@ pub struct While {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct WhileLet {
     extent: Extent,
     label: Option<Lifetime>,
@@ -1405,7 +1293,7 @@ pub struct WhileLet {
 }
 
 // TODO: Should this be the same as dereference? What about reference?
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Unary {
     extent: Extent,
     op: UnaryOp,
@@ -1419,7 +1307,7 @@ pub enum UnaryOp {
     Not,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Binary {
     extent: Extent,
     op: BinaryOp,
@@ -1461,7 +1349,7 @@ pub enum BinaryOp {
     SubAssign,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct If {
     extent: Extent,
     condition: Box<Attributed<Expression>>,
@@ -1471,7 +1359,7 @@ pub struct If {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Match {
     extent: Extent,
     head: Box<Attributed<Expression>>,
@@ -1479,7 +1367,7 @@ pub struct Match {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct MatchArm {
     extent: Extent,
     attributes: Vec<Attribute>,
@@ -1489,48 +1377,39 @@ pub struct MatchArm {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum MatchHand {
     Brace(Attributed<Expression>),
     Expression(Attributed<Expression>),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Range {
     extent: Extent,
     lhs: Option<Box<Attributed<Expression>>>,
     rhs: Option<Box<Attributed<Expression>>>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct RangeInclusive {
     extent: Extent,
     lhs: Option<Box<Attributed<Expression>>>,
     rhs: Option<Box<Attributed<Expression>>>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum Array {
     Explicit(ArrayExplicit),
     Repeated(ArrayRepeated),
 }
 
-impl Array {
-    fn extent(&self) -> Extent {
-        match *self {
-            Array::Explicit(ArrayExplicit { extent, .. }) |
-            Array::Repeated(ArrayRepeated { extent, .. }) => extent,
-        }
-    }
-}
-
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ArrayExplicit {
     extent: Extent,
     values: Vec<Attributed<Expression>>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ArrayRepeated {
     extent: Extent,
     value: Box<Attributed<Expression>>,
@@ -1539,58 +1418,58 @@ pub struct ArrayRepeated {
 }
 
 // TODO: Rename this visitor function?
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ExpressionBox {
     extent: Extent,
     target: Box<Attributed<Expression>>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct AsType {
     extent: Extent,
     target: Box<Attributed<Expression>>,
     typ: Type,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Ascription {
     extent: Extent,
     target: Box<Attributed<Expression>>,
     typ: Type,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Character {
     extent: Extent,
     value: Extent,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct String {
     extent: Extent,
     value: Extent,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Byte {
     extent: Extent,
     value: Character,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ByteString {
     extent: Extent,
     value: String,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Slice {
     extent: Extent,
     target: Box<Attributed<Expression>>,
     index: Box<Attributed<Expression>>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Closure {
     extent: Extent,
     #[visit(ignore)]
@@ -1601,28 +1480,28 @@ pub struct Closure {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, Visit)] // HasExtent?
 pub struct ClosureArg {
     name: Pattern,
     typ: Option<Type>,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Reference {
     extent: Extent,
     is_mutable: Option<Extent>,
     target: Box<Attributed<Expression>>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Dereference {
     extent: Extent,
     target: Box<Attributed<Expression>>,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Disambiguation {
     extent: Extent,
     from_type: Type,
@@ -1631,21 +1510,21 @@ pub struct Disambiguation {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Return {
     extent: Extent,
     value: Option<Box<Attributed<Expression>>>,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Continue {
     extent: Extent,
     label: Option<Lifetime>,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Break {
     extent: Extent,
     label: Option<Lifetime>,
@@ -1653,14 +1532,14 @@ pub struct Break {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Pattern {
     extent: Extent,
     name: Option<PatternName>,
     kind: PatternKind,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternName {
     extent: Extent,
     is_ref: Option<Extent>,
@@ -1669,14 +1548,7 @@ pub struct PatternName {
     whitespace: Vec<Whitespace>,
 }
 
-impl Pattern {
-    #[allow(dead_code)]
-    fn extent(&self) -> Extent {
-        self.extent
-    }
-}
-
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum PatternKind {
     Byte(PatternByte),
     ByteString(PatternByteString),
@@ -1693,30 +1565,7 @@ pub enum PatternKind {
     Tuple(PatternTuple),
 }
 
-impl PatternKind {
-    #[allow(dead_code)]
-    fn extent(&self) -> Extent {
-        use PatternKind::*;
-
-        match *self {
-            Byte(PatternByte { extent, .. })                     |
-            ByteString(PatternByteString { extent, .. })         |
-            Character(PatternCharacter { extent, .. })           |
-            Ident(PatternIdent { extent, .. })                   |
-            Number(PatternNumber { extent, .. })                 |
-            MacroCall(PatternMacroCall { extent, .. })           |
-            RangeExclusive(PatternRangeExclusive { extent, .. }) |
-            RangeInclusive(PatternRangeInclusive { extent, .. }) |
-            Reference(PatternReference { extent, .. })           |
-            Slice(PatternSlice { extent, .. })                   |
-            String(PatternString { extent, .. })                 |
-            Struct(PatternStruct { extent, .. })                 |
-            Tuple(PatternTuple { extent, .. })                   => extent,
-        }
-    }
-}
-
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternIdent {
     extent: Extent,
     is_ref: Option<Extent>,
@@ -1725,7 +1574,7 @@ pub struct PatternIdent {
     tuple: Option<PatternTuple>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternStruct {
     extent: Extent,
     name: PathedIdent,
@@ -1735,13 +1584,13 @@ pub struct PatternStruct {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, Visit, Decompose)] // HasExtent?
 pub enum PatternStructField {
     Long(PatternStructFieldLong),
     Short(PatternStructFieldShort),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternStructFieldLong {
     extent: Extent,
     name: Ident,
@@ -1749,72 +1598,72 @@ pub struct PatternStructFieldLong {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, Visit)] // HasExtent?
 pub struct PatternStructFieldShort {
     ident: PatternIdent
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternTuple {
     extent: Extent,
     members: Vec<PatternBundleMember>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternSlice {
     extent: Extent,
     members: Vec<PatternBundleMember>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum PatternBundleMember {
     Pattern(Pattern),
     Wildcard(Extent),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternWildcard {
     extent: Extent,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternByte {
     extent: Extent,
     value: Byte,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternCharacter {
     extent: Extent,
     value: Character,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternByteString {
     extent: Extent,
     value: ByteString,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternString {
     extent: Extent,
     value: String,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternNumber {
     extent: Extent,
     is_negative: Option<Extent>,
     value: Number,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternMacroCall {
     extent: Extent,
     value: MacroCall,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternRangeExclusive {
     extent: Extent,
     start: PatternRangeComponent,
@@ -1822,7 +1671,7 @@ pub struct PatternRangeExclusive {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternRangeInclusive {
     extent: Extent,
     start: PatternRangeComponent,
@@ -1838,7 +1687,7 @@ pub enum PatternRangeComponent {
     Number(PatternNumber),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct PatternReference {
     extent: Extent,
     is_mut: Option<Extent>,
@@ -1846,7 +1695,7 @@ pub struct PatternReference {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Trait {
     extent: Extent,
     visibility: Option<Visibility>,
@@ -1859,7 +1708,7 @@ pub struct Trait {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum TraitMember {
     Attribute(Attribute), // TODO: should be part of each item
     Const(TraitMemberConst),
@@ -1867,14 +1716,14 @@ pub enum TraitMember {
     Type(TraitMemberType),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TraitMemberFunction {
     extent: Extent,
     header: TraitImplFunctionHeader,
     body: Option<Block>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TraitMemberType {
     extent: Extent,
     name: Ident,
@@ -1883,7 +1732,7 @@ pub struct TraitMemberType {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TraitMemberConst {
     extent: Extent,
     name: Ident,
@@ -1892,7 +1741,7 @@ pub struct TraitMemberConst {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Impl {
     extent: Extent,
     is_unsafe: Option<Extent>,
@@ -1903,13 +1752,13 @@ pub struct Impl {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum ImplKind {
     Trait(ImplOfTrait),
     Inherent(ImplOfInherent),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ImplOfTrait {
     extent: Extent,
     is_negative: Option<Extent>,
@@ -1918,20 +1767,20 @@ pub struct ImplOfTrait {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ImplOfInherent {
     extent: Extent,
     type_name: Type,
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum ImplOfTraitType {
     Type(Type),
     Wildcard(Extent),
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum ImplMember {
     Attribute(Attribute),  // TODO: should be part of each item
     Const(ImplConst),
@@ -1940,14 +1789,14 @@ pub enum ImplMember {
     MacroCall(MacroCall),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ImplFunction {
     extent: Extent,
     header: FunctionHeader,
     body: Block,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ImplType {
     extent: Extent,
     name: Ident,
@@ -1955,7 +1804,7 @@ pub struct ImplType {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ImplConst {
     extent: Extent,
     name: Ident,
@@ -1964,7 +1813,7 @@ pub struct ImplConst {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Crate {
     extent: Extent,
     visibility: Option<Visibility>,
@@ -1973,7 +1822,7 @@ pub struct Crate {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ExternBlock {
     extent: Extent,
     abi: Option<String>,
@@ -1981,14 +1830,14 @@ pub struct ExternBlock {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum ExternBlockMember {
     Attribute(Attribute),  // TODO: should be part of each item
     Function(ExternBlockMemberFunction),
     Static(ExternBlockMemberStatic),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ExternBlockMemberStatic {
     extent: Extent,
     visibility: Option<Visibility>,
@@ -1998,7 +1847,7 @@ pub struct ExternBlockMemberStatic {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ExternBlockMemberFunction {
     extent: Extent,
     visibility: Option<Visibility>,
@@ -2010,13 +1859,13 @@ pub struct ExternBlockMemberFunction {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)]
+#[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum ExternBlockMemberFunctionArgument {
     Named(ExternBlockMemberFunctionArgumentNamed),
     Variadic(ExternBlockMemberFunctionArgumentVariadic),
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ExternBlockMemberFunctionArgumentNamed {
     extent: Extent,
     name: Pattern,
@@ -2024,12 +1873,12 @@ pub struct ExternBlockMemberFunctionArgumentNamed {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct ExternBlockMemberFunctionArgumentVariadic {
     extent: Extent,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct TypeAlias {
     extent: Extent,
     visibility: Option<Visibility>,
@@ -2040,7 +1889,7 @@ pub struct TypeAlias {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Module {
     extent: Extent,
     visibility: Option<Visibility>,
@@ -2049,7 +1898,7 @@ pub struct Module {
     whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)]
+#[derive(Debug, HasExtent, Visit)]
 pub struct Visibility {
     extent: Extent,
     #[visit(ignore)]
@@ -4702,49 +4551,6 @@ where
 }
 
 #[cfg(test)]
-mod test_utils {
-    use super::*;
-
-    type TestResult<T> = Result<(usize, T), (usize, Vec<Error>)>;
-
-    pub fn qp<'s, F, T>(f: F, s: &'s str) -> TestResult<T>
-        where F: for<'a> FnOnce(&mut Master<'a>, Point<'a>) -> Progress<'a, T>
-    {
-        // TODO: Master::once()?
-        let tokens = Tokens::new(s).collect::<Result<Vec<_>, _>>().expect("Unable to tokenize");
-        let (_ws, tokens): (Vec<_>, Vec<_>) = tokens.into_iter().partition(|t| {
-            t.is_whitespace() || t.is_comment() || t.is_doc_comment() || t.is_comment_block() || t.is_doc_comment_block()
-        });
-
-        let mut pm = Master::with_state(State::new(&tokens));
-        let pt = Point::new(&tokens);
-        let r = f(&mut pm, pt);
-        match pm.finish(r) {
-            peresil::Progress { status: peresil::Status::Success(v), point } => {
-                Ok((point.offset, v))
-            }
-            peresil::Progress { status: peresil::Status::Failure(v), point } => {
-                Err((point.offset, v))
-            }
-        }
-    }
-
-    pub fn unwrap_progress<T>(p: TestResult<T>) -> T {
-        match p {
-            Ok((_, v)) => v,
-            Err((offset, e)) => panic!("Failed parsing at token at index {}: {:?}", offset, e),
-        }
-    }
-
-    pub fn unwrap_progress_err<T>(p: TestResult<T>) -> (usize, Vec<Error>) {
-        match p {
-            Ok(_) => panic!("Parsing should have failed, but it did not"),
-            Err(x) => x
-        }
-    }
-}
-
-#[cfg(test)]
 mod test {
     use super::*;
     use test_utils::*;
@@ -4752,722 +4558,721 @@ mod test {
     #[test]
     fn parse_use() {
         let p = qp(p_use, "use foo::Bar;");
-        assert_eq!(unwrap_progress(p).extent, (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn parse_use_public() {
         let p = qp(p_use, "pub use foo::Bar;");
-        assert_eq!(unwrap_progress(p).extent, (0, 17))
+        assert_extent!(p, (0, 17))
     }
 
     #[test]
     fn parse_use_glob() {
         let p = qp(p_use, "use foo::*;");
-        assert_eq!(unwrap_progress(p).extent, (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn parse_use_with_multi() {
         let p = qp(p_use, "use foo::{Bar, Baz};");
-        assert_eq!(unwrap_progress(p).extent, (0, 20))
+        assert_extent!(p, (0, 20))
     }
 
     #[test]
     fn parse_use_no_path() {
         let p = qp(p_use, "use {Bar, Baz};");
-        assert_eq!(unwrap_progress(p).extent, (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn parse_use_absolute_path() {
         let p = qp(p_use, "use ::{Bar, Baz};");
-        assert_eq!(unwrap_progress(p).extent, (0, 17))
+        assert_extent!(p, (0, 17))
     }
 
     #[test]
     fn parse_use_rename() {
         let p = qp(p_use, "use foo as bar;");
-        assert_eq!(unwrap_progress(p).extent, (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn parse_use_with_multi_rename() {
         let p = qp(p_use, "use foo::{bar as a, baz as b};");
-        assert_eq!(unwrap_progress(p).extent, (0, 30))
+        assert_extent!(p, (0, 30))
     }
 
     #[test]
     fn parse_use_all_space() {
         let p = qp(p_use, "use foo :: { bar as a , baz as b } ;");
-        assert_eq!(unwrap_progress(p).extent, (0, 36))
+        assert_extent!(p, (0, 36))
     }
 
     #[test]
     fn item_mod_multiple() {
         let p = qp(item, "mod foo { use super::*; }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 25))
+        assert_extent!(p, (0, 25))
     }
 
     #[test]
     fn item_macro_call_with_parens() {
         let p = qp(item, "foo!();");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn item_macro_call_with_square_brackets() {
         let p = qp(item, "foo![];");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn item_macro_call_with_curly_braces() {
         let p = qp(item, "foo! { }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn item_macro_call_with_ident() {
         let p = qp(item, "macro_rules! name { }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 21))
+        assert_extent!(p, (0, 21))
     }
 
     #[test]
     fn item_macro_call_all_space() {
         let p = qp(item, "foo ! bar [ ] ;");
-        assert_eq!(unwrap_progress(p).extent(), (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn item_mod() {
         let p = qp(module, "mod foo { }");
-        assert_eq!(unwrap_progress(p).extent, (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn item_mod_public() {
         let p = qp(module, "pub mod foo;");
-        assert_eq!(unwrap_progress(p).extent, (0, 12))
+        assert_extent!(p, (0, 12))
     }
 
     #[test]
     fn item_mod_another_file() {
         let p = qp(module, "mod foo;");
-        assert_eq!(unwrap_progress(p).extent, (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn item_trait() {
         let p = qp(item, "trait Foo {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 12))
+        assert_extent!(p, (0, 12))
     }
 
     #[test]
     fn item_trait_public() {
         let p = qp(item, "pub trait Foo {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 16))
+        assert_extent!(p, (0, 16))
     }
 
     #[test]
     fn item_trait_unsafe() {
         let p = qp(item, "unsafe trait Foo {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 19))
+        assert_extent!(p, (0, 19))
     }
 
     #[test]
     fn item_trait_with_generics() {
         let p = qp(item, "trait Foo<T> {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn item_trait_with_members() {
         let p = qp(item, "trait Foo { fn bar(&self) -> u8; }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 34))
+        assert_extent!(p, (0, 34))
     }
 
     #[test]
     fn item_trait_with_members_with_patterns() {
         let p = qp(item, "trait Foo { fn bar(&self, &a: &u8) -> u8; }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 43))
+        assert_extent!(p, (0, 43))
     }
 
     #[test]
     fn item_trait_with_members_with_body() {
         let p = qp(item, "trait Foo { fn bar(&self) -> u8 { 42 } }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 40))
+        assert_extent!(p, (0, 40))
     }
 
     #[test]
     fn item_trait_with_unnamed_parameters() {
         let p = qp(item, "trait Foo { fn bar(&self, u8); }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 32))
+        assert_extent!(p, (0, 32))
     }
 
     #[test]
     fn item_trait_with_qualified_function() {
         let p = qp(item, r#"trait Foo { const unsafe extern "C" fn bar(); }"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 47))
+        assert_extent!(p, (0, 47))
     }
 
     #[test]
     fn item_trait_with_associated_type() {
         let p = qp(item, "trait Foo { type Bar; }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 23))
+        assert_extent!(p, (0, 23))
     }
 
     #[test]
     fn item_trait_with_associated_type_with_bounds() {
         let p = qp(item, "trait Foo { type Bar: Baz; }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 28))
+        assert_extent!(p, (0, 28))
     }
 
     #[test]
     fn item_trait_with_associated_type_with_default() {
         let p = qp(item, "trait Foo { type Bar = (); }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 28))
+        assert_extent!(p, (0, 28))
     }
 
     #[test]
     fn item_trait_with_associated_type_with_bounds_and_default() {
         let p = qp(item, "trait Foo { type Bar: Baz = (); }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 33))
+        assert_extent!(p, (0, 33))
     }
 
     #[test]
     fn item_trait_with_associated_const() {
         let p = qp(item, "trait Foo { const Bar: u8; }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 28))
+        assert_extent!(p, (0, 28))
     }
 
     #[test]
     fn item_trait_with_associated_const_with_default() {
         let p = qp(item, "trait Foo { const Bar: u8 = 42; }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 33))
+        assert_extent!(p, (0, 33))
     }
 
     #[test]
     fn item_trait_with_supertraits() {
         let p = qp(item, "trait Foo: Bar + Baz {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 23))
+        assert_extent!(p, (0, 23))
     }
 
     #[test]
     fn item_trait_with_where_clause() {
         let p = qp(item, "trait Foo where A: B {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 23))
+        assert_extent!(p, (0, 23))
     }
 
     #[test]
     fn item_trait_all_space() {
         let p = qp(item, "trait Foo : Bar { type A : B ; fn a ( a : u8) -> u8 { a } }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 59))
+        assert_extent!(p, (0, 59))
     }
 
     #[test]
     fn item_type_alias() {
         let p = qp(item, "type Foo<T> = Bar<T, u8>;");
-        assert_eq!(unwrap_progress(p).extent(), (0, 25))
+        assert_extent!(p, (0, 25))
     }
 
     #[test]
     fn item_type_alias_public() {
         let p = qp(item, "pub type Foo<T> = Bar<T, u8>;");
-        assert_eq!(unwrap_progress(p).extent(), (0, 29))
+        assert_extent!(p, (0, 29))
     }
 
     #[test]
     fn item_type_alias_with_trait_bounds() {
         let p = qp(item, "type X<T: Foo> where T: Bar = Option<T>;");
-        assert_eq!(unwrap_progress(p).extent(), (0, 40))
+        assert_extent!(p, (0, 40))
     }
 
     #[test]
     fn item_const() {
         let p = qp(item, r#"const FOO: &'static str = "hi";"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 31))
+        assert_extent!(p, (0, 31))
     }
 
     #[test]
     fn item_const_public() {
         let p = qp(item, "pub const FOO: u8 = 42;");
-        assert_eq!(unwrap_progress(p).extent(), (0, 23))
+        assert_extent!(p, (0, 23))
     }
 
     #[test]
     fn item_static() {
         let p = qp(item, r#"static FOO: &'static str = "hi";"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 32))
+        assert_extent!(p, (0, 32))
     }
 
     #[test]
     fn item_static_mut() {
         let p = qp(item, r#"static mut FOO: &'static str = "hi";"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 36))
+        assert_extent!(p, (0, 36))
     }
 
     #[test]
     fn item_static_public() {
         let p = qp(item, "pub static FOO: u8 = 42;");
-        assert_eq!(unwrap_progress(p).extent(), (0, 24))
+        assert_extent!(p, (0, 24))
     }
 
     #[test]
     fn item_extern_crate() {
         let p = qp(item, "extern crate foo;");
-        assert_eq!(unwrap_progress(p).extent(), (0, 17))
+        assert_extent!(p, (0, 17))
     }
 
     #[test]
     fn item_extern_crate_public() {
         let p = qp(item, "pub extern crate foo;");
-        assert_eq!(unwrap_progress(p).extent(), (0, 21))
+        assert_extent!(p, (0, 21))
     }
 
     #[test]
     fn item_extern_crate_rename() {
         let p = qp(item, "extern crate foo as bar;");
-        assert_eq!(unwrap_progress(p).extent(), (0, 24))
+        assert_extent!(p, (0, 24))
     }
 
     #[test]
     fn item_extern_block() {
         let p = qp(item, r#"extern {}"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn item_extern_block_with_abi() {
         let p = qp(item, r#"extern "C" {}"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn item_extern_block_with_fn() {
         let p = qp(item, r#"extern { fn foo(bar: u8) -> bool; }"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 35))
+        assert_extent!(p, (0, 35))
     }
 
     #[test]
     fn item_extern_block_with_variadic_fn() {
         let p = qp(item, r#"extern { fn foo(bar: u8, ...) -> bool; }"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 40))
+        assert_extent!(p, (0, 40))
     }
 
     #[test]
     fn item_extern_block_with_fn_and_generics() {
         let p = qp(item, r#"extern { fn foo<A, B>(bar: A) -> B; }"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 37))
+        assert_extent!(p, (0, 37))
     }
 
     #[test]
     fn item_extern_block_with_attribute() {
         let p = qp(item, r#"extern { #[wow] }"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 17))
+        assert_extent!(p, (0, 17))
     }
 
     #[test]
     fn item_extern_block_with_static() {
         let p = qp(item, r#"extern { static FOO: u32; }"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 27))
+        assert_extent!(p, (0, 27))
     }
 
     #[test]
     fn item_extern_block_with_static_and_qualifiers() {
         let p = qp(item, r#"extern { pub static mut FOO: u32; }"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 35))
+        assert_extent!(p, (0, 35))
     }
 
     #[test]
     fn inherent_impl() {
         let p = qp(p_impl, "impl Bar {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn inherent_impl_with_function() {
         let p = qp(p_impl, "impl Bar { fn foo() {} }");
-        assert_eq!(unwrap_progress(p).extent, (0, 24))
+        assert_extent!(p, (0, 24))
     }
 
     #[test]
     fn inherent_impl_with_const_function() {
         let p = qp(p_impl, "impl Bar { const fn foo() {} }");
-        assert_eq!(unwrap_progress(p).extent, (0, 30))
+        assert_extent!(p, (0, 30))
     }
 
     #[test]
     fn inherent_impl_with_default_function() {
         let p = qp(p_impl, "impl Bar { default fn foo() {} }");
-        assert_eq!(unwrap_progress(p).extent, (0, 32))
+        assert_extent!(p, (0, 32))
     }
 
     #[test]
     fn inherent_impl_with_unsafe_function() {
         let p = qp(p_impl, "impl Bar { unsafe fn foo() {} }");
-        assert_eq!(unwrap_progress(p).extent, (0, 31))
+        assert_extent!(p, (0, 31))
     }
 
     #[test]
     fn inherent_impl_with_extern_function() {
         let p = qp(p_impl, "impl Bar { extern fn foo() {} }");
-        assert_eq!(unwrap_progress(p).extent, (0, 31))
+        assert_extent!(p, (0, 31))
     }
 
     #[test]
     fn inherent_impl_with_default_const_unsafe_function() {
         let p = qp(p_impl, "impl Bar { default const unsafe fn foo() {} }");
-        assert_eq!(unwrap_progress(p).extent, (0, 45))
+        assert_extent!(p, (0, 45))
     }
 
     #[test]
     fn inherent_impl_with_default_unsafe_extern_function() {
         let p = qp(p_impl, "impl Bar { default unsafe extern fn foo() {} }");
-        assert_eq!(unwrap_progress(p).extent, (0, 46))
+        assert_extent!(p, (0, 46))
     }
 
     #[test]
     fn impl_with_trait() {
         let p = qp(p_impl, "impl Foo for Bar {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 19))
+        assert_extent!(p, (0, 19))
     }
 
     #[test]
     fn impl_with_negative_trait() {
         let p = qp(p_impl, "impl !Foo for Bar {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 20))
+        assert_extent!(p, (0, 20))
     }
 
     #[test]
     fn impl_trait_with_wildcard_type() {
         let p = qp(p_impl, "impl Foo for .. {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 18))
+        assert_extent!(p, (0, 18))
     }
 
     #[test]
     fn impl_with_generics() {
         let p = qp(p_impl, "impl<'a, T> Foo<'a, T> for Bar<'a, T> {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 40))
+        assert_extent!(p, (0, 40))
     }
 
     #[test]
     fn impl_with_generics_no_space() {
         let p = qp(p_impl, "impl<'a,T>Foo<'a,T>for Bar<'a,T>{}");
-        assert_eq!(unwrap_progress(p).extent, (0, 34))
+        assert_extent!(p, (0, 34))
     }
 
     #[test]
     fn impl_with_trait_bounds() {
         let p = qp(p_impl, "impl<T> Foo for Bar<T> where T: Quux {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 39))
+        assert_extent!(p, (0, 39))
     }
 
     #[test]
     fn impl_with_attribute() {
         let p = qp(p_impl, "impl Foo { #[attribute] fn bar() {} }");
-        assert_eq!(unwrap_progress(p).extent, (0, 37))
+        assert_extent!(p, (0, 37))
     }
 
     #[test]
     fn impl_with_attributes() {
         let p = qp(p_impl, "impl Foo { #[a] #[b] fn bar() {} }");
-        assert_eq!(unwrap_progress(p).extent, (0, 34))
+        assert_extent!(p, (0, 34))
     }
 
     #[test]
     fn impl_with_associated_type() {
         let p = qp(p_impl, "impl Foo { type A = B; }");
-        assert_eq!(unwrap_progress(p).extent, (0, 24))
+        assert_extent!(p, (0, 24))
     }
 
     #[test]
     fn impl_with_associated_const() {
         let p = qp(p_impl, "impl Foo { const A: i32 = 42; }");
-        assert_eq!(unwrap_progress(p).extent, (0, 31))
+        assert_extent!(p, (0, 31))
     }
 
     #[test]
     fn impl_with_unsafe() {
         let p = qp(p_impl, "unsafe impl Foo {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 18))
+        assert_extent!(p, (0, 18))
     }
 
     #[test]
     fn impl_with_macro_call() {
         let p = qp(p_impl, "impl Foo { bar!(); }");
-        assert_eq!(unwrap_progress(p).extent, (0, 20))
+        assert_extent!(p, (0, 20))
     }
 
     #[test]
     fn enum_with_trailing_stuff() {
         let p = qp(p_enum, "enum A {} impl Foo for Bar {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn enum_with_generic_types() {
         let p = qp(p_enum, "enum A { Foo(Vec<u8>) }");
-        assert_eq!(unwrap_progress(p).extent, (0, 23))
+        assert_extent!(p, (0, 23))
     }
 
     #[test]
     fn enum_with_generic_declarations() {
         let p = qp(p_enum, "enum A<T> { Foo(Vec<T>) }");
-        assert_eq!(unwrap_progress(p).extent, (0, 25))
+        assert_extent!(p, (0, 25))
     }
 
     #[test]
     fn enum_with_struct_variant() {
         let p = qp(p_enum, "enum A { Foo { a: u8 } }");
-        assert_eq!(unwrap_progress(p).extent, (0, 24))
+        assert_extent!(p, (0, 24))
     }
 
     #[test]
     fn enum_with_attribute() {
         let p = qp(p_enum, "enum Foo { #[attr] A(u8)}");
-        assert_eq!(unwrap_progress(p).extent, (0, 25))
+        assert_extent!(p, (0, 25))
     }
 
     #[test]
     fn enum_with_attribute_on_value() {
         let p = qp(p_enum, "enum Foo { A(#[attr] u8) }");
-        assert_eq!(unwrap_progress(p).extent, (0, 26))
+        assert_extent!(p, (0, 26))
     }
 
     #[test]
     fn enum_with_discriminant() {
         let p = qp(p_enum, "enum Foo { A = 1, B = 2 }");
-        assert_eq!(unwrap_progress(p).extent, (0, 25))
+        assert_extent!(p, (0, 25))
     }
 
     #[test]
     fn enum_with_where_clause() {
         let p = qp(p_enum, "enum Foo<A> where A: Bar { Z }");
-        assert_eq!(unwrap_progress(p).extent, (0, 30))
+        assert_extent!(p, (0, 30))
     }
 
     #[test]
     fn enum_public() {
         let p = qp(p_enum, "pub enum A {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn fn_with_public_modifier() {
         let p = qp(function_header, "pub fn foo()");
-        assert_eq!(unwrap_progress(p).extent, (0, 12))
+        assert_extent!(p, (0, 12))
     }
 
     #[test]
     fn fn_with_const_modifier() {
         let p = qp(function_header, "const fn foo()");
-        assert_eq!(unwrap_progress(p).extent, (0, 14))
+        assert_extent!(p, (0, 14))
     }
 
     #[test]
     fn fn_with_extern_modifier() {
         let p = qp(function_header, "extern fn foo()");
-        assert_eq!(unwrap_progress(p).extent, (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn fn_with_extern_modifier_and_abi() {
         let p = qp(function_header, r#"extern "C" fn foo()"#);
-        assert_eq!(unwrap_progress(p).extent, (0, 19))
+        assert_extent!(p, (0, 19))
     }
 
     #[test]
     fn fn_with_self_type_reference() {
         let p = qp(function_header, "fn foo(&self)");
-        assert_eq!(unwrap_progress(p).extent, (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn fn_with_self_type_value() {
         let p = qp(function_header, "fn foo(self)");
-        assert_eq!(unwrap_progress(p).extent, (0, 12))
+        assert_extent!(p, (0, 12))
     }
 
     #[test]
     fn fn_with_self_type_value_mut() {
         let p = qp(function_header, "fn foo(mut self)");
-        assert_eq!(unwrap_progress(p).extent, (0, 16))
+        assert_extent!(p, (0, 16))
     }
 
     #[test]
     fn fn_with_self_type_reference_mut() {
         let p = qp(function_header, "fn foo(&mut self)");
-        assert_eq!(unwrap_progress(p).extent, (0, 17))
+        assert_extent!(p, (0, 17))
     }
 
     #[test]
     fn fn_with_self_type_with_lifetime() {
         let p = qp(function_header, "fn foo<'a>(&'a self)");
-        assert_eq!(unwrap_progress(p).extent, (0, 20))
+        assert_extent!(p, (0, 20))
     }
 
     #[test]
     fn fn_with_self_type_and_regular() {
         let p = qp(function_header, "fn foo(&self, a: u8)");
-        assert_eq!(unwrap_progress(p).extent, (0, 20))
+        assert_extent!(p, (0, 20))
     }
 
     #[test]
     fn fn_with_self_type_explicit_type() {
         let p = qp(function_header, "fn foo(self: &mut Self)");
-        assert_eq!(unwrap_progress(p).extent, (0, 23))
+        assert_extent!(p, (0, 23))
     }
 
     #[test]
     fn fn_with_self_type_explicit_type_mutable() {
         let p = qp(function_header, "fn foo(mut self: &mut Self)");
-        assert_eq!(unwrap_progress(p).extent, (0, 27))
+        assert_extent!(p, (0, 27))
     }
 
     #[test]
     fn fn_with_argument() {
         let p = qp(function_header, "fn foo(a: u8)");
-        assert_eq!(unwrap_progress(p).extent, (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn fn_with_arguments_all_space() {
         let p = qp(function_header, "fn foo ( a : u8 )");
-        assert_eq!(unwrap_progress(p).extent, (0, 17))
+        assert_extent!(p, (0, 17))
     }
 
     #[test]
     fn fn_with_argument_with_generic() {
         let p = qp(function_header, "fn foo(a: Vec<u8>)");
-        assert_eq!(unwrap_progress(p).extent, (0, 18))
+        assert_extent!(p, (0, 18))
     }
 
     #[test]
     fn fn_with_arguments() {
         let p = qp(function_header, "fn foo(a: u8, b: u8)");
-        assert_eq!(unwrap_progress(p).extent, (0, 20))
+        assert_extent!(p, (0, 20))
     }
 
     #[test]
     fn fn_with_arguments_with_patterns() {
         let p = qp(function_header, "fn foo(&a: &u8)");
-        assert_eq!(unwrap_progress(p).extent, (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn fn_with_return_type() {
         let p = qp(function_header, "fn foo() -> bool");
-        assert_eq!(unwrap_progress(p).extent, (0, 16))
+        assert_extent!(p, (0, 16))
     }
 
     #[test]
     fn fn_with_generics() {
         let p = qp(function_header, "fn foo<A, B>()");
-        assert_eq!(unwrap_progress(p).extent, (0, 14))
+        assert_extent!(p, (0, 14))
     }
 
     #[test]
     fn fn_with_lifetimes() {
         let p = qp(function_header, "fn foo<'a, 'b>()");
-        assert_eq!(unwrap_progress(p).extent, (0, 16))
+        assert_extent!(p, (0, 16))
     }
 
     #[test]
     fn fn_with_lifetimes_and_generics() {
         let p = qp(function_header, "fn foo<'a, T>()");
-        assert_eq!(unwrap_progress(p).extent, (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn fn_with_whitespace_before_arguments() {
         let p = qp(function_header, "fn foo () -> ()");
-        assert_eq!(unwrap_progress(p).extent, (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn fn_with_whitespace_before_generics() {
         let p = qp(function_header, "fn foo <'a, T>() -> ()");
-        assert_eq!(unwrap_progress(p).extent, (0, 22))
+        assert_extent!(p, (0, 22))
     }
 
     #[test]
     fn fn_with_unsafe_qualifier() {
         let p = qp(function_header, "unsafe fn foo()");
-        assert_eq!(unwrap_progress(p).extent, (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn block_with_multiple_implicit_statement_macro_calls() {
         let p = qp(block, "{ a! {} b! {} }");
-        assert_eq!(unwrap_progress(p).extent, (0, 15));
+        assert_extent!(p, (0, 15));
     }
 
     #[test]
     fn block_promotes_implicit_statement_to_expression() {
         let p = qp(block, "{ if a {} }");
-        let p = unwrap_progress(p);
         assert!(p.statements.is_empty());
-        assert_eq!(p.expression.unwrap().extent(), (2, 9));
+        assert_extent!(p.expression.unwrap(), (2, 9));
     }
 
     #[test]
     fn block_with_multiple_empty_statements() {
         let p = qp(block, "{ ; ; ; }");
-        assert_eq!(unwrap_progress(p).extent, (0, 9));
+        assert_extent!(p, (0, 9));
     }
 
     #[test]
     fn statement_match_no_semicolon() {
         let p = qp(statement, "match a { _ => () }");
-        assert_eq!(unwrap_progress(p).into_expression().unwrap().extent(), (0, 19))
+        assert_extent!(p.into_expression().unwrap(), (0, 19))
     }
 
     #[test]
     fn statement_use() {
         let p = qp(statement, "use foo::Bar;");
-        assert_eq!(unwrap_progress(p).extent(), (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn statement_any_item() {
         let p = qp(statement, "struct Foo {}");
-        assert_eq!(unwrap_progress(p).extent(), (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn statement_braced_expression_followed_by_method() {
         let p = qp(statement, "match 1 { _ => 1u8 }.count_ones()");
-        assert_eq!(unwrap_progress(p).extent(), (0, 33))
+        assert_extent!(p, (0, 33))
     }
 
     #[test]
     fn pathed_ident_with_leading_separator() {
         let p = qp(pathed_ident, "::foo");
-        assert_eq!(unwrap_progress(p).extent, (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn pathed_ident_with_turbofish() {
         let p = qp(pathed_ident, "foo::<Vec<u8>>");
-        assert_eq!(unwrap_progress(p).extent, (0, 14))
+        assert_extent!(p, (0, 14))
     }
 
     #[test]
     fn pathed_ident_with_turbofish_with_lifetime() {
         let p = qp(pathed_ident, "StructWithLifetime::<'a, u8>");
-        assert_eq!(unwrap_progress(p).extent, (0, 28))
+        assert_extent!(p, (0, 28))
     }
 
     #[test]
     fn pathed_ident_all_space() {
         let p = qp(pathed_ident, "foo :: < Vec < u8 > , Option < bool > >");
-        assert_eq!(unwrap_progress(p).extent, (0, 39))
+        assert_extent!(p, (0, 39))
     }
 
     #[test]
     fn number_decimal_cannot_start_with_underscore() {
-        let p = qp(number_literal, "_123");
+        let p = parse_full(number_literal, "_123");
         let (err_loc, errs) = unwrap_progress_err(p);
         assert_eq!(err_loc, 0);
         assert!(errs.contains(&Error::ExpectedNumber));
@@ -5476,705 +5281,704 @@ mod test {
     #[test]
     fn number_with_exponent() {
         let p = qp(number_literal, "1e2");
-        assert_eq!(unwrap_progress(p).extent(), (0, 3))
+        assert_extent!(p, (0, 3))
     }
 
     #[test]
     fn number_with_prefix_and_exponent() {
         let p = qp(number_literal, "0x1e2");
-        assert_eq!(unwrap_progress(p).extent(), (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn number_with_fractional() {
         let p = qp(number_literal, "1.2");
-        assert_eq!(unwrap_progress(p).extent(), (0, 3))
+        assert_extent!(p, (0, 3))
     }
 
     #[test]
     fn number_with_fractional_with_suffix() {
         let p = qp(number_literal, "1.2f32");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn number_with_prefix_and_fractional() {
         let p = qp(number_literal, "0x1.2");
-        assert_eq!(unwrap_progress(p).extent(), (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn number_with_prefix_exponent_and_fractional() {
         let p = qp(number_literal, "0o7.3e9");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn number_with_prefix_can_have_underscore_after_prefix() {
         let p = qp(number_literal, "0x_123");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn number_binary_can_have_suffix() {
         let p = qp(number_literal, "0b111u8");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn number_decimal_can_have_suffix() {
         let p = qp(number_literal, "123i16");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn number_hexadecimal_can_have_suffix() {
         let p = qp(number_literal, "0xBEEF__u32");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn number_octal_can_have_suffix() {
         let p = qp(number_literal, "0o777_isize");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn pattern_with_path() {
         let p = qp(pattern, "foo::Bar::Baz");
-        assert_eq!(unwrap_progress(p).extent(), (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn pattern_with_ref() {
         let p = qp(pattern, "ref a");
-        assert_eq!(unwrap_progress(p).extent(), (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn pattern_with_tuple() {
         let p = qp(pattern, "(a, b)");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn pattern_with_enum_tuple() {
         let p = qp(pattern, "Baz(a)");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn pattern_with_tuple_wildcard() {
         let p = qp(pattern, "(..)");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn pattern_with_tuple_wildcard_anywhere() {
         let p = qp(pattern, "(a, .., b)");
-        assert_eq!(unwrap_progress(p).extent(), (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn pattern_with_tuple_all_space() {
         let p = qp(pattern, "( a , .. , b )");
-        assert_eq!(unwrap_progress(p).extent(), (0, 14))
+        assert_extent!(p, (0, 14))
     }
 
     #[test]
     fn pattern_with_enum_struct() {
         let p = qp(pattern, "Baz { a: a }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 12))
+        assert_extent!(p, (0, 12))
     }
 
     #[test]
     fn pattern_with_enum_struct_shorthand() {
         let p = qp(pattern, "Baz { a }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn pattern_with_enum_struct_shorthand_with_ref() {
         let p = qp(pattern, "Baz { ref a }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn pattern_with_enum_struct_wildcard() {
         let p = qp(pattern, "Baz { .. }");
-        assert_eq!(unwrap_progress(p).extent(), (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn pattern_with_byte_literal() {
         let p = qp(pattern, "b'a'");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn pattern_with_char_literal() {
         let p = qp(pattern, "'a'");
-        assert_eq!(unwrap_progress(p).extent(), (0, 3))
+        assert_extent!(p, (0, 3))
     }
 
     #[test]
     fn pattern_with_byte_string_literal() {
         let p = qp(pattern, r#"b"hello""#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn pattern_with_string_literal() {
         let p = qp(pattern, r#""hello""#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn pattern_with_numeric_literal() {
         let p = qp(pattern, "42");
-        assert_eq!(unwrap_progress(p).extent(), (0, 2))
+        assert_extent!(p, (0, 2))
     }
 
     #[test]
     fn pattern_with_numeric_literal_negative() {
         let p = qp(pattern, "- 42");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn pattern_with_slice() {
         let p = qp(pattern, "[]");
-        assert_eq!(unwrap_progress(p).extent(), (0, 2))
+        assert_extent!(p, (0, 2))
     }
 
     #[test]
     fn pattern_with_reference() {
         let p = qp(pattern, "&a");
-        assert_eq!(unwrap_progress(p).extent(), (0, 2))
+        assert_extent!(p, (0, 2))
     }
 
     #[test]
     fn pattern_with_reference_mutable() {
-        let p = unwrap_progress(qp(pattern, "&mut ()"));
+        let p = qp(pattern, "&mut ()");
         assert!(p.kind.is_reference());
-        assert_eq!(p.extent(), (0, 7));
+        assert_extent!(p, (0, 7));
     }
 
     #[test]
     fn pattern_with_named_subpattern() {
-        let p = unwrap_progress(qp(pattern, "a @ 1"));
-        assert_eq!(p.extent(), (0, 5));
+        let p = qp(pattern, "a @ 1");
+        assert_extent!(p, (0, 5));
     }
 
     #[test]
     fn pattern_with_named_subpattern_qualifiers() {
-        let p = unwrap_progress(qp(pattern, "ref mut a @ 1"));
-        assert_eq!(p.extent(), (0, 13));
+        let p = qp(pattern, "ref mut a @ 1");
+        assert_extent!(p, (0, 13));
     }
 
     #[test]
     fn pattern_with_numeric_inclusive_range() {
         let p = qp(pattern, "1 ... 10");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn pattern_with_numeric_inclusive_range_negative() {
         let p = qp(pattern, "-10 ... -1");
-        assert_eq!(unwrap_progress(p).extent(), (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn pattern_with_character_inclusive_range() {
         let p = qp(pattern, "'a'...'z'");
-        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn pattern_with_byte_inclusive_range() {
         let p = qp(pattern, "b'a'...b'z'");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn pattern_with_pathed_ident_inclusive_range() {
         let p = qp(pattern, "foo::a...z");
-        assert_eq!(unwrap_progress(p).extent(), (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn pattern_with_numeric_exclusive_range() {
         let p = qp(pattern, "1 .. 10");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn pattern_with_numeric_exclusive_range_negative() {
         let p = qp(pattern, "-10 .. -1");
-        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn pattern_with_character_exclusive_range() {
         let p = qp(pattern, "'a'..'z'");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn pattern_with_byte_exclusive_range() {
         let p = qp(pattern, "b'a'..b'z'");
-        assert_eq!(unwrap_progress(p).extent(), (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn pattern_with_pathed_ident_exclusive_range() {
         let p = qp(pattern, "foo::a..z");
-        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn pattern_with_macro_call() {
         let p = qp(pattern, "foo![]");
-        assert_eq!(unwrap_progress(p).extent(), (0, 6))
+        assert_extent!(p, (0, 6))
     }
 
     #[test]
     fn type_tuple() {
         let p = qp(typ, "(u8, u8)");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn type_tuple_all_space() {
         let p = qp(typ, "( u8 , u8 )");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn type_with_generics() {
         let p = qp(typ, "A<T>");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn type_with_generics_all_space() {
         let p = qp(typ, "A < T >");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn type_impl_trait() {
         let p = qp(typ, "impl Foo");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn type_fn_trait() {
         let p = qp(typ, "Fn(u8) -> u8");
-        assert_eq!(unwrap_progress(p).extent(), (0, 12))
+        assert_extent!(p, (0, 12))
     }
 
     #[test]
     fn type_ref() {
         let p = qp(typ, "&mut Foo");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn type_mut_ref() {
         let p = qp(typ, "&mut Foo");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn type_mut_ref_with_lifetime() {
         let p = qp(typ, "&'a mut Foo");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn type_const_pointer() {
         let p = qp(typ, "*const Foo");
-        assert_eq!(unwrap_progress(p).extent(), (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn type_mut_pointer() {
         let p = qp(typ, "*mut Foo");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn type_uninhabited() {
         let p = qp(typ, "!");
-        assert_eq!(unwrap_progress(p).extent(), (0, 1))
+        assert_extent!(p, (0, 1))
     }
 
     #[test]
     fn type_slice() {
         let p = qp(typ, "[u8]");
-        assert_eq!(unwrap_progress(p).extent(), (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn type_array() {
         let p = qp(typ, "[u8; 42]");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn type_array_allows_expressions() {
         let p = qp(typ, "[u8; 1 + 1]");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn type_fn() {
         let p = qp(typ, "fn(u8) -> u8");
-        assert_eq!(unwrap_progress(p).extent(), (0, 12))
+        assert_extent!(p, (0, 12))
     }
 
     #[test]
     fn type_fn_with_names() {
         let p = qp(typ, "fn(a: u8) -> u8");
-        assert_eq!(unwrap_progress(p).extent(), (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn type_fn_with_const() {
         let p = qp(typ, "const fn()");
-        assert_eq!(unwrap_progress(p).extent(), (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn type_fn_with_unsafe() {
         let p = qp(typ, "unsafe fn()");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn type_fn_with_extern() {
         let p = qp(typ, "extern fn()");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn type_fn_with_extern_and_abi() {
         let p = qp(typ, r#"extern "C" fn()"#);
-        assert_eq!(unwrap_progress(p).extent(), (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn type_higher_ranked_trait_bounds() {
         let p = qp(typ, "for <'a> Foo<'a>");
-        assert_eq!(unwrap_progress(p).extent(), (0, 16))
+        assert_extent!(p, (0, 16))
     }
 
     #[test]
     fn type_higher_ranked_trait_bounds_on_functions() {
         let p = qp(typ, "for <'a> fn(&'a u8)");
-        assert_eq!(unwrap_progress(p).extent(), (0, 19))
+        assert_extent!(p, (0, 19))
     }
 
     #[test]
     fn type_higher_ranked_trait_bounds_on_references() {
         let p = qp(typ, "for <'a> &'a u8");
-        assert_eq!(unwrap_progress(p).extent(), (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn type_with_additional_named_type() {
         let p = qp(typ, "Foo + Bar");
-        assert_eq!(unwrap_progress(p).extent(), (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn type_with_additional_lifetimes() {
         let p = qp(typ, "Foo + 'a");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn type_disambiguation() {
         let p = qp(typ, "<Foo as Bar>");
-        assert_eq!(unwrap_progress(p).extent(), (0, 12))
+        assert_extent!(p, (0, 12))
     }
 
     #[test]
     fn type_disambiguation_with_associated_type() {
         let p = qp(typ, "<Foo as Bar>::Quux");
-        assert_eq!(unwrap_progress(p).extent(), (0, 18))
+        assert_extent!(p, (0, 18))
     }
 
     #[test]
     fn type_disambiguation_without_disambiguation() {
         let p = qp(typ, "<Foo>");
-        assert_eq!(unwrap_progress(p).extent(), (0, 5))
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn type_disambiguation_with_double_angle_brackets() {
         let p = qp(typ, "<<A as B> as Option<T>>");
-        assert_eq!(unwrap_progress(p).extent(), (0, 23))
+        assert_extent!(p, (0, 23))
     }
 
     #[test]
     fn struct_basic() {
         let p = qp(p_struct, "struct S { field: TheType, other: OtherType }");
-        assert_eq!(unwrap_progress(p).extent, (0, 45))
+        assert_extent!(p, (0, 45))
     }
 
     #[test]
     fn struct_with_generic_fields() {
         let p = qp(p_struct, "struct S { field: Option<u8> }");
-        assert_eq!(unwrap_progress(p).extent, (0, 30))
+        assert_extent!(p, (0, 30))
     }
 
     #[test]
     fn struct_with_fields_with_no_space() {
         let p = qp(p_struct, "struct S{a:u8}");
-        assert_eq!(unwrap_progress(p).extent, (0, 14))
+        assert_extent!(p, (0, 14))
     }
 
     #[test]
     fn struct_with_fields_with_all_space() {
         let p = qp(p_struct, "struct S { a : u8 }");
-        assert_eq!(unwrap_progress(p).extent, (0, 19))
+        assert_extent!(p, (0, 19))
     }
 
     #[test]
     fn struct_with_generic_declarations() {
         let p = qp(p_struct, "struct S<T> { field: Option<T> }");
-        assert_eq!(unwrap_progress(p).extent, (0, 32))
+        assert_extent!(p, (0, 32))
     }
 
     #[test]
     fn struct_public() {
         let p = qp(p_struct, "pub struct S {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
     fn struct_public_field() {
         let p = qp(p_struct, "struct S { pub age: u8 }");
-        assert_eq!(unwrap_progress(p).extent, (0, 24))
+        assert_extent!(p, (0, 24))
     }
 
     #[test]
     fn struct_with_attributed_field() {
         let p = qp(p_struct, "struct S { #[foo(bar)] #[baz(quux)] field: u8 }");
-        assert_eq!(unwrap_progress(p).extent, (0, 47))
+        assert_extent!(p, (0, 47))
     }
 
     #[test]
     fn struct_with_tuple() {
         let p = qp(p_struct, "struct S(u8);");
-        assert_eq!(unwrap_progress(p).extent, (0, 13))
+        assert_extent!(p, (0, 13))
     }
 
     #[test]
     fn struct_with_tuple_and_annotation() {
         let p = qp(p_struct, "struct S(#[foo] u8);");
-        assert_eq!(unwrap_progress(p).extent, (0, 20))
+        assert_extent!(p, (0, 20))
     }
 
     #[test]
     fn struct_with_tuple_and_visibility() {
         let p = qp(p_struct, "struct S(pub u8);");
-        assert_eq!(unwrap_progress(p).extent, (0, 17))
+        assert_extent!(p, (0, 17))
     }
 
     #[test]
     fn struct_empty() {
         let p = qp(p_struct, "struct S;");
-        assert_eq!(unwrap_progress(p).extent, (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn struct_with_where_clause() {
         let p = qp(p_struct, "struct S<A> where A: Foo { a: A }");
-        assert_eq!(unwrap_progress(p).extent, (0, 33))
+        assert_extent!(p, (0, 33))
     }
 
     #[test]
     fn struct_with_tuple_and_where_clause() {
         let p = qp(p_struct, "struct S<A>(A) where A: Foo;");
-        assert_eq!(unwrap_progress(p).extent, (0, 28))
+        assert_extent!(p, (0, 28))
     }
 
     #[test]
     fn union_basic() {
         let p = qp(p_union, "union U { field: TheType, other: OtherType }");
-        assert_eq!(unwrap_progress(p).extent, (0, 44))
+        assert_extent!(p, (0, 44))
     }
 
     #[test]
     fn union_is_still_an_ident() {
         let p = qp(p_union, "union union { union: union }");
-        assert_eq!(unwrap_progress(p).extent, (0, 28))
+        assert_extent!(p, (0, 28))
     }
 
     #[test]
     fn union_with_generic_declarations() {
         let p = qp(p_union, "union S<T> { field: Option<T> }");
-        assert_eq!(unwrap_progress(p).extent, (0, 31))
+        assert_extent!(p, (0, 31))
     }
 
     #[test]
     fn union_with_where_clause() {
         let p = qp(p_union, "union S<A> where A: Foo { a: A }");
-        assert_eq!(unwrap_progress(p).extent, (0, 32))
+        assert_extent!(p, (0, 32))
     }
 
     #[test]
     fn union_public() {
         let p = qp(p_union, "pub union S {}");
-        assert_eq!(unwrap_progress(p).extent, (0, 14))
+        assert_extent!(p, (0, 14))
     }
 
     #[test]
     fn union_public_field() {
         let p = qp(p_union, "union S { pub age: u8 }");
-        assert_eq!(unwrap_progress(p).extent, (0, 23))
+        assert_extent!(p, (0, 23))
     }
 
     #[test]
     fn union_with_attributed_field() {
         let p = qp(p_union, "union S { #[foo(bar)] #[baz(quux)] field: u8 }");
-        assert_eq!(unwrap_progress(p).extent, (0, 46))
+        assert_extent!(p, (0, 46))
     }
 
     #[test]
     fn where_clause_with_path() {
         let p = qp(where_clause_item, "P: foo::bar::baz::Quux<'a>");
-        assert_eq!(unwrap_progress(p).extent(), (0, 26))
+        assert_extent!(p, (0, 26))
     }
 
     #[test]
     fn where_clause_with_multiple_bounds() {
         let p = qp(where_clause_item, "P: A + B");
-        assert_eq!(unwrap_progress(p).extent(), (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn where_clause_with_multiple_types() {
         let p = qp(where_clause, "where P: A, Q: B");
-        let p = unwrap_progress(p);
-        assert_eq!(p[1].extent(), (12, 16))
+        assert_extent!(p[1], (12, 16))
     }
 
     #[test]
     fn where_clause_with_lifetimes() {
         let p = qp(where_clause_item, "'a: 'b + 'c");
-        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn ident_with_leading_underscore() {
         let p = qp(ident, "_foo");
-        assert_eq!(unwrap_progress(p).extent, (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn ident_can_have_keyword_substring() {
         let p = qp(ident, "form");
-        assert_eq!(unwrap_progress(p).extent, (0, 4))
+        assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn lifetime_ident() {
         let p = qp(lifetime, "'a");
-        assert_eq!(unwrap_progress(p).extent, (0, 2))
+        assert_extent!(p, (0, 2))
     }
 
     #[test]
     fn lifetime_static() {
         let p = qp(lifetime, "'static");
-        assert_eq!(unwrap_progress(p).extent, (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn generic_declarations_() {
         let p = qp(generic_declarations, "<A>");
-        assert_eq!(unwrap_progress(p).extent, (0, 3))
+        assert_extent!(p, (0, 3))
     }
 
     #[test]
     fn generic_declarations_allow_type_bounds() {
         let p = qp(generic_declarations, "<A: Foo>");
-        assert_eq!(unwrap_progress(p).extent, (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn generic_declarations_with_default_types() {
         let p = qp(generic_declarations, "<A = Bar>");
-        assert_eq!(unwrap_progress(p).extent, (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn generic_declarations_with_type_bounds_and_default_types() {
         let p = qp(generic_declarations, "<A: Foo = Bar>");
-        assert_eq!(unwrap_progress(p).extent, (0, 14))
+        assert_extent!(p, (0, 14))
     }
 
     #[test]
     fn generic_declarations_allow_lifetime_bounds() {
         let p = qp(generic_declarations, "<'a: 'b>");
-        assert_eq!(unwrap_progress(p).extent, (0, 8))
+        assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn generic_declarations_with_attributes() {
         let p = qp(generic_declarations, "<#[foo] 'a, #[bar] B>");
-        assert_eq!(unwrap_progress(p).extent, (0, 21))
+        assert_extent!(p, (0, 21))
     }
 
     #[test]
     fn generic_declarations_all_space() {
         let p = qp(generic_declarations, "< 'a : 'b , A : Foo >");
-        assert_eq!(unwrap_progress(p).extent, (0, 21))
+        assert_extent!(p, (0, 21))
     }
 
     #[test]
     fn trait_bounds_with_lifetime() {
         let p = qp(trait_bounds, "'a + 'b");
-        assert_eq!(unwrap_progress(p).extent, (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn trait_bounds_with_relaxed() {
         let p = qp(trait_bounds, "?A + ?B");
-        assert_eq!(unwrap_progress(p).extent, (0, 7))
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
     fn trait_bounds_with_associated_types() {
         let p = qp(trait_bounds, "A<B, C = D>");
-        assert_eq!(unwrap_progress(p).extent, (0, 11))
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn visibility_self() {
         let p = qp(visibility, "pub(self)");
-        assert_eq!(unwrap_progress(p).extent, (0, 9))
+        assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn visibility_super() {
         let p = qp(visibility, "pub(super)");
-        assert_eq!(unwrap_progress(p).extent, (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn visibility_crate() {
         let p = qp(visibility, "pub(crate)");
-        assert_eq!(unwrap_progress(p).extent, (0, 10))
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn visibility_path() {
         let p = qp(visibility, "pub(::foo::bar)");
-        assert_eq!(unwrap_progress(p).extent, (0, 15))
+        assert_extent!(p, (0, 15))
     }
 
     fn zero_or_more_tailed_test<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
@@ -6186,7 +5990,6 @@ mod test {
     #[test]
     fn zero_or_more_tailed_with_zero() {
         let p = qp(zero_or_more_tailed_test, "");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 0);
         assert_eq!(p.separator_count, 0);
     }
@@ -6194,7 +5997,6 @@ mod test {
     #[test]
     fn zero_or_more_tailed_with_one() {
         let p = qp(zero_or_more_tailed_test, "X");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 1);
         assert_eq!(p.separator_count, 0);
     }
@@ -6202,7 +6004,6 @@ mod test {
     #[test]
     fn zero_or_more_tailed_with_one_trailing() {
         let p = qp(zero_or_more_tailed_test, "X,");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 1);
         assert_eq!(p.separator_count, 1);
     }
@@ -6210,7 +6011,6 @@ mod test {
     #[test]
     fn zero_or_more_tailed_with_two() {
         let p = qp(zero_or_more_tailed_test, "X, X");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 2);
         assert_eq!(p.separator_count, 1);
     }
@@ -6218,7 +6018,6 @@ mod test {
     #[test]
     fn zero_or_more_tailed_with_two_trailing() {
         let p = qp(zero_or_more_tailed_test, "X, X,");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 2);
         assert_eq!(p.separator_count, 2);
     }
@@ -6226,7 +6025,6 @@ mod test {
     #[test]
     fn zero_or_more_tailed_with_all_space() {
         let p = qp(zero_or_more_tailed_test, "X , X , ");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 2);
         assert_eq!(p.separator_count, 2);
     }
@@ -6234,7 +6032,6 @@ mod test {
     #[test]
     fn zero_or_more_tailed_doesnt_allow_space_separator() {
         let p = qp(zero_or_more_tailed_test, "X X");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 1);
         assert_eq!(p.separator_count, 0);
     }
@@ -6247,7 +6044,7 @@ mod test {
 
     #[test]
     fn one_or_more_tailed_with_zero() {
-        let p = qp(one_or_more_tailed_test, "");
+        let p = parse_full(one_or_more_tailed_test, "");
         let (err_loc, errs) = unwrap_progress_err(p);
         assert_eq!(err_loc, 0);
         assert!(errs.contains(&Error::ExpectedIdent));
@@ -6256,7 +6053,6 @@ mod test {
     #[test]
     fn one_or_more_tailed_with_one() {
         let p = qp(one_or_more_tailed_test, "X");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 1);
         assert_eq!(p.separator_count, 0);
     }
@@ -6264,7 +6060,6 @@ mod test {
     #[test]
     fn one_or_more_tailed_with_one_trailing() {
         let p = qp(one_or_more_tailed_test, "X,");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 1);
         assert_eq!(p.separator_count, 1);
     }
@@ -6272,7 +6067,6 @@ mod test {
     #[test]
     fn one_or_more_tailed_with_two() {
         let p = qp(one_or_more_tailed_test, "X, X");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 2);
         assert_eq!(p.separator_count, 1);
     }
@@ -6280,7 +6074,6 @@ mod test {
     #[test]
     fn one_or_more_tailed_with_two_trailing() {
         let p = qp(one_or_more_tailed_test, "X, X,");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 2);
         assert_eq!(p.separator_count, 2);
     }
@@ -6288,7 +6081,6 @@ mod test {
     #[test]
     fn one_or_more_tailed_with_all_space() {
         let p = qp(one_or_more_tailed_test, "X , X , ");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 2);
         assert_eq!(p.separator_count, 2);
     }
@@ -6296,7 +6088,6 @@ mod test {
     #[test]
     fn one_or_more_tailed_with_two_doesnt_allow_space_separator() {
         let p = qp(one_or_more_tailed_test, "X X");
-        let p = unwrap_progress(p);
         assert_eq!(p.values.len(), 1);
         assert_eq!(p.separator_count, 0);
     }
