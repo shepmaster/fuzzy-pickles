@@ -362,7 +362,7 @@ fn operator_postfix_as_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
 {
     sequence!(pm, pt, {
         _   = kw_as;
-        typ = typ;
+        typ = typ_single;
     }, |_, _| OperatorPostfix::AsType { typ })
 }
 
@@ -2083,6 +2083,14 @@ mod test {
     #[test]
     fn expr_as_type_followed_by_addition() {
         let p = unwrap_progress(qp(expression, "42 as u8 + 1"));
+        let p = p.value.into_binary().unwrap();
+        assert!(p.lhs.is_as_type());
+        assert_eq!(p.extent, (0, 12));
+    }
+
+    #[test]
+    fn expr_as_type_followed_by_addition_of_variable() {
+        let p = unwrap_progress(qp(expression, "42 as u8 + a"));
         let p = p.value.into_binary().unwrap();
         assert!(p.lhs.is_as_type());
         assert_eq!(p.extent, (0, 12));
