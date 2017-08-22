@@ -9,8 +9,45 @@ use peresil::combinators::*;
 
 use super::*;
 
-pub fn expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Attributed<Expression>> {
-    match expression_shunting_yard(pm, pt) {
+pub fn expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, Attributed<Expression>>
+{
+    match expression_shunting_yard(pm, pt, |_, state| state) {
+        Ok(ShuntCar { value: expr, ept, .. }) => Progress::success(ept, expr),
+        Err((failure_point, err)) => Progress::failure(failure_point, err),
+    }
+}
+
+// Expressions that may be treated as a statement have special
+// restrictions on what is allowed to follow them
+pub fn statement_expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, Attributed<Expression>>
+{
+    let r = expression_shunting_yard(pm, pt, |shunting_yard, state| {
+        match state {
+            ExpressionState::Atom => {
+                // If there are pending operators, they are prefix
+                // operators and this is no longer valid as a
+                // statement terminator.
+                let has_no_prefix = shunting_yard.operators.is_empty();
+
+                // If we have parsed one expression, is it one of the
+                // special expressions that ends in a curly brace?
+                let may_terminate_statement = shunting_yard.result.first().map_or(false, |expr| {
+                    expr.value.may_terminate_statement()
+                });
+
+                if has_no_prefix && may_terminate_statement {
+                    ExpressionState::AtomLimitedPostfix
+                } else {
+                    state
+                }
+            }
+            _ => state
+        }
+    });
+
+    match r {
         Ok(ShuntCar { value: expr, ept, .. }) => Progress::success(ept, expr),
         Err((failure_point, err)) => Progress::failure(failure_point, err),
     }
@@ -22,16 +59,19 @@ enum ExpressionState {
     Infix { was_range: bool },
     Postfix,
     Atom,
-    AtomPostfixOnly,
+    AtomLimitedPostfix,
 }
 
-fn expression_shunting_yard<'s>(pm: &mut Master<'s>, mut pt: Point<'s>) ->
+fn expression_shunting_yard<'s, F>(pm: &mut Master<'s>, mut pt: Point<'s>, adapt_state: F) ->
     ExprResult<'s, ShuntCar<'s, Attributed<Expression>>>
+where
+    F: Fn(&ShuntingYard, ExpressionState) -> ExpressionState
 {
     let mut shunting_yard = ShuntingYard::new();
     let mut state = ExpressionState::Prefix;
 
     loop {
+        //println!("\nState: {:?}", state);
         match state {
             ExpressionState::Prefix |
             ExpressionState::Infix { .. } => {
@@ -56,13 +96,8 @@ fn expression_shunting_yard<'s>(pm: &mut Master<'s>, mut pt: Point<'s>) ->
                                 state = ExpressionState::Prefix;
                             }
                             PrefixOrAtom::Atom(expr) => {
-                                let postfix_only = expr.may_only_be_followed_by_postfix();
                                 shunting_yard.add_expression(expr, pt, point);
-                                state = if postfix_only {
-                                    ExpressionState::AtomPostfixOnly
-                                } else {
-                                    ExpressionState::Atom
-                                };
+                                state = ExpressionState::Atom;
                             }
                         }
                         pt = point;
@@ -94,8 +129,8 @@ fn expression_shunting_yard<'s>(pm: &mut Master<'s>, mut pt: Point<'s>) ->
                     }
                 }
             }
-            ExpressionState::AtomPostfixOnly => {
-                match operator_postfix(pm, pt) {
+            ExpressionState::AtomLimitedPostfix => {
+                match operator_postfix_limited(pm, pt) {
                     peresil::Progress { status: peresil::Status::Success(op), point } => {
                         shunting_yard.add_postfix(pm, op, pt, point)?;
                         state = ExpressionState::Postfix;
@@ -107,6 +142,8 @@ fn expression_shunting_yard<'s>(pm: &mut Master<'s>, mut pt: Point<'s>) ->
                 }
             }
         }
+
+        state = adapt_state(&shunting_yard, state);
     }
 }
 
@@ -311,6 +348,15 @@ fn operator_postfix<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
         .finish()
 }
 
+fn operator_postfix_limited<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, OperatorPostfix>
+{
+    pm.alternate(pt)
+        .one(operator_postfix_field_access)
+        .one(map(question_mark, OperatorPostfix::Try))
+        .finish()
+}
+
 fn operator_postfix_as_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
     Progress<'s, OperatorPostfix>
 {
@@ -401,12 +447,14 @@ fn expression_atom<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expre
         .finish()
 }
 
+#[derive(Debug)]
 struct ShuntCar<'s, T> {
     value: T,
     spt: Point<'s>,
     ept: Point<'s>,
 }
 
+#[derive(Debug)]
 struct ShuntingYard<'s> {
     operators: Vec<ShuntCar<'s, OperatorKind>>,
     result: Vec<ShuntCar<'s, Attributed<Expression>>>,
@@ -1534,12 +1582,6 @@ mod test {
     }
 
     #[test]
-    fn expr_for_loop_followed_by_infix() {
-        let p = qp(expression, "for a in b {} + c");
-        assert_eq!(unwrap_progress(p).extent(), (0, 13))
-    }
-
-    #[test]
     fn expr_loop() {
         let p = qp(expression, "loop {}");
         assert_eq!(unwrap_progress(p).extent(), (0, 7))
@@ -1558,8 +1600,8 @@ mod test {
     }
 
     #[test]
-    fn expr_match_brace_with_no_comma_followed_by_tuple_isnt_a_function_call() {
-        // `_ => {} (_,)` is unambigous from a function call
+    fn expr_match_brace_with_no_comma_followed_by_tuple_is_not_a_function_call() {
+        // `_ => {} (_,)` is ambiguous from a function call
         // `{foo}(arg)`. We must check blocks specifically.
         let p = qp(expression, "match (1,) { (1,) => {} (_,) => {} }");
         assert_eq!(unwrap_progress(p).extent(), (0, 36))
@@ -1647,17 +1689,6 @@ mod test {
         assert_eq!(unwrap_progress(p).extent(), (0, 20))
     }
 
-    #[test]
-    fn expr_if_followed_by_infix() {
-        let p = qp(expression, "if a {} + 1");
-        assert_eq!(unwrap_progress(p).extent(), (0, 7))
-    }
-
-    #[test]
-    fn expr_if_followed_by_postfix() {
-        let p = qp(expression, "if a {}.foo()");
-        assert_eq!(unwrap_progress(p).extent(), (0, 13))
-    }
 
     #[test]
     fn expr_if_let() {
@@ -2181,6 +2212,56 @@ mod test {
     fn expr_disambiguation_without_disambiguation() {
         let p = qp(expression, "<Foo>::quux");
         assert_eq!(unwrap_progress(p).extent(), (0, 11))
+    }
+
+    #[test]
+    fn implicit_statement_followed_by_infix() {
+        let p = qp(statement_expression, "if a {} + c");
+        assert_eq!(unwrap_progress(p).extent(), (0, 7))
+    }
+
+    #[test]
+    fn implicit_statement_followed_by_infix_with_infix_inside() {
+        let p = qp(statement_expression, "for a in b + c {} + d");
+        assert_eq!(unwrap_progress(p).extent(), (0, 17))
+    }
+
+    #[test]
+    fn implicit_statement_followed_by_infix_with_braced_infix_inside() {
+        let p = qp(statement_expression, "if {a} < b {} &mut c");
+        assert_eq!(unwrap_progress(p).extent(), (0, 13))
+    }
+
+    #[test]
+    fn implicit_statement_in_infix() {
+        let p = qp(statement_expression, "a + loop {} + d");
+        assert_eq!(unwrap_progress(p).extent(), (0, 15))
+    }
+
+    #[test]
+    fn implicit_statement_with_prefix_followed_by_infix() {
+        let p = qp(statement_expression, "*match a { _ => b } = c");
+        assert_eq!(unwrap_progress(p).extent(), (0, 23))
+    }
+
+    #[test]
+    fn implicit_statement_followed_by_field_access() {
+        let p = qp(statement_expression, "{ a }.foo()");
+        assert_eq!(unwrap_progress(p).extent(), (0, 11))
+    }
+
+    #[test]
+    fn implicit_statement_followed_by_question_mark() {
+        let p = qp(statement_expression, "unsafe { a }?");
+        assert_eq!(unwrap_progress(p).extent(), (0, 13))
+    }
+
+    #[test]
+    fn implicit_statement_followed_by_tuple_is_not_call() {
+        let p = qp(statement_expression, "if let Some(a) = b {} (c, d)");
+        let p = unwrap_progress(p);
+        assert_eq!(p.extent(), (0, 21));
+        assert!(p.is_if());
     }
 
     #[test]
