@@ -358,7 +358,7 @@ pub fn parse_rust_file(file: &str) -> Result<File, ErrorDetail> {
     loop {
         if pt.s.first().map(Token::is_end_of_file).unwrap_or(true) { break }
 
-        let item = item(&mut pm, pt);
+        let item = attributed(item)(&mut pm, pt);
         let item = pm.finish(item);
 
         let next_pt = match item.status {
@@ -407,12 +407,11 @@ impl HasExtent for Extent {
 
 #[derive(Debug, Visit)]
 pub struct File {
-    items: Vec<Item>,
+    items: Vec<Attributed<Item>>,
 }
 
 #[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum Item {
-    Attribute(Attribute), // TODO: should be part of each item
     Const(Const),
     Enum(Enum),
     ExternCrate(Crate),
@@ -535,14 +534,13 @@ pub struct TraitImplFunctionHeader {
 #[derive(Debug, HasExtent, Visit)]
 pub struct GenericDeclarations {
     pub extent: Extent,
-    lifetimes: Vec<GenericDeclarationLifetime>,
-    types: Vec<GenericDeclarationType>,
+    lifetimes: Vec<Attributed<GenericDeclarationLifetime>>,
+    types: Vec<Attributed<GenericDeclarationType>>,
 }
 
 #[derive(Debug, HasExtent, Visit)]
 pub struct GenericDeclarationLifetime {
     extent: Extent,
-    attributes: Vec<Attribute>,
     name: Lifetime,
     bounds: Vec<Lifetime>,
 }
@@ -550,7 +548,6 @@ pub struct GenericDeclarationLifetime {
 #[derive(Debug, HasExtent, Visit)]
 pub struct GenericDeclarationType {
     extent: Extent,
-    attributes: Vec<Attribute>,
     name: Ident,
     bounds: Option<TraitBounds>,
     default: Option<Type>,
@@ -806,14 +803,13 @@ pub enum StructDefinitionBody {
 #[derive(Debug, HasExtent, Visit)]
 pub struct StructDefinitionBodyBrace {
     pub extent: Extent,
-    fields: Vec<StructDefinitionFieldNamed>,
+    fields: Vec<Attributed<StructDefinitionFieldNamed>>,
     whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, HasExtent, Visit)]
 pub struct StructDefinitionFieldNamed {
     extent: Extent,
-    attributes: Vec<Attribute>,
     visibility: Option<Visibility>,
     name: Ident,
     typ: Type,
@@ -823,14 +819,13 @@ pub struct StructDefinitionFieldNamed {
 #[derive(Debug, HasExtent, Visit)]
 pub struct StructDefinitionBodyTuple {
     pub extent: Extent,
-    fields: Vec<StructDefinitionFieldUnnamed>,
+    fields: Vec<Attributed<StructDefinitionFieldUnnamed>>,
     whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, HasExtent, Visit)]
 pub struct StructDefinitionFieldUnnamed {
     extent: Extent,
-    attributes: Vec<Attribute>,
     visibility: Option<Visibility>,
     typ: Type,
 }
@@ -842,7 +837,7 @@ pub struct Union {
     name: Ident,
     generics: Option<GenericDeclarations>,
     wheres: Vec<Where>,
-    fields: Vec<StructDefinitionFieldNamed>,
+    fields: Vec<Attributed<StructDefinitionFieldNamed>>,
     whitespace: Vec<Whitespace>,
 }
 
@@ -853,14 +848,13 @@ pub struct Enum {
     name: Ident,
     generics: Option<GenericDeclarations>,
     wheres: Vec<Where>,
-    variants: Vec<EnumVariant>,
+    variants: Vec<Attributed<EnumVariant>>,
     whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, HasExtent, Visit)]
 pub struct EnumVariant {
     extent: Extent,
-    attributes: Vec<Attribute>,
     name: Ident,
     body: EnumVariantBody,
     whitespace: Vec<Whitespace>,
@@ -868,7 +862,7 @@ pub struct EnumVariant {
 
 #[derive(Debug, Visit, Decompose)] // HasExtent?
 pub enum EnumVariantBody {
-    Tuple(Vec<StructDefinitionFieldUnnamed>),
+    Tuple(Vec<Attributed<StructDefinitionFieldUnnamed>>),
     Struct(StructDefinitionBodyBrace),
     Unit(Option<Attributed<Expression>>),
 }
@@ -1012,7 +1006,7 @@ pub struct Parenthetical {
 #[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum Statement {
     Expression(Attributed<Expression>),
-    Item(Item),
+    Item(Attributed<Item>),
     Empty(Extent),
 }
 
@@ -1034,16 +1028,31 @@ impl<T> std::ops::Deref for Attributed<T> {
     fn deref(&self) -> &Self::Target { &self.value }
 }
 
-impl Visit for Attributed<Expression> {
-    fn visit<V>(&self, v: &mut V)
-        where V: Visitor
-    {
-        v.visit_attributed_expression(self);
-        self.attributes.visit(v);
-        self.value.visit(v);
-        v.exit_attributed_expression(self);
-    }
+macro_rules! visit_attributed {
+    ($typ:ty, $visit:ident, $exit:ident) => {
+        impl Visit for Attributed<$typ> {
+            fn visit<V>(&self, v: &mut V)
+                where V: Visitor
+            {
+                v.$visit(self);
+                self.attributes.visit(v);
+                self.value.visit(v);
+                v.$exit(self);
+            }
+        }
+    };
 }
+
+visit_attributed!(EnumVariant, visit_attributed_enum_variant, exit_attributed_enum_variant);
+visit_attributed!(Expression, visit_attributed_expression, exit_attributed_expression);
+visit_attributed!(ExternBlockMember, visit_attributed_extern_block_member, exit_attributed_extern_block_member);
+visit_attributed!(GenericDeclarationLifetime, visit_attributed_generic_declaration_lifetime, exit_attributed_generic_declaration_lifetime);
+visit_attributed!(GenericDeclarationType, visit_attributed_generic_declaration_type, exit_attributed_generic_declaration_type);
+visit_attributed!(ImplMember, visit_attributed_impl_member, exit_attributed_impl_member);
+visit_attributed!(Item, visit_attributed_item, exit_attributed_item);
+visit_attributed!(StructDefinitionFieldNamed, visit_attributed_struct_definition_field_named, exit_attributed_struct_definition_field_named);
+visit_attributed!(StructDefinitionFieldUnnamed, visit_attributed_struct_definition_field_unnamed, exit_attributed_struct_definition_field_unnamed);
+visit_attributed!(TraitMember, visit_attributed_trait_member, exit_attributed_trait_member);
 
 // Assumes that there are no attributes
 impl From<Expression> for Attributed<Expression> {
@@ -1704,13 +1713,12 @@ pub struct Trait {
     generics: Option<GenericDeclarations>,
     bounds: Option<TraitBounds>,
     wheres: Vec<Where>,
-    members: Vec<TraitMember>,
+    members: Vec<Attributed<TraitMember>>,
     whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum TraitMember {
-    Attribute(Attribute), // TODO: should be part of each item
     Const(TraitMemberConst),
     Function(TraitMemberFunction),
     Type(TraitMemberType),
@@ -1748,7 +1756,7 @@ pub struct Impl {
     generics: Option<GenericDeclarations>,
     kind: ImplKind,
     wheres: Vec<Where>,
-    body: Vec<ImplMember>,
+    body: Vec<Attributed<ImplMember>>,
     whitespace: Vec<Whitespace>,
 }
 
@@ -1782,7 +1790,6 @@ pub enum ImplOfTraitType {
 
 #[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum ImplMember {
-    Attribute(Attribute),  // TODO: should be part of each item
     Const(ImplConst),
     Function(ImplFunction),
     Type(ImplType),
@@ -1826,13 +1833,12 @@ pub struct Crate {
 pub struct ExternBlock {
     extent: Extent,
     abi: Option<String>,
-    members: Vec<ExternBlockMember>,
+    members: Vec<Attributed<ExternBlockMember>>,
     whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum ExternBlockMember {
-    Attribute(Attribute),  // TODO: should be part of each item
     Function(ExternBlockMemberFunction),
     Static(ExternBlockMemberStatic),
 }
@@ -1894,7 +1900,7 @@ pub struct Module {
     extent: Extent,
     visibility: Option<Visibility>,
     name: Ident,
-    body: Option<Vec<Item>>,
+    body: Option<Vec<Attributed<Item>>>,
     whitespace: Vec<Whitespace>,
 }
 
@@ -2009,7 +2015,16 @@ pub trait Visitor {
     fn visit_ascription(&mut self, &Ascription) {}
     fn visit_associated_type(&mut self, &AssociatedType) {}
     fn visit_attribute(&mut self, &Attribute) {}
+    fn visit_attributed_enum_variant(&mut self, &Attributed<EnumVariant>) {}
     fn visit_attributed_expression(&mut self, &Attributed<Expression>) {}
+    fn visit_attributed_extern_block_member(&mut self, &Attributed<ExternBlockMember>) {}
+    fn visit_attributed_generic_declaration_lifetime(&mut self, &Attributed<GenericDeclarationLifetime>) {}
+    fn visit_attributed_generic_declaration_type(&mut self, &Attributed<GenericDeclarationType>) {}
+    fn visit_attributed_impl_member(&mut self, &Attributed<ImplMember>) {}
+    fn visit_attributed_item(&mut self, &Attributed<Item>) {}
+    fn visit_attributed_struct_definition_field_named(&mut self, &Attributed<StructDefinitionFieldNamed>) {}
+    fn visit_attributed_struct_definition_field_unnamed(&mut self, &Attributed<StructDefinitionFieldUnnamed>) {}
+    fn visit_attributed_trait_member(&mut self, &Attributed<TraitMember>) {}
     fn visit_binary(&mut self, &Binary) {}
     fn visit_block(&mut self, &Block) {}
     fn visit_break(&mut self, &Break) {}
@@ -2183,7 +2198,16 @@ pub trait Visitor {
     fn exit_ascription(&mut self, &Ascription) {}
     fn exit_associated_type(&mut self, &AssociatedType) {}
     fn exit_attribute(&mut self, &Attribute) {}
+    fn exit_attributed_enum_variant(&mut self, &Attributed<EnumVariant>) {}
     fn exit_attributed_expression(&mut self, &Attributed<Expression>) {}
+    fn exit_attributed_extern_block_member(&mut self, &Attributed<ExternBlockMember>) {}
+    fn exit_attributed_generic_declaration_lifetime(&mut self, &Attributed<GenericDeclarationLifetime>) {}
+    fn exit_attributed_generic_declaration_type(&mut self, &Attributed<GenericDeclarationType>) {}
+    fn exit_attributed_impl_member(&mut self, &Attributed<ImplMember>) {}
+    fn exit_attributed_item(&mut self, &Attributed<Item>) {}
+    fn exit_attributed_struct_definition_field_named(&mut self, &Attributed<StructDefinitionFieldNamed>) {}
+    fn exit_attributed_struct_definition_field_unnamed(&mut self, &Attributed<StructDefinitionFieldUnnamed>) {}
+    fn exit_attributed_trait_member(&mut self, &Attributed<TraitMember>) {}
     fn exit_binary(&mut self, &Binary) {}
     fn exit_block(&mut self, &Block) {}
     fn exit_break(&mut self, &Break) {}
@@ -2662,7 +2686,6 @@ pub fn peek<P, E, S, F, T>
 
 fn item<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Item> {
     pm.alternate(pt)
-        .one(map(attribute, Item::Attribute))
         .one(map(p_const, Item::Const))
         .one(map(extern_crate, Item::ExternCrate))
         .one(map(extern_block, Item::ExternBlock))
@@ -2989,8 +3012,8 @@ fn generic_declarations<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, 
     sequence!(pm, pt, {
         spt       = point;
         _         = left_angle;
-        lifetimes = zero_or_more_tailed_values(comma, generic_declaration_lifetime);
-        types     = zero_or_more_tailed_values(comma, generic_declaration_type);
+        lifetimes = zero_or_more_tailed_values(comma, attributed(generic_declaration_lifetime));
+        types     = zero_or_more_tailed_values(comma, attributed(generic_declaration_type));
         _         = right_angle;
     }, |pm: &mut Master, pt| GenericDeclarations { extent: pm.state.ex(spt, pt), lifetimes, types })
 }
@@ -2998,12 +3021,10 @@ fn generic_declarations<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, 
 fn generic_declaration_lifetime<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, GenericDeclarationLifetime> {
     sequence!(pm, pt, {
         spt        = point;
-        attributes = zero_or_more(attribute);
         name       = lifetime;
         bounds     = optional(generic_declaration_lifetime_bounds);
     }, |pm: &mut Master, pt| GenericDeclarationLifetime {
         extent: pm.state.ex(spt, pt),
-        attributes,
         name,
         bounds: bounds.unwrap_or_else(Vec::new),
     })
@@ -3019,12 +3040,11 @@ fn generic_declaration_lifetime_bounds<'s>(pm: &mut Master<'s>, pt: Point<'s>) -
 fn generic_declaration_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, GenericDeclarationType> {
     sequence!(pm, pt, {
         spt        = point;
-        attributes = zero_or_more(attribute);
         name       = ident;
         // Over-permissive; allows interleaving trait bounds and default types
         bounds     = optional(generic_declaration_type_bounds);
         default    = optional(generic_declaration_type_default);
-    }, |pm: &mut Master, pt| GenericDeclarationType { extent: pm.state.ex(spt, pt), attributes, name, bounds, default })
+    }, |pm: &mut Master, pt| GenericDeclarationType { extent: pm.state.ex(spt, pt), name, bounds, default })
 }
 
 fn generic_declaration_type_bounds<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TraitBounds> {
@@ -3213,7 +3233,7 @@ fn block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Block> {
 fn statement<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Statement> {
     pm.alternate(pt)
         .one(map(statement_expression, Statement::Expression))
-        .one(map(item, Statement::Item))
+        .one(map(attributed(item), Statement::Item))
         .one(map(statement_empty, Statement::Empty))
         .finish()
 }
@@ -3596,7 +3616,7 @@ fn struct_defn_body_brace_only<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
     sequence!(pm, pt, {
         spt    = point;
         _      = left_curly;
-        fields = zero_or_more_tailed_values(comma, struct_defn_field);
+        fields = zero_or_more_tailed_values(comma, attributed(struct_defn_field));
         _      = right_curly;
     }, |pm: &mut Master, pt| StructDefinitionBodyBrace { extent: pm.state.ex(spt, pt), fields, whitespace: Vec::new() })
 }
@@ -3612,10 +3632,10 @@ fn struct_defn_body_tuple<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
     }, |pm: &mut Master, pt| (StructDefinitionBodyTuple { extent: pm.state.ex(spt, pt), fields, whitespace: Vec::new() }, wheres))
 }
 
-fn struct_defn_body_tuple_only<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Vec<StructDefinitionFieldUnnamed>> {
+fn struct_defn_body_tuple_only<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Vec<Attributed<StructDefinitionFieldUnnamed>>> {
     sequence!(pm, pt, {
         _     = left_paren;
-        types = zero_or_more_tailed_values(comma, tuple_defn_field);
+        types = zero_or_more_tailed_values(comma, attributed(tuple_defn_field));
         _     = right_paren;
     }, |_, _| types)
 }
@@ -3623,12 +3643,10 @@ fn struct_defn_body_tuple_only<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progre
 fn tuple_defn_field<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, StructDefinitionFieldUnnamed> {
     sequence!(pm, pt, {
         spt        = point;
-        attributes = zero_or_more(attribute);
         visibility = optional(visibility);
         typ        = typ;
     }, |pm: &mut Master, pt| StructDefinitionFieldUnnamed {
         extent: pm.state.ex(spt, pt),
-        attributes,
         visibility,
         typ,
     })
@@ -3637,7 +3655,6 @@ fn tuple_defn_field<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Stru
 fn struct_defn_field<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, StructDefinitionFieldNamed> {
     sequence!(pm, pt, {
         spt        = point;
-        attributes = zero_or_more(attribute);
         visibility = optional(visibility);
         name       = ident;
         _          = colon;
@@ -3645,7 +3662,6 @@ fn struct_defn_field<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Str
     }, |pm: &mut Master, pt| StructDefinitionFieldNamed {
         extent: pm.state.ex(spt, pt),
         visibility,
-        attributes,
         name,
         typ,
         whitespace: Vec::new(),
@@ -3661,7 +3677,7 @@ fn p_union<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Union> {
         generics   = optional(generic_declarations);
         wheres     = optional(where_clause);
         _          = left_curly;
-        fields     = zero_or_more_tailed_values(comma, struct_defn_field);
+        fields     = zero_or_more_tailed_values(comma, attributed(struct_defn_field));
         _          = right_curly;
     }, |pm: &mut Master, pt| Union {
         extent: pm.state.ex(spt, pt),
@@ -3683,7 +3699,7 @@ fn p_enum<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Enum> {
         generics   = optional(generic_declarations);
         wheres     = optional(where_clause);
         _          = left_curly;
-        variants   = zero_or_more_tailed_values(comma, enum_variant);
+        variants   = zero_or_more_tailed_values(comma, attributed(enum_variant));
         _          = right_curly;
     }, |pm: &mut Master, pt| Enum {
         extent: pm.state.ex(spt, pt),
@@ -3698,11 +3714,15 @@ fn p_enum<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Enum> {
 
 fn enum_variant<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, EnumVariant> {
     sequence!(pm, pt, {
-        spt        = point;
-        attributes = zero_or_more(attribute);
-        name       = ident;
-        body       = enum_variant_body;
-    }, |pm: &mut Master, pt| EnumVariant { extent: pm.state.ex(spt, pt), attributes, name, body, whitespace: Vec::new() })
+        spt  = point;
+        name = ident;
+        body = enum_variant_body;
+    }, |pm: &mut Master, pt| EnumVariant {
+        extent: pm.state.ex(spt, pt),
+        name,
+        body,
+        whitespace: Vec::new(),
+    })
 }
 
 fn enum_variant_body<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, EnumVariantBody> {
@@ -3731,7 +3751,7 @@ fn p_trait<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Trait> {
         bounds     = optional(generic_declaration_type_bounds);
         wheres     = optional(where_clause);
         _          = left_curly;
-        members    = zero_or_more(trait_impl_member);
+        members    = zero_or_more(attributed(trait_impl_member));
         _          = right_curly;
     }, |pm: &mut Master, pt| Trait {
         extent: pm.state.ex(spt, pt),
@@ -3752,7 +3772,6 @@ fn trait_impl_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Tra
         .one(map(trait_member_function, TraitMember::Function))
         .one(map(trait_member_type, TraitMember::Type))
         .one(map(trait_member_const, TraitMember::Const))
-        .one(map(attribute, TraitMember::Attribute))
         .finish()
 }
 
@@ -3895,7 +3914,7 @@ fn p_impl<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Impl> {
         kind      = p_impl_kind;
         wheres    = optional(where_clause);
         _         = left_curly;
-        body      = zero_or_more(impl_member);
+        body      = zero_or_more(attributed(impl_member));
         _         = right_curly;
     }, |pm: &mut Master, pt| Impl {
         extent: pm.state.ex(spt, pt),
@@ -3951,7 +3970,6 @@ fn type_or_wildcard<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Impl
 
 fn impl_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplMember> {
     pm.alternate(pt)
-        .one(map(attribute, ImplMember::Attribute))
         .one(map(impl_const, ImplMember::Const))
         .one(map(impl_function, ImplMember::Function))
         .one(map(impl_type, ImplMember::Type))
@@ -4058,14 +4076,13 @@ fn extern_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExternBl
         _       = kw_extern;
         abi     = optional(string_literal);
         _       = left_curly;
-        members = zero_or_more(extern_block_member);
+        members = zero_or_more(attributed(extern_block_member));
         _       = right_curly;
     }, |pm: &mut Master, pt| ExternBlock { extent: pm.state.ex(spt, pt), abi, members, whitespace: Vec::new() })
 }
 
 fn extern_block_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExternBlockMember> {
     pm.alternate(pt)
-        .one(map(attribute, ExternBlockMember::Attribute))
         .one(map(extern_block_static, ExternBlockMember::Static))
         .one(map(extern_block_member_function, ExternBlockMember::Function))
         .finish()
@@ -4249,17 +4266,17 @@ fn module<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Module> {
     }, |pm: &mut Master, pt| Module { extent: pm.state.ex(spt, pt), visibility, name, body, whitespace: Vec::new() })
 }
 
-fn module_body_or_not<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Option<Vec<Item>>> {
+fn module_body_or_not<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Option<Vec<Attributed<Item>>>> {
     pm.alternate(pt)
         .one(map(module_body, Some))
         .one(map(semicolon, |_| None))
         .finish()
 }
 
-fn module_body<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Vec<Item>> {
+fn module_body<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Vec<Attributed<Item>>> {
     sequence!(pm, pt, {
         _    = left_curly;
-        body = zero_or_more(item);
+        body = zero_or_more(attributed(item));
         _    = right_curly;
     }, |_, _| body)
 }
@@ -4533,9 +4550,9 @@ fn lifetime<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Lifetime> {
 }
 
 fn attributed<'s, F, T>(f: F) ->
-    impl FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, Attributed<T>>
+    impl Fn(&mut Master<'s>, Point<'s>) -> Progress<'s, Attributed<T>>
 where
-    F: FnOnce(&mut Master<'s>, Point<'s>) -> Progress<'s, T>
+    F: Fn(&mut Master<'s>, Point<'s>) -> Progress<'s, T>
 {
     move |pm, pt| {
         sequence!(pm, pt, {
@@ -4869,8 +4886,8 @@ mod test {
 
     #[test]
     fn item_extern_block_with_attribute() {
-        let p = qp(item, r#"extern { #[wow] }"#);
-        assert_extent!(p, (0, 17))
+        let p = qp(item, r#"extern { #[wow] static A: u8; }"#);
+        assert_extent!(p, (0, 31))
     }
 
     #[test]
