@@ -5,6 +5,8 @@ extern crate syn;
 #[macro_use]
 extern crate quote;
 
+use std::iter;
+
 use proc_macro::TokenStream;
 
 #[proc_macro_derive(Visit, attributes(visit))]
@@ -78,29 +80,26 @@ fn impl_visit_fields(ast: &syn::MacroInput) -> quote::Tokens {
 
     match ast.body {
         Body::Enum(ref e) => {
-            let enum_name = &ast.ident;
-
-            let mut q = quote! {};
-
-            q.append_all(e.iter().map(|variant| {
-                let variant_name = &variant.ident;
-                quote! { #enum_name::#variant_name(ref x) => x.visit(v), }
-            }));
+            let enum_name = iter::repeat(&ast.ident);
+            let variant_names = e.iter().map(|variant| &variant.ident);
 
             quote! {
                 match *self {
-                    #q
+                    #(#enum_name::#variant_names(ref x) => Visit::visit(x, v),)*
                 }
             }
         }
         Body::Struct(VariantData::Struct(ref fields)) |
         Body::Struct(VariantData::Tuple(ref fields)) => {
-            let mut q = quote! {};
-            q.append_all(fields.iter().enumerate().filter(|&(_, ref f)| !is_ignore_field(f)).map(|(i, f)| {
-                let field_name: syn::Ident = f.ident.clone().unwrap_or_else(|| i.into());
-                quote! { self.#field_name.visit(v); }
-            }));
-            q
+            let field_names = fields
+                .iter()
+                .enumerate()
+                .filter(|&(_, ref f)| !is_ignore_field(f))
+                .map(|(i, f)| f.ident.clone().unwrap_or_else(|| i.into()));
+
+            quote! {
+                #(Visit::visit(&self.#field_names, v);)*
+            }
         }
         Body::Struct(VariantData::Unit) => quote! {},
     }
@@ -241,18 +240,12 @@ fn impl_has_extent(ast: &syn::MacroInput) -> quote::Tokens {
 
     let body = match ast.body {
         Body::Enum(ref e) => {
-            let enum_name = &ast.ident;
-
-            let mut variants = quote! {};
-
-            variants.append_all(e.iter().map(|variant| {
-                let variant_name = &variant.ident;
-                quote! { #enum_name::#variant_name(ref x) => HasExtent::extent(x), }
-            }));
+            let enum_name = iter::repeat(&ast.ident);
+            let variant_names = e.iter().map(|variant| &variant.ident);
 
             quote! {
                 match *self {
-                    #variants
+                    #(#enum_name::#variant_names(ref x) => HasExtent::extent(x),)*
                 }
             }
         }
