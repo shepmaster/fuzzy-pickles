@@ -1728,6 +1728,7 @@ pub enum TraitMember {
     Const(TraitMemberConst),
     Function(TraitMemberFunction),
     Type(TraitMemberType),
+    MacroCall(MacroCall),
 }
 
 #[derive(Debug, HasExtent, Visit)]
@@ -3781,6 +3782,7 @@ fn trait_impl_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Tra
         .one(map(trait_member_function, TraitMember::Function))
         .one(map(trait_member_type, TraitMember::Type))
         .one(map(trait_member_const, TraitMember::Const))
+        .one(map(item_macro_call, TraitMember::MacroCall))
         .finish()
 }
 
@@ -4799,6 +4801,12 @@ mod test {
     fn item_trait_with_where_clause() {
         let p = qp(item, "trait Foo where A: B {}");
         assert_extent!(p, (0, 23))
+    }
+
+    #[test]
+    fn item_trait_with_macro() {
+        let p = qp(item, "trait Foo { bar!{} }");
+        assert_extent!(p, (0, 20))
     }
 
     #[test]
