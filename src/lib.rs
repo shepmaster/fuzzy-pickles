@@ -412,6 +412,7 @@ pub struct File {
 
 #[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum Item {
+    AttributeContaining(AttributeContaining),
     Const(Const),
     Enum(Enum),
     ExternCrate(Crate),
@@ -431,7 +432,12 @@ pub enum Item {
 #[derive(Debug, HasExtent, Visit)]
 pub struct Attribute {
     extent: Extent,
-    is_containing: Option<Extent>,
+    text: Extent,
+}
+
+#[derive(Debug, HasExtent, Visit)]
+pub struct AttributeContaining {
+    extent: Extent,
     text: Extent,
 }
 
@@ -2015,6 +2021,7 @@ pub trait Visitor {
     fn visit_ascription(&mut self, &Ascription) {}
     fn visit_associated_type(&mut self, &AssociatedType) {}
     fn visit_attribute(&mut self, &Attribute) {}
+    fn visit_attribute_containing(&mut self, &AttributeContaining) {}
     fn visit_attributed_enum_variant(&mut self, &Attributed<EnumVariant>) {}
     fn visit_attributed_expression(&mut self, &Attributed<Expression>) {}
     fn visit_attributed_extern_block_member(&mut self, &Attributed<ExternBlockMember>) {}
@@ -2198,6 +2205,7 @@ pub trait Visitor {
     fn exit_ascription(&mut self, &Ascription) {}
     fn exit_associated_type(&mut self, &AssociatedType) {}
     fn exit_attribute(&mut self, &Attribute) {}
+    fn exit_attribute_containing(&mut self, &AttributeContaining) {}
     fn exit_attributed_enum_variant(&mut self, &Attributed<EnumVariant>) {}
     fn exit_attributed_expression(&mut self, &Attributed<Expression>) {}
     fn exit_attributed_extern_block_member(&mut self, &Attributed<ExternBlockMember>) {}
@@ -2686,6 +2694,7 @@ pub fn peek<P, E, S, F, T>
 
 fn item<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Item> {
     pm.alternate(pt)
+        .one(map(attribute_containing, Item::AttributeContaining))
         .one(map(p_const, Item::Const))
         .one(map(extern_crate, Item::ExternCrate))
         .one(map(extern_block, Item::ExternBlock))
@@ -4011,17 +4020,6 @@ fn impl_const<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplConst>
 
 // TODO: optional could take E that is `into`, or just a different one
 
-fn attribute<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Attribute> {
-    sequence!(pm, pt, {
-        spt           = point;
-        _             = hash;
-        is_containing = optional(ext(bang));
-        _             = left_square;
-        text          = parse_nested_until(Token::is_left_square, Token::is_right_square);
-        _             = right_square;
-    }, |pm: &mut Master, pt| Attribute { extent: pm.state.ex(spt, pt), is_containing, text })
-}
-
 fn p_const<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Const> {
     sequence!(pm, pt, {
         spt        = point;
@@ -4567,6 +4565,27 @@ where
     }
 }
 
+fn attribute<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Attribute> {
+    sequence!(pm, pt, {
+        spt  = point;
+        _    = hash;
+        _    = left_square;
+        text = parse_nested_until(Token::is_left_square, Token::is_right_square);
+        _    = right_square;
+    }, |pm: &mut Master, pt| Attribute { extent: pm.state.ex(spt, pt), text })
+}
+
+fn attribute_containing<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, AttributeContaining> {
+    sequence!(pm, pt, {
+        spt  = point;
+        _    = hash;
+        _    = bang;
+        _    = left_square;
+        text = parse_nested_until(Token::is_left_square, Token::is_right_square);
+        _    = right_square;
+    }, |pm: &mut Master, pt| AttributeContaining { extent: pm.state.ex(spt, pt), text })
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -4888,6 +4907,12 @@ mod test {
     fn item_extern_block_with_attribute() {
         let p = qp(item, r#"extern { #[wow] static A: u8; }"#);
         assert_extent!(p, (0, 31))
+    }
+
+    #[test]
+    fn item_attribute_containing() {
+        let p = qp(item, r#"#![feature(sweet)]"#);
+        assert_extent!(p, (0, 18))
     }
 
     #[test]
