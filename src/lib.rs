@@ -941,8 +941,15 @@ pub struct TraitImplArgumentNamed {
     whitespace: Vec<Whitespace>,
 }
 
+#[derive(Debug, HasExtent, Visit)]
+pub struct Where {
+    extent: Extent,
+    higher_ranked_trait_bounds: Vec<Lifetime>,
+    kind: WhereKind,
+}
+
 #[derive(Debug, HasExtent, Visit, Decompose)]
-pub enum Where {
+pub enum WhereKind {
     Lifetime(WhereLifetime),
     Type(WhereType),
 }
@@ -2208,6 +2215,7 @@ pub trait Visitor {
     fn visit_value(&mut self, &Value) {}
     fn visit_visibility(&mut self, &Visibility) {}
     fn visit_where(&mut self, &Where) {}
+    fn visit_where_kind(&mut self, &WhereKind) {}
     fn visit_where_lifetime(&mut self, &WhereLifetime) {}
     fn visit_where_type(&mut self, &WhereType) {}
     fn visit_while(&mut self, &While) {}
@@ -2394,6 +2402,7 @@ pub trait Visitor {
     fn exit_value(&mut self, &Value) {}
     fn exit_visibility(&mut self, &Visibility) {}
     fn exit_where(&mut self, &Where) {}
+    fn exit_where_kind(&mut self, &WhereKind) {}
     fn exit_where_lifetime(&mut self, &WhereLifetime) {}
     fn exit_where_type(&mut self, &WhereType) {}
     fn exit_while(&mut self, &While) {}
@@ -3168,9 +3177,21 @@ fn where_clause<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Vec<Wher
 }
 
 fn where_clause_item<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Where> {
+    sequence!(pm, pt, {
+        spt   = point;
+        hrtbs = optional(higher_ranked_trait_bounds);
+        kind  = where_clause_kind;
+    }, |pm: &mut Master, pt|  Where {
+        extent: pm.state.ex(spt, pt),
+        higher_ranked_trait_bounds: hrtbs.unwrap_or_else(Vec::new),
+        kind,
+    })
+}
+
+fn where_clause_kind<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, WhereKind> {
     pm.alternate(pt)
-        .one(map(where_lifetime, Where::Lifetime))
-        .one(map(where_type, Where::Type))
+        .one(map(where_lifetime, WhereKind::Lifetime))
+        .one(map(where_type, WhereKind::Type))
         .finish()
 }
 
@@ -4384,12 +4405,20 @@ fn typ_higher_ranked_trait_bounds<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
 {
     sequence!(pm, pt, {
         spt       = point;
+        lifetimes = higher_ranked_trait_bounds;
+        child     = typ_higher_ranked_trait_bounds_child;
+    }, |pm: &mut Master, pt| TypeHigherRankedTraitBounds { extent: pm.state.ex(spt, pt), lifetimes, child, whitespace: Vec::new() })
+}
+
+fn higher_ranked_trait_bounds<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, Vec<Lifetime>>
+{
+    sequence!(pm, pt, {
         _         = kw_for;
         _         = left_angle;
         lifetimes = zero_or_more_tailed_values(comma, lifetime);
         _         = right_angle;
-        child     = typ_higher_ranked_trait_bounds_child;
-    }, |pm: &mut Master, pt| TypeHigherRankedTraitBounds { extent: pm.state.ex(spt, pt), lifetimes, child, whitespace: Vec::new() })
+    }, |_, _| lifetimes)
 }
 
 fn typ_higher_ranked_trait_bounds_child<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
@@ -5990,6 +6019,12 @@ mod test {
     fn where_clause_with_lifetimes() {
         let p = qp(where_clause_item, "'a: 'b + 'c");
         assert_extent!(p, (0, 11))
+    }
+
+    #[test]
+    fn where_clause_with_higher_ranked_trait_bounds() {
+        let p = qp(where_clause_item, "for<'a> [u8; 4]: Send");
+        assert_extent!(p, (0, 21))
     }
 
     #[test]
