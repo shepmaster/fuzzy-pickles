@@ -667,7 +667,7 @@ fn number_exponent_uppercase<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress
 fn whitespace<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     let ci = pt.s.chars();
     let idx = ci.take_while(|&c| {
-        c == ' ' || c == '\t' || c == '\r' || c == '\n'
+        c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\u{200e}' || c == '\u{200f}'
     }).map(|c| c.len_utf8()).sum();
 
     split_point_at_non_zero_offset(pt, idx, Error::ExpectedWhitespace).map(|(_, e)| e)
@@ -1136,6 +1136,12 @@ mod test {
 
         let s = unwrap_as!(toks[2], Token::Ident);
         assert_eq!(s, (2, 5));
+    }
+
+    #[test]
+    fn whitespace_unicode_direction_markers() {
+        let s = tokenize_as!("\u{200e}\u{200f}", Token::Whitespace);
+        assert_eq!(s, (0, 6))
     }
 
     #[test]
