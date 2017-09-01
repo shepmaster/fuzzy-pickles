@@ -721,9 +721,22 @@ pub struct AssociatedType {
 pub struct TypeFunction {
     extent: Extent,
     qualifiers: FunctionQualifiers,
-    arguments: Vec<TraitImplArgument>, // TODO: rename this indicating it doesn't require names
+    arguments: Vec<TypeFunctionArgument>,
     return_type: Option<Box<Type>>,
     whitespace: Vec<Whitespace>,
+}
+
+#[derive(Debug, HasExtent, Visit, Decompose)]
+pub enum TypeFunctionArgument {
+    Named(TypeFunctionArgumentNamed),
+    Variadic(Extent),
+}
+
+#[derive(Debug, HasExtent, Visit)]
+pub struct TypeFunctionArgumentNamed {
+    extent: Extent,
+    name: Option<Ident>,
+    typ: Type
 }
 
 #[derive(Debug, Copy, Clone, HasExtent, Visit)]
@@ -2166,6 +2179,8 @@ pub trait Visitor {
     fn visit_type_array(&mut self, &TypeArray) {}
     fn visit_type_disambiguation(&mut self, &TypeDisambiguation) {}
     fn visit_type_function(&mut self, &TypeFunction) {}
+    fn visit_type_function_argument(&mut self, &TypeFunctionArgument) {}
+    fn visit_type_function_argument_named(&mut self, &TypeFunctionArgumentNamed) {}
     fn visit_type_generics(&mut self, &TypeGenerics) {}
     fn visit_type_generics_angle(&mut self, &TypeGenericsAngle) {}
     fn visit_type_generics_angle_member(&mut self, &TypeGenericsAngleMember) {}
@@ -2350,6 +2365,8 @@ pub trait Visitor {
     fn exit_type_array(&mut self, &TypeArray) {}
     fn exit_type_disambiguation(&mut self, &TypeDisambiguation) {}
     fn exit_type_function(&mut self, &TypeFunction) {}
+    fn exit_type_function_argument(&mut self, &TypeFunctionArgument) {}
+    fn exit_type_function_argument_named(&mut self, &TypeFunctionArgumentNamed) {}
     fn exit_type_generics(&mut self, &TypeGenerics) {}
     fn exit_type_generics_angle(&mut self, &TypeGenericsAngle) {}
     fn exit_type_generics_angle_member(&mut self, &TypeGenericsAngleMember) {}
@@ -4532,7 +4549,10 @@ fn typ_function<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeFunc
         spt         = point;
         qualifiers  = function_qualifiers; // TODO: shouldn't allow const / default
         _           = kw_fn;
-        arguments   = trait_impl_function_arglist; // TODO: shouldn't allow `self`
+        _           = left_paren;
+        arguments   = zero_or_more_tailed_values(comma, typ_function_argument);
+        arguments   = zero_or_more_tailed_values_append(arguments, comma, typ_function_argument_variadic);
+        _           = right_paren;
         return_type = optional(function_return_type);
     }, |pm: &mut Master, pt| TypeFunction {
         extent: pm.state.ex(spt, pt),
@@ -4541,6 +4561,35 @@ fn typ_function<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeFunc
         return_type: return_type.map(Box::new),
         whitespace: Vec::new(),
     })
+}
+
+fn typ_function_argument<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, TypeFunctionArgument>
+{
+    sequence!(pm, pt, {
+        spt  = point;
+        name = optional(typ_function_argument_name);
+        typ  = typ;
+    }, |pm: &mut Master, pt| TypeFunctionArgument::Named(TypeFunctionArgumentNamed {
+        extent: pm.state.ex(spt, pt),
+        name,
+        typ,
+    }))
+}
+
+fn typ_function_argument_name<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, Ident>
+{
+    sequence!(pm, pt, {
+        name = ident;
+        _    = colon;
+    }, |_, _| name)
+}
+
+fn typ_function_argument_variadic<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, TypeFunctionArgument>
+{
+    map(triple_period, TypeFunctionArgument::Variadic)(pm, pt)
 }
 
 fn lifetime<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Lifetime> {
@@ -5717,6 +5766,12 @@ mod test {
     fn type_fn_with_extern_and_abi() {
         let p = qp(typ, r#"extern "C" fn()"#);
         assert_extent!(p, (0, 15))
+    }
+
+    #[test]
+    fn type_fn_with_variadic() {
+        let p = qp(typ, r#"fn(...)"#);
+        assert_extent!(p, (0, 7))
     }
 
     #[test]
