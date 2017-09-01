@@ -1834,6 +1834,7 @@ pub struct ImplType {
 #[derive(Debug, HasExtent, Visit)]
 pub struct ImplConst {
     extent: Extent,
+    visibility: Option<Visibility>,
     name: Ident,
     typ: Type,
     value: Attributed<Expression>,
@@ -4026,15 +4027,22 @@ fn impl_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplType> {
 
 fn impl_const<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplConst> {
     sequence!(pm, pt, {
-        spt   = point;
-        _     = kw_const;
-        name  = ident;
-        _     = colon;
-        typ   = typ;
-        _     = equals;
-        value = expression;
-        _     = semicolon;
-    }, |pm: &mut Master, pt| ImplConst { extent: pm.state.ex(spt, pt), name, typ, value, whitespace: Vec::new() })
+        spt        = point;
+        visibility = optional(visibility);
+        _          = kw_const;
+        name       = ident;
+        _          = colon;
+        typ        = typ;
+        _          = equals;
+        value      = expression;
+        _          = semicolon;
+    }, |pm: &mut Master, pt| ImplConst {
+        extent: pm.state.ex(spt, pt),
+        visibility, name,
+        typ,
+        value,
+        whitespace: Vec::new(),
+    })
 }
 
 // TODO: optional could take E that is `into`, or just a different one
@@ -5090,6 +5098,12 @@ mod test {
     fn impl_with_associated_const() {
         let p = qp(p_impl, "impl Foo { const A: i32 = 42; }");
         assert_extent!(p, (0, 31))
+    }
+
+    #[test]
+    fn impl_with_public_associated_const() {
+        let p = qp(p_impl, "impl Foo { pub(crate) const A: i32 = 42; }");
+        assert_extent!(p, (0, 42))
     }
 
     #[test]
