@@ -46,11 +46,19 @@ type Progress<'s, T> = peresil::Progress<Point<'s>, T, Error>;
 ///
 /// This has the nice benefit of getting our automatic rewind
 /// capability from the point and the grammar logic can stay clean.
-#[derive(Debug)]
 pub struct TokenPoint<'s, T: 's> {
     pub offset: usize,
     pub sub_offset: Option<u8>,
     pub s: &'s [T],
+}
+
+impl<'s, T: 's> fmt::Debug for TokenPoint<'s, T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.sub_offset {
+            Some(s) => write!(f, "TokenPoint {{ {}.{} }}", self.offset, s),
+            None => write!(f, "TokenPoint {{ {} }}", self.offset),
+        }
+    }
 }
 
 impl<'s, T: 's> TokenPoint<'s, T> {
