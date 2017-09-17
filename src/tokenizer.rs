@@ -905,15 +905,6 @@ mod test {
         })
     }
 
-    macro_rules! unwrap_as {
-        ($tok:expr, $p:path) => {
-            match $tok {
-                $p(s) => s,
-                _ => panic!("Not a {}: {:?}", stringify!($p), $tok),
-            }
-        }
-    }
-
     fn tok(s: &str) -> Vec<Token> {
         Tokens::new(s).collect::<Result<_, _>>().expect("Tokenization failed")
     }

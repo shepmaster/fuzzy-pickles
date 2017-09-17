@@ -220,19 +220,45 @@ enum OperatorKind {
     Postfix(OperatorPostfix),
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum Associativity {
+    Left,
+    Right,
+}
+
 type Precedence = u8;
 
 impl OperatorKind {
+    /// If the operator's precedence is less than that of the
+    /// operators at the top of the stack or the precedences are equal
+    /// and the operator is left associative, then that operator is
+    /// popped off the stack and added to the output
+    fn should_pop(&self, top_operator: &Self) -> bool {
+        if self.associativity() == Associativity::Left {
+            top_operator.precedence() >= self.precedence()
+        } else {
+            top_operator.precedence() > self.precedence()
+        }
+    }
+
+    fn associativity(&self) -> Associativity {
+        use self::OperatorKind::*;
+        use self::Associativity::*;
+
+        match *self {
+            Prefix(_) => Right,
+            Infix(_) => Left,
+            Postfix(_) => Left,
+        }
+    }
+
     fn precedence(&self) -> Precedence {
         use self::OperatorKind::*;
 
         match *self {
-            Prefix(_) => 20,
-            Infix(OperatorInfix::RangeExclusive(_)) => 9,
-            Infix(OperatorInfix::RangeInclusive(_)) => 9,
+            Prefix(_) => 10,
             Infix(_) => 10,
-            Postfix(OperatorPostfix::Call { .. }) => 10,
-            Postfix(_) => 20,
+            Postfix(_) => 10,
         }
     }
 }
@@ -517,11 +543,9 @@ impl<'s> ShuntingYard<'s> {
 
     fn apply_precedence(&mut self, pm: &Master, operator: &OperatorKind) -> ExprResult<'s, ()>  {
         //println!("About to push {:?}", operator);
-        let op_precedence = operator.precedence();
-        while self.operators.last().map_or(false, |&ShuntCar { value: ref top, .. }| top.precedence() > op_precedence) {
+        while self.operators.last().map_or(false, |&ShuntCar { value: ref top, .. }| operator.should_pop(top)) {
             let ShuntCar { value, spt, ept } = self.operators.pop()
                 .expect("Cannot pop operator that was just there");
-            //println!("Precedence current ({}) top ({})", value.precedence(), op_precedence);
             self.apply_one(pm, value, spt..ept)?;
         }
         Ok(())
@@ -801,11 +825,10 @@ impl<'s> ShuntingYard<'s> {
         ExprResult<'s, ()>
         where F: FnOnce(Extent, Attributed<Expression>) -> Expression
     {
-        let ShuntCar { value: expr, spt, ept: expr_ept } = self.pop_expression(op_range.start)?;
-        let ept = max(expr_ept, op_range.end);
-        let extent = pm.state.ex(spt, ept);
-        let new_expr = f(extent, expr);
-        self.result.push(ShuntCar { value: new_expr.into(), spt, ept });
+        let ShuntCar { value: expr, spt: expr_spt, .. } = self.pop_expression(op_range.start)?;
+        let extent_of_entire_expression = pm.state.ex(expr_spt, op_range.end);
+        let new_expr = f(extent_of_entire_expression, expr);
+        self.result.push(ShuntCar { value: new_expr.into(), spt: expr_spt, ept: op_range.end });
         Ok(())
     }
 
@@ -1504,41 +1527,100 @@ mod test {
 
     #[test]
     fn expr_field_access_name() {
-        let p = qp(expression, "foo.bar");
-        assert_extent!(p, (0, 7))
+        let e = qp(expression, "foo.bar");
+
+        let fa1 = unwrap_as!(e.value, Expression::FieldAccess);
+        assert_extent!(fa1, (0, 7));
+
+        let v2 = unwrap_as!(fa1.target.value, Expression::Value);
+        let fn2 = unwrap_as!(fa1.field, FieldName::Path);
+        assert_extent!(v2, (0, 3));
+        assert_extent!(fn2, (4, 7));
     }
 
     #[test]
     fn expr_field_access_number() {
-        let p = qp(expression, "foo.0");
-        assert_extent!(p, (0, 5))
+        let e = qp(expression, "foo.0");
+
+        let fa1 = unwrap_as!(e.value, Expression::FieldAccess);
+        assert_extent!(fa1, (0, 5));
+
+        let v2 = unwrap_as!(fa1.target.value, Expression::Value);
+        let fn2 = unwrap_as!(fa1.field, FieldName::Number);
+        assert_extent!(v2, (0, 3));
+        assert_extent!(fn2, (4, 5));
     }
 
     #[test]
     fn expr_field_access_multiple() {
-        let p = qp(expression, "foo.bar.baz");
-        assert_extent!(p, (0, 11))
+        let e = qp(expression, "foo.bar.baz");
+
+        let fa1 = unwrap_as!(e.value, Expression::FieldAccess);
+        assert_extent!(fa1, (0, 11));
+        assert_extent!(fa1.field, (8, 11));
+
+        let fa2 = unwrap_as!(fa1.target.value, Expression::FieldAccess);
+        assert_extent!(fa2, (0, 7));
+        assert_extent!(fa2.field, (4, 7));
+
+        let v3 = unwrap_as!(fa2.target.value, Expression::Value);
+        assert_extent!(v3, (0, 3));
     }
 
     #[test]
     fn expr_call_function() {
-        let p = qp(expression, "foo()");
-        assert!(p.is_call());
-        assert_extent!(p, (0, 5))
+        let e = qp(expression, "foo(a)");
+
+        let mut c1 = unwrap_as!(e.value, Expression::Call);
+        assert_extent!(c1, (0, 6));
+
+        let v2 = unwrap_as!(c1.target.value, Expression::Value);
+        let a2 = unwrap_as!(c1.args.remove(0).value, Expression::Value);
+        assert_extent!(v2, (0, 3));
+        assert_extent!(a2, (4, 5));
     }
 
     #[test]
     fn expr_call_method() {
-        let p = qp(expression, "foo.bar()");
-        assert!(p.is_call());
-        assert_extent!(p, (0, 9))
+        let e = qp(expression, "foo.bar(a)");
+
+        let mut c1 = unwrap_as!(e.value, Expression::Call);
+        assert_extent!(c1, (0, 10));
+
+        let fa2 = unwrap_as!(c1.target.value, Expression::FieldAccess);
+        let arg2 = unwrap_as!(c1.args.remove(0).value, Expression::Value);
+        assert_extent!(fa2, (0, 7));
+        assert_extent!(fa2.field, (4, 7));
+        assert_extent!(arg2, (8, 9));
+
+        let v3 = unwrap_as!(fa2.target.value, Expression::Value);
+        assert_extent!(v3, (0, 3));
     }
 
     #[test]
     fn expr_call_method_multiple() {
-        let p = qp(expression, "foo.bar().baz()");
-        assert!(p.is_call());
-        assert_extent!(p, (0, 15))
+        let e = qp(expression, "foo.bar(a).baz(b)");
+
+        let mut c1 = unwrap_as!(e.value, Expression::Call);
+        assert_extent!(c1, (0, 17));
+
+        let fa2 = unwrap_as!(c1.target.value, Expression::FieldAccess);
+        let arg2 = unwrap_as!(c1.args.remove(0).value, Expression::Value);
+        assert_extent!(fa2, (0, 14));
+        assert_extent!(fa2.field, (11, 14));
+        assert_extent!(arg2, (15, 16));
+
+        let mut c3 = unwrap_as!(fa2.target.value, Expression::Call);
+        assert_extent!(c3, (0, 10));
+
+        let fa4 = unwrap_as!(c3.target.value, Expression::FieldAccess);
+        let arg4 = unwrap_as!(c3.args.remove(0).value, Expression::Value);
+        assert_extent!(fa4, (0, 7));
+        assert_extent!(fa4.field, (4, 7));
+        assert_extent!(arg4, (8, 9));
+
+        let v5 = unwrap_as!(fa4.target.value, Expression::Value);
+        assert_extent!(v5, (0, 3));
     }
 
     #[test]
