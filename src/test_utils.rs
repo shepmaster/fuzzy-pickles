@@ -24,7 +24,7 @@ pub fn parse_full<'s, F, T>(f: F, s: &'s str) -> TestResult<T>
         t.is_whitespace() || t.is_comment() || t.is_doc_comment() || t.is_comment_block() || t.is_doc_comment_block()
     });
 
-    let mut pm = Master::with_state(State::new(&tokens));
+    let mut pm = Master::with_state(State::new());
     let pt = Point::new(&tokens);
     let r = f(&mut pm, pt);
     match pm.finish(r) {
