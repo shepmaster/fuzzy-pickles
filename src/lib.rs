@@ -389,7 +389,7 @@ pub fn parse_rust_file(file: &str) -> Result<File, ErrorDetail> {
 
 pub type Extent = (usize, usize);
 
-trait HasExtent {
+pub trait HasExtent {
     fn extent(&self) -> Extent;
 }
 
@@ -1194,7 +1194,7 @@ pub struct FieldAccess {
     field: FieldName,
 }
 
-#[derive(Debug, Decompose)]
+#[derive(Debug, HasExtent, Decompose)]
 pub enum FieldName {
     Path(PathComponent),
     Number(Extent),
