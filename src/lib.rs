@@ -16,7 +16,6 @@ pub mod tokenizer;
 mod expression;
 
 use std::collections::BTreeSet;
-use std::cmp::max;
 use std::fmt;
 
 use peresil::combinators::*;
