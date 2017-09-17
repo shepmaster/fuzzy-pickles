@@ -129,12 +129,41 @@ impl<'s> State<'s> {
     }
 
     fn ex(&self, start: Point, end: Point) -> Extent {
-        if end.offset > start.offset {
-            let (a, _) = self.tokens[start.offset].extent();
-            let (_, b) = self.tokens[end.offset-1].extent();
-            (a, b)
-        } else {
-            self.tokens[start.offset].extent()
+        use std::cmp::Ordering;
+
+        let start_offset = |pt: Point| -> usize {
+            let (a, _) = self.tokens[pt.offset].extent();
+            let a_x = pt.sub_offset.map_or(0, |x| x + 1) as usize;
+            a + a_x
+        };
+
+        let end_offset = |pt: Point| -> usize {
+            let (_, b) = self.tokens[pt.offset - 1].extent();
+            let b_x = pt.sub_offset.map_or(0, |x| x + 1) as usize;
+            b + b_x
+        };
+
+        match start.offset.cmp(&end.offset) {
+            Ordering::Less => {
+                let a = start_offset(start);
+                let b = end_offset(end);
+                (a, b)
+            }
+            Ordering::Equal => {
+                match start.sub_offset.cmp(&end.sub_offset) {
+                    Ordering::Less => {
+                        let a = start_offset(start);
+                        let b = start_offset(end);
+                        (a, b)
+                    }
+                    Ordering::Equal => {
+                        let a = start_offset(start);
+                        (a, a)
+                    }
+                    Ordering::Greater => panic!("points are backwards"),
+                }
+            }
+            Ordering::Greater => panic!("points are backwards"),
         }
     }
 }
