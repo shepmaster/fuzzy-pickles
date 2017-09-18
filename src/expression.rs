@@ -759,6 +759,13 @@ impl<'s> ShuntingYard<'s> {
         where F: FnOnce(Extent, Attributed<Expression>) -> Expression
     {
         let ShuntCar { value: expr, ept: expr_ept, .. } = self.pop_expression(op_range.start)?;
+
+        if op_range.start > expr_ept {
+            // We popped an expression from before the prefix
+            // operator; that means we ran out of input.
+            return Err((op_range.start, Error::ExpectedExpression));
+        }
+
         let extent_of_inner_expression = pm.state.ex(op_range.start, expr_ept);
         let value = f(extent_of_inner_expression, expr);
         let extent = (extent_of_prefix.0, extent_of_inner_expression.1);
@@ -2411,5 +2418,19 @@ mod test {
     fn match_arm_with_attribute() {
         let p = qp(match_arm, "#[cfg(cool)] _ => 1");
         assert_extent!(p, (0, 19))
+    }
+
+    #[test]
+    fn prefix_operator_with_missing_target() {
+        let (err_loc, _) = unwrap_progress_err(parse_full(expression, "*"));
+        assert_eq!(err_loc, 1);
+    }
+
+    #[test]
+    fn prefix_operator_with_missing_target_but_existing_expression() {
+        // `a` is pushed onto the stack as an expression which we try
+        // to pop off for the prefix dereference.
+        let (err_loc, _) = unwrap_progress_err(parse_full(expression, "a * *"));
+        assert_eq!(err_loc, 3);
     }
 }
