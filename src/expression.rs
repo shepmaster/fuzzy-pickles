@@ -2122,9 +2122,17 @@ mod test {
     }
 
     #[test]
-    fn expr_reference_double() {
-        let p = qp(expression, "&&foo");
-        assert_extent!(p, (0, 5))
+    fn expr_reference_of_reference() {
+        let e = qp(expression, "&&foo");
+
+        let r1 = unwrap_as!(e.value, Expression::Reference);
+        assert_extent!(r1, (0, 5));
+
+        let r2 = unwrap_as!(r1.target.value, Expression::Reference);
+        assert_extent!(r2, (1, 5));
+
+        let v3 = unwrap_as!(r2.target.value, Expression::Value);
+        assert_extent!(v3, (2, 5));
     }
 
     #[test]
