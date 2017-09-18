@@ -165,10 +165,10 @@ impl State {
                         let a = start_offset(start);
                         (a, a)
                     }
-                    Ordering::Greater => panic!("points are backwards"),
+                    Ordering::Greater => panic!("points are backwards ({:?}, {:?})", start, end),
                 }
             }
-            Ordering::Greater => panic!("points are backwards"),
+            Ordering::Greater => panic!("points are backwards ({:?}, {:?})", start, end),
         }
     }
 }
