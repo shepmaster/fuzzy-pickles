@@ -24,7 +24,7 @@ use tokenizer::{Token, Tokens};
 use expression::{expression, statement_expression, expr_byte, expr_byte_string, expr_macro_call};
 
 type Point<'s> = TokenPoint<'s, Token>;
-type Master<'s> = peresil::ParseMaster<Point<'s>, Error, State<'s>>;
+type Master<'s> = peresil::ParseMaster<Point<'s>, Error, State>;
 type Progress<'s, T> = peresil::Progress<Point<'s>, T, Error>;
 
 // ------
@@ -46,11 +46,19 @@ type Progress<'s, T> = peresil::Progress<Point<'s>, T, Error>;
 ///
 /// This has the nice benefit of getting our automatic rewind
 /// capability from the point and the grammar logic can stay clean.
-#[derive(Debug)]
 pub struct TokenPoint<'s, T: 's> {
     pub offset: usize,
     pub sub_offset: Option<u8>,
     pub s: &'s [T],
+}
+
+impl<'s, T: 's> fmt::Debug for TokenPoint<'s, T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.sub_offset {
+            Some(s) => write!(f, "TokenPoint {{ {}.{} }}", self.offset, s),
+            None => write!(f, "TokenPoint {{ {} }}", self.offset),
+        }
+    }
 }
 
 impl<'s, T: 's> TokenPoint<'s, T> {
@@ -110,35 +118,32 @@ impl<'s, T> Eq for TokenPoint<'s, T> {}
 // -----
 
 #[derive(Debug, Default)]
-pub struct State<'s> {
+pub struct State {
     expression_ambiguity: expression::ExpressionAmbiguity,
-
-    // When calculating the containing extent of an item, we need to
-    // look back one token. Since that's already gone, we bundle all
-    // the tokens around.
-    tokens: &'s [Token],
 }
 
-impl<'s> State<'s> {
-    #[allow(dead_code)]
-    fn new(tokens: &'s [Token]) -> Self {
-        State {
-            tokens,
-            ..State::default()
-        }
+impl State {
+    fn new() -> Self {
+        State::default()
     }
 
     fn ex(&self, start: Point, end: Point) -> Extent {
         use std::cmp::Ordering;
 
+        // When calculating the extent of an item, we need to look
+        // back one token from the end. Since that's already gone, we
+        // use the initial point.
+        let relative_tokens = start.s;
+
         let start_offset = |pt: Point| -> usize {
-            let (a, _) = self.tokens[pt.offset].extent();
+            let (a, _) = relative_tokens[0].extent();
             let a_x = pt.sub_offset.map_or(0, |x| x + 1) as usize;
             a + a_x
         };
 
         let end_offset = |pt: Point| -> usize {
-            let (_, b) = self.tokens[pt.offset - 1].extent();
+            let offset = pt.offset - start.offset - 1;
+            let (_, b) = relative_tokens[offset].extent();
             let b_x = pt.sub_offset.map_or(0, |x| x + 1) as usize;
             b + b_x
         };
@@ -380,7 +385,7 @@ pub fn parse_rust_file(file: &str) -> Result<File, ErrorDetail> {
     });
 
     let mut pt = Point::new(&tokens);
-    let mut pm = Master::with_state(State::new(&tokens));
+    let mut pm = Master::with_state(State::new());
     let mut items = Vec::new();
 
     loop {
