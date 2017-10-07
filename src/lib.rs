@@ -1631,6 +1631,7 @@ pub enum PatternKind {
     String(PatternString),
     Struct(PatternStruct),
     Tuple(PatternTuple),
+    Box(PatternBox)
 }
 
 #[derive(Debug, HasExtent, Visit)]
@@ -1759,6 +1760,13 @@ pub enum PatternRangeComponent {
 pub struct PatternReference {
     extent: Extent,
     is_mut: Option<Extent>,
+    pattern: Box<Pattern>,
+    whitespace: Vec<Whitespace>,
+}
+
+#[derive(Debug, HasExtent, Visit)]
+pub struct PatternBox {
+    extent: Extent,
     pattern: Box<Pattern>,
     whitespace: Vec<Whitespace>,
 }
@@ -2177,6 +2185,7 @@ pub trait Visitor {
     fn visit_pattern_struct_field_short(&mut self, &PatternStructFieldShort) {}
     fn visit_pattern_tuple(&mut self, &PatternTuple) {}
     fn visit_pattern_wildcard(&mut self, &PatternWildcard) {}
+    fn visit_pattern_box(&mut self, &PatternBox) {}
     fn visit_range(&mut self, &Range) {}
     fn visit_range_inclusive(&mut self, &RangeInclusive) {}
     fn visit_reference(&mut self, &Reference) {}
@@ -2364,6 +2373,7 @@ pub trait Visitor {
     fn exit_pattern_struct_field_short(&mut self, &PatternStructFieldShort) {}
     fn exit_pattern_tuple(&mut self, &PatternTuple) {}
     fn exit_pattern_wildcard(&mut self, &PatternWildcard) {}
+    fn exit_pattern_box(&mut self, &PatternBox) {}
     fn exit_range(&mut self, &Range) {}
     fn exit_range_inclusive(&mut self, &RangeInclusive) {}
     fn exit_reference(&mut self, &Reference) {}
@@ -2855,6 +2865,7 @@ shims! [
     (asterisk, Token::into_asterisk, Error::ExpectedAsterisk),
     (at, Token::into_at, Error::ExpectedAt),
     (bang, Token::into_bang, Error::ExpectedBang),
+    (box_pattern, Token::into_box, Error::ExpectedBox),
     (caret, Token::into_caret, Error::ExpectedCaret),
     (caret_equals, Token::into_caret_equals, Error::ExpectedCaretEquals),
     (colon, Token::into_colon, Error::ExpectedColon),
@@ -3492,6 +3503,7 @@ fn pattern_kind<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternK
         .one(map(pattern_tuple, PatternKind::Tuple))
         .one(map(pattern_slice, PatternKind::Slice))
         .one(map(pattern_macro_call, PatternKind::MacroCall))
+        .one(map(pattern_box, PatternKind::Box))
         // Must be last, otherwise it collides with struct names
         .one(map(pattern_ident, PatternKind::Ident))
         .finish()
@@ -3606,6 +3618,18 @@ fn pattern_reference<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Pat
         is_mut,
         pattern: Box::new(pattern),
         whitespace: Vec::new()
+    })
+}
+
+fn pattern_box<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternBox> {
+    sequence!(pm, pt, {
+        spt     = point;
+        _       = box_pattern;
+        pattern = pattern;
+    }, |pm: &mut Master, pt| PatternBox {
+        extent: pm.state.ex(spt, pt),
+        pattern: Box::new(pattern),
+        whitespace: Vec::new(),
     })
 }
 
@@ -5337,6 +5361,12 @@ mod test {
     }
 
     #[test]
+    fn fn_with_arguments_with_box_pattern() {
+        let p = qp(function_header, "fn foo(box a: Box<u8>)");
+        assert_extent!(p, (0, 22))
+    }
+
+    #[test]
     fn fn_with_return_type() {
         let p = qp(function_header, "fn foo() -> bool");
         assert_extent!(p, (0, 16))
@@ -5716,6 +5746,12 @@ mod test {
     fn pattern_with_macro_call() {
         let p = qp(pattern, "foo![]");
         assert_extent!(p, (0, 6))
+    }
+
+    #[test]
+    fn pattern_with_box() {
+        let p = qp(pattern, "box a");
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
