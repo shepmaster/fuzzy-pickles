@@ -541,7 +541,7 @@ fn ident_raw<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, (&'s str, 
         if UnicodeXID::is_xid_start(c) || c == '_' {
             idx += c.len_utf8();
 
-            idx += ci.take_while(|&c| UnicodeXID::is_xid_continue(c)).map(|c| c.len_utf8()).sum();
+            idx += ci.take_while(|&c| UnicodeXID::is_xid_continue(c)).map(|c| c.len_utf8()).sum::<usize>();
         }
     }
 
