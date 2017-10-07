@@ -1618,6 +1618,7 @@ pub struct PatternName {
 
 #[derive(Debug, HasExtent, Visit, Decompose)]
 pub enum PatternKind {
+    Box(PatternBox),
     Byte(PatternByte),
     ByteString(PatternByteString),
     Character(PatternCharacter),
@@ -1631,7 +1632,6 @@ pub enum PatternKind {
     String(PatternString),
     Struct(PatternStruct),
     Tuple(PatternTuple),
-    Box(PatternBox)
 }
 
 #[derive(Debug, HasExtent, Visit)]
@@ -2865,7 +2865,6 @@ shims! [
     (asterisk, Token::into_asterisk, Error::ExpectedAsterisk),
     (at, Token::into_at, Error::ExpectedAt),
     (bang, Token::into_bang, Error::ExpectedBang),
-    (box_pattern, Token::into_box, Error::ExpectedBox),
     (caret, Token::into_caret, Error::ExpectedCaret),
     (caret_equals, Token::into_caret_equals, Error::ExpectedCaretEquals),
     (colon, Token::into_colon, Error::ExpectedColon),
@@ -3624,7 +3623,7 @@ fn pattern_reference<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Pat
 fn pattern_box<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternBox> {
     sequence!(pm, pt, {
         spt     = point;
-        _       = box_pattern;
+        _       = kw_box;
         pattern = pattern;
     }, |pm: &mut Master, pt| PatternBox {
         extent: pm.state.ex(spt, pt),
@@ -5358,12 +5357,6 @@ mod test {
     fn fn_with_arguments_with_patterns() {
         let p = qp(function_header, "fn foo(&a: &u8)");
         assert_extent!(p, (0, 15))
-    }
-
-    #[test]
-    fn fn_with_arguments_with_box_pattern() {
-        let p = qp(function_header, "fn foo(box a: Box<u8>)");
-        assert_extent!(p, (0, 22))
     }
 
     #[test]
