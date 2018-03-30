@@ -9,7 +9,7 @@ use peresil::combinators::*;
 
 use super::*;
 
-pub fn expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+pub(crate) fn expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
     Progress<'s, Attributed<Expression>>
 {
     match expression_shunting_yard(pm, pt, |_, state| state) {
@@ -20,7 +20,7 @@ pub fn expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
 
 // Expressions that may be treated as a statement have special
 // restrictions on what is allowed to follow them
-pub fn statement_expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+pub(crate) fn statement_expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
     Progress<'s, Attributed<Expression>>
 {
     let r = expression_shunting_yard(pm, pt, |shunting_yard, state| {
@@ -846,7 +846,7 @@ impl<'s> ShuntingYard<'s> {
     }
 }
 
-pub fn expr_macro_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MacroCall> {
+pub(crate) fn expr_macro_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MacroCall> {
     sequence!(pm, pt, {
         spt  = point;
         name = ident;
@@ -1141,12 +1141,12 @@ fn expr_array_repeated<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, A
     })
 }
 
-pub fn expr_byte<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Byte> {
+pub(crate) fn expr_byte<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Byte> {
     byte(pm, pt)
         .map(|extent| Byte { extent, value: Character { extent, value: extent } }) // FIXME: value
 }
 
-pub fn expr_byte_string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ByteString> {
+pub(crate) fn expr_byte_string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ByteString> {
     pm.alternate(pt)
         .one(map(byte_string, |extent| {
             ByteString { extent, value: String { extent, value: extent } }  // FIXME: value

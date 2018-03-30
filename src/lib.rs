@@ -48,7 +48,7 @@ type Progress<'s, T> = peresil::Progress<Point<'s>, T, Error>;
 ///
 /// This has the nice benefit of getting our automatic rewind
 /// capability from the point and the grammar logic can stay clean.
-pub struct TokenPoint<'s, T: 's> {
+pub(crate) struct TokenPoint<'s, T: 's> {
     pub offset: usize,
     pub sub_offset: Option<u8>,
     pub s: &'s [T],
@@ -120,7 +120,7 @@ impl<'s, T> Eq for TokenPoint<'s, T> {}
 // -----
 
 #[derive(Debug, Default)]
-pub struct State {
+pub(crate) struct State {
     expression_ambiguity: expression::ExpressionAmbiguity,
 }
 
@@ -689,7 +689,7 @@ fn one_or_more_tailed_values<'s, S, F, T, U>(sep: S, f: F) ->
 }
 
 // TODO: generic enough to move to library?
-pub fn not<P, E, S, F, T>
+pub(crate) fn not<P, E, S, F, T>
     (parser: F, error: E)
      -> impl FnOnce(&mut peresil::ParseMaster<P, E, S>, P) -> peresil::Progress<P, (), E>
     where F: FnOnce(&mut peresil::ParseMaster<P, E, S>, P) -> peresil::Progress<P, T, E>,
@@ -709,7 +709,7 @@ pub fn not<P, E, S, F, T>
 }
 
 // TODO: generic enough to move to library?
-pub fn peek<P, E, S, F, T>
+pub(crate) fn peek<P, E, S, F, T>
     (parser: F)
      -> impl FnOnce(&mut peresil::ParseMaster<P, E, S>, P) -> peresil::Progress<P, T, E>
     where F: FnOnce(&mut peresil::ParseMaster<P, E, S>, P) -> peresil::Progress<P, T, E>,
