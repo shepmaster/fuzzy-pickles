@@ -4,7 +4,10 @@ use std::fs::File;
 use std::env;
 use std::io::prelude::*;
 
-use fuzzy_pickles::{Control, Visit, Visitor};
+use fuzzy_pickles::{
+    ast,
+    visit::{Control, Visit, Visitor},
+};
 
 #[derive(Debug, Default)]
 struct Stats {
@@ -12,7 +15,7 @@ struct Stats {
 }
 
 impl Visitor for Stats {
-    fn visit_statement(&mut self, _: &fuzzy_pickles::Statement) -> Control {
+    fn visit_statement(&mut self, _: &ast::Statement) -> Control {
         self.statements +=1;
         Control::Continue
     }
