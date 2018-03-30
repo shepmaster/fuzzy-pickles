@@ -17,7 +17,6 @@ pub mod tokenizer;
 pub mod visit;
 pub mod parser;
 
-use std::collections::BTreeSet;
 use std::fmt;
 
 pub type Extent = (usize, usize);
@@ -38,11 +37,10 @@ impl HasExtent for Extent {
     fn extent(&self) -> Extent { *self }
 }
 
-
 #[derive(Debug, PartialEq)]
 pub enum ErrorDetail {
     Tokenizer(tokenizer::ErrorDetail),
-    Parser(ParserErrorDetail),
+    Parser(parser::ErrorDetail),
 }
 
 impl ErrorDetail {
@@ -57,8 +55,8 @@ impl From<tokenizer::ErrorDetail> for ErrorDetail {
     }
 }
 
-impl From<ParserErrorDetail> for ErrorDetail {
-    fn from(other: ParserErrorDetail) -> Self {
+impl From<parser::ErrorDetail> for ErrorDetail {
+    fn from(other: parser::ErrorDetail) -> Self {
         ErrorDetail::Parser(other)
     }
 }
@@ -75,39 +73,6 @@ impl<'a> fmt::Display for ErrorDetailText<'a> {
             ErrorDetail::Tokenizer(ref t) => t.with_text(self.text).fmt(f),
             ErrorDetail::Parser(ref p) => p.with_text(self.text).fmt(f),
         }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct ParserErrorDetail {
-    location: usize,
-    errors: BTreeSet<parser::Error>,
-}
-
-impl ParserErrorDetail {
-    pub fn with_text<'a>(&'a self, text: &'a str) -> ParserErrorDetailText<'a> {
-        ParserErrorDetailText { detail: self, text }
-    }
-}
-
-#[derive(Debug)]
-pub struct ParserErrorDetailText<'a> {
-    detail: &'a ParserErrorDetail,
-    text: &'a str,
-}
-
-impl<'a> fmt::Display for ParserErrorDetailText<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let human = HumanTextError::new(self.text, self.detail.location);
-
-        writeln!(f, "Unable to parse text (line {}, column {})", human.line, human.column)?;
-        writeln!(f, "{}{}", human.head_of_line, human.tail_of_line)?;
-        writeln!(f, "{:>width$}", "^", width = human.column)?;
-        writeln!(f, "Expected:")?;
-        for e in &self.detail.errors {
-            writeln!(f, "  {:?}", e)?; // TODO: should be Display
-        }
-        Ok(())
     }
 }
 
@@ -162,7 +127,7 @@ pub fn parse_rust_file(file: &str) -> Result<ast::File, ErrorDetail> {
                 item.point
             },
             peresil::Status::Failure(e) => {
-                return Err(ErrorDetail::Parser(ParserErrorDetail {
+                return Err(ErrorDetail::Parser(parser::ErrorDetail {
                     location: tokens[item.point.offset].extent().0,
                     errors: e.into_iter().collect(),
                 }))

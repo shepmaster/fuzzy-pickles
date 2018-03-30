@@ -5,21 +5,24 @@ mod expression;
 #[macro_use]
 mod test_utils;
 
-use Extent;
+use {Extent, HumanTextError};
 use ast::*;
 use combinators::*;
-use self::combinators::*;
-use self::expression::{
-    expr_byte,
-    expr_byte_string,
-    expr_macro_call,
-    expression,
-    statement_expression,
+use self::{
+    combinators::*,
+    expression::{
+        expr_byte,
+        expr_byte_string,
+        expr_macro_call,
+        expression,
+        statement_expression,
+    },
 };
 use tokenizer::{self, Token};
 use peresil;
 use peresil::combinators::*;
 use std::{self, fmt};
+use std::collections::BTreeSet;
 
 pub(crate) type Point<'s> = TokenPoint<'s, Token>;
 pub(crate) type Master<'s> = peresil::ParseMaster<Point<'s>, Error, State>;
@@ -173,12 +176,13 @@ impl State {
 
 // define an error type - emphasis on errors. Need to implement Recoverable (more to discuss.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Error {
+pub(crate) enum Error {
     ExpectedAmpersand,
     ExpectedAmpersandEquals,
     ExpectedAs,
     ExpectedAsterisk,
     ExpectedAt,
+    #[allow(unused)]
     ExpectedBackslash,
     ExpectedBang,
     ExpectedBox,
@@ -196,6 +200,7 @@ pub enum Error {
     ExpectedCrate,
     ExpectedDefault,
     ExpectedDivideEquals,
+    #[allow(unused)]
     ExpectedDollar,
     ExpectedDoubleAmpersand,
     ExpectedDoubleColon,
@@ -258,6 +263,7 @@ pub enum Error {
     ExpectedStruct,
     ExpectedThickArrow,
     ExpectedThinArrow,
+    #[allow(unused)]
     ExpectedTilde,
     ExpectedTimesEquals,
     ExpectedTrait,
@@ -276,6 +282,39 @@ pub enum Error {
 
 impl peresil::Recoverable for Error {
     fn recoverable(&self) -> bool { true }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ErrorDetail {
+    pub(crate) location: usize,
+    pub(crate) errors: BTreeSet<Error>,
+}
+
+impl ErrorDetail {
+    pub fn with_text<'a>(&'a self, text: &'a str) -> ErrorDetailText<'a> {
+        ErrorDetailText { detail: self, text }
+    }
+}
+
+#[derive(Debug)]
+pub struct ErrorDetailText<'a> {
+    detail: &'a ErrorDetail,
+    text: &'a str,
+}
+
+impl<'a> fmt::Display for ErrorDetailText<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let human = HumanTextError::new(self.text, self.detail.location);
+
+        writeln!(f, "Unable to parse text (line {}, column {})", human.line, human.column)?;
+        writeln!(f, "{}{}", human.head_of_line, human.tail_of_line)?;
+        writeln!(f, "{:>width$}", "^", width = human.column)?;
+        writeln!(f, "Expected:")?;
+        for e in &self.detail.errors {
+            writeln!(f, "  {:?}", e)?; // TODO: should be Display
+        }
+        Ok(())
+    }
 }
 
 pub(crate) fn item<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Item> {
