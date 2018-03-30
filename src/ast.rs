@@ -1,24 +1,7 @@
 use std;
 
+use {Extent, HasExtent};
 use visit::{Visit, Visitor};
-
-pub type Extent = (usize, usize);
-
-pub trait HasExtent {
-    fn extent(&self) -> Extent;
-}
-
-impl<T: HasExtent> HasExtent for Box<T>{
-    fn extent(&self) -> Extent { (**self).extent() }
-}
-
-impl<'a, T: HasExtent> HasExtent for &'a T {
-    fn extent(&self) -> Extent { (**self).extent() }
-}
-
-impl HasExtent for Extent {
-    fn extent(&self) -> Extent { *self }
-}
 
 #[derive(Debug, Visit)]
 pub struct File {

@@ -1,4 +1,5 @@
 use ast::*;
+use Extent;
 
 pub trait Visit {
     fn visit<V>(&self, &mut V)

@@ -7,7 +7,11 @@
 use peresil;
 use peresil::combinators::*;
 
+use std;
+use Extent;
 use super::*;
+use ast::*;
+use tokenizer::Token;
 
 pub(crate) fn expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
     Progress<'s, Attributed<Expression>>
@@ -1426,7 +1430,7 @@ fn set_ambiguity_level<'s, F, T>(parser: F, level: ExpressionAmbiguity) ->
 #[cfg(test)]
 mod test {
     use super::*;
-    use test_utils::*;
+    use super::test_utils::*;
 
     #[test]
     fn expression_atom_can_have_attributes() {

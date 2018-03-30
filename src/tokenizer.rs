@@ -5,7 +5,8 @@ use unicode_xid::UnicodeXID;
 use peresil;
 use peresil::combinators::*;
 
-use super::{Extent, HumanTextError, not, peek};
+use ::{Extent, HumanTextError};
+use ::combinators::{not, peek};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Decompose)]
 pub enum Token {

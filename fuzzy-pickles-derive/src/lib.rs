@@ -244,7 +244,7 @@ fn impl_has_extent(ast: &syn::MacroInput) -> quote::Tokens {
 
             quote! {
                 match *self {
-                    #(#enum_name::#variant_names(ref x) => HasExtent::extent(x),)*
+                    #(#enum_name::#variant_names(ref x) => ::HasExtent::extent(x),)*
                 }
             }
         }
@@ -260,7 +260,7 @@ fn impl_has_extent(ast: &syn::MacroInput) -> quote::Tokens {
     };
 
     quote! {
-        impl HasExtent for #name {
+        impl ::HasExtent for #name {
             fn extent(&self) -> Extent {
                 #body
             }
