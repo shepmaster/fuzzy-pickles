@@ -1,5 +1,3 @@
-//#![feature(proc_macro)]
-
 extern crate proc_macro;
 extern crate syn;
 #[macro_use]
@@ -63,11 +61,11 @@ fn impl_visit(ast: &syn::MacroInput) -> quote::Tokens {
     let visit_fields = impl_visit_fields(ast);
 
     quote! {
-        impl Visit for #name {
+        impl ::visit::Visit for #name {
             fn visit<V>(&self, v: &mut V)
-                where V: Visitor
+                where V: ::visit::Visitor
             {
-                if Control::Continue == v.#method_name(self) {
+                if ::visit::Control::Continue == v.#method_name(self) {
                     #visit_fields;
                 }
                 v.#exit_method_name(self);
@@ -86,7 +84,7 @@ fn impl_visit_fields(ast: &syn::MacroInput) -> quote::Tokens {
 
             quote! {
                 match *self {
-                    #(#enum_name::#variant_names(ref x) => Visit::visit(x, v),)*
+                    #(#enum_name::#variant_names(ref x) => ::visit::Visit::visit(x, v),)*
                 }
             }
         }
@@ -99,7 +97,7 @@ fn impl_visit_fields(ast: &syn::MacroInput) -> quote::Tokens {
                 .map(|(i, f)| f.ident.clone().unwrap_or_else(|| i.into()));
 
             quote! {
-                #(Visit::visit(&self.#field_names, v);)*
+                #(::visit::Visit::visit(&self.#field_names, v);)*
             }
         }
         Body::Struct(VariantData::Unit) => quote! {},
@@ -246,7 +244,7 @@ fn impl_has_extent(ast: &syn::MacroInput) -> quote::Tokens {
 
             quote! {
                 match *self {
-                    #(#enum_name::#variant_names(ref x) => HasExtent::extent(x),)*
+                    #(#enum_name::#variant_names(ref x) => ::HasExtent::extent(x),)*
                 }
             }
         }
@@ -262,7 +260,7 @@ fn impl_has_extent(ast: &syn::MacroInput) -> quote::Tokens {
     };
 
     quote! {
-        impl HasExtent for #name {
+        impl ::HasExtent for #name {
             fn extent(&self) -> Extent {
                 #body
             }

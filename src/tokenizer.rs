@@ -5,7 +5,8 @@ use unicode_xid::UnicodeXID;
 use peresil;
 use peresil::combinators::*;
 
-use super::{Extent, HumanTextError, not, peek};
+use ::{Extent, HumanTextError};
+use ::combinators::{not, peek};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Decompose)]
 pub enum Token {
@@ -307,7 +308,7 @@ number!(NumberHexadecimal);
 number!(NumberOctal);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Error {
+pub(crate) enum Error {
     Literal(&'static str),
     ExpectedIdent,
     ExpectedNumber,
