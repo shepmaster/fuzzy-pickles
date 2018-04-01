@@ -267,6 +267,7 @@ pub trait Visitor {
     fn visit_union(&mut self, &Union) -> Control { Control::Continue }
     fn visit_unsafe_block(&mut self, &UnsafeBlock) -> Control { Control::Continue }
     fn visit_use(&mut self, &Use) -> Control { Control::Continue }
+    fn visit_use_path(&mut self, &UsePath) -> Control { Control::Continue }
     fn visit_use_tail(&mut self, &UseTail) -> Control { Control::Continue }
     fn visit_use_tail_glob(&mut self, &UseTailGlob) -> Control { Control::Continue }
     fn visit_use_tail_ident(&mut self, &UseTailIdent) -> Control { Control::Continue }
@@ -455,6 +456,7 @@ pub trait Visitor {
     fn exit_union(&mut self, &Union) {}
     fn exit_unsafe_block(&mut self, &UnsafeBlock) {}
     fn exit_use(&mut self, &Use) {}
+    fn exit_use_path(&mut self, &UsePath) {}
     fn exit_use_tail(&mut self, &UseTail) {}
     fn exit_use_tail_glob(&mut self, &UseTailGlob) {}
     fn exit_use_tail_ident(&mut self, &UseTailIdent) {}

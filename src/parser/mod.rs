@@ -1836,11 +1836,20 @@ fn p_use<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Use> {
         visibility = optional(visibility);
         _          = kw_use;
         _          = optional(double_colon);
-        path       = zero_or_more(use_path_component);
-        tail       = use_tail;
+        path       = use_path;
         _          = semicolon;
     }, move |pm: &mut Master, pt| {
-        Use { extent: pm.state.ex(spt, pt), visibility, path, tail, whitespace: Vec::new() }
+        Use { extent: pm.state.ex(spt, pt), visibility, path, whitespace: Vec::new() }
+    })
+}
+
+fn use_path<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, UsePath> {
+    sequence!(pm, pt, {
+        spt  = point;
+        path = zero_or_more(use_path_component);
+        tail = use_tail;
+    }, move |pm: &mut Master, pt| {
+        UsePath { extent: pm.state.ex(spt, pt), path, tail }
     })
 }
 
@@ -1885,9 +1894,9 @@ fn use_tail_multi<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, UseTai
     sequence!(pm, pt, {
         spt   = point;
         _     = left_curly;
-        names = zero_or_more_tailed_values(comma, use_tail_ident);
+        paths = zero_or_more_tailed_values(comma, use_path);
         _     = right_curly;
-    }, |pm: &mut Master, pt| UseTailMulti { extent: pm.state.ex(spt, pt), names })
+    }, |pm: &mut Master, pt| UseTailMulti { extent: pm.state.ex(spt, pt), paths })
 }
 
 fn type_alias<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeAlias> {
@@ -2335,6 +2344,12 @@ mod test {
     fn parse_use_with_multi_rename() {
         let p = qp(p_use, "use foo::{bar as a, baz as b};");
         assert_extent!(p, (0, 30))
+    }
+
+    #[test]
+    fn parse_use_with_nested() {
+        let p = qp(p_use, "use foo::{self, inner::{self, Type}};");
+        assert_extent!(p, (0, 37))
     }
 
     #[test]

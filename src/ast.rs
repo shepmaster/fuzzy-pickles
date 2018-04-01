@@ -61,9 +61,15 @@ pub struct Comment {
 pub struct Use {
     pub extent: Extent,
     pub visibility: Option<Visibility>,
+    pub path: UsePath,
+    pub whitespace: Vec<Whitespace>,
+}
+
+#[derive(Debug, HasExtent, Visit)]
+pub struct UsePath {
+    pub extent: Extent,
     pub path: Vec<Ident>,
     pub tail: UseTail,
-    pub whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, HasExtent, Visit, Decompose)]
@@ -88,7 +94,7 @@ pub struct UseTailGlob {
 #[derive(Debug, HasExtent, Visit)]
 pub struct UseTailMulti {
     pub extent: Extent,
-    pub names: Vec<UseTailIdent>,
+    pub paths: Vec<UsePath>,
 }
 
 #[derive(Debug, HasExtent, Visit)]
