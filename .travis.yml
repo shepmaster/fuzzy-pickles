@@ -5,4 +5,4 @@ sudo: false
 script:
 - cargo build --verbose
 - cargo test --verbose
-- cargo run --bin=stats src/lib.rs > /dev/null
+- cargo run --bin=stats $(git ls-files '*rs') > /dev/null
