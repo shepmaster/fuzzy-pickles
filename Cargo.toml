@@ -4,7 +4,7 @@ name = "fuzzy-pickles"
 version = "0.1.0"
 
 [workspace]
-members = ["stats"]
+members = ["stats", "tokenizer"]
 
 [dependencies]
 unicode-xid = "0.0.4"
