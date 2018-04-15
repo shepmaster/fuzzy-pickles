@@ -1347,6 +1347,7 @@ pub struct Trait {
     pub extent: Extent,
     pub visibility: Option<Visibility>,
     pub is_unsafe: Option<Extent>,
+    pub is_auto: Option<Extent>,
     pub name: Ident,
     pub generics: Option<GenericDeclarations>,
     pub bounds: Option<TraitBounds>,

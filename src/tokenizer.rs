@@ -71,6 +71,7 @@ pub enum Token {
 
     // Keywords
     As(Extent),
+    Auto(Extent),
     Box(Extent),
     Break(Extent),
     Const(Extent),
@@ -135,6 +136,7 @@ impl Token {
             As(s)                  |
             Asterisk(s)            |
             At(s)                  |
+            Auto(s)                |
             Backslash(s)           |
             Bang(s)                |
             Box(s)                 |
@@ -492,6 +494,7 @@ fn keyword_or_ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Toke
     ident_raw(pm, pt).map(|(s, extent)| {
         match s {
             "as" => Token::As(extent),
+            "auto" => Token::Auto(extent),
             "box" => Token::Box(extent),
             "break" => Token::Break(extent),
             "const" => Token::Const(extent),
