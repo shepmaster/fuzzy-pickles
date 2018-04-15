@@ -1080,27 +1080,52 @@ fn pattern_tuple<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Pattern
     sequence!(pm, pt, {
         spt     = point;
         _       = left_paren;
-        members = zero_or_more_tailed_values(comma, pattern_bundle_member);
+        members = zero_or_more_tailed_values(comma, pattern_tuple_member);
         _       = right_paren;
     }, |pm: &mut Master, pt| PatternTuple { extent: pm.state.ex(spt, pt), members })
+}
+
+fn pattern_tuple_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, PatternTupleMember>
+{
+    pm.alternate(pt)
+        .one(map(pattern, PatternTupleMember::Pattern))
+        .one(map(ext(double_period), PatternTupleMember::Wildcard))
+        .finish()
 }
 
 fn pattern_slice<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternSlice> {
     sequence!(pm, pt, {
         spt     = point;
         _       = left_square;
-        members = zero_or_more_tailed_values(comma, pattern_bundle_member);
+        members = zero_or_more_tailed_values(comma, pattern_slice_member);
         _       = right_square;
     }, |pm: &mut Master, pt| PatternSlice { extent: pm.state.ex(spt, pt), members })
 }
 
-fn pattern_bundle_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
-    Progress<'s, PatternBundleMember>
+fn pattern_slice_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, PatternSliceMember>
 {
     pm.alternate(pt)
-        .one(map(pattern, PatternBundleMember::Pattern))
-        .one(map(ext(double_period), PatternBundleMember::Wildcard))
+        .one(map(pattern_slice_subslice, PatternSliceMember::Subslice))
+        .one(map(pattern, PatternSliceMember::Pattern))
+        .one(map(ext(double_period), PatternSliceMember::Wildcard))
         .finish()
+}
+
+fn pattern_slice_subslice<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternSliceSubslice> {
+    sequence!(pm, pt, {
+        spt    = point;
+        is_ref = optional(kw_ref);
+        is_mut = optional(kw_mut);
+        name   = ident;
+        _      = double_period;
+    }, |pm: &mut Master, pt| PatternSliceSubslice {
+        extent: pm.state.ex(spt, pt),
+        is_ref,
+        is_mut,
+        name,
+    })
 }
 
 fn pattern_struct<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternStruct> {
@@ -3264,8 +3289,20 @@ mod test {
 
     #[test]
     fn pattern_with_slice() {
-        let p = qp(pattern, "[]");
-        assert_extent!(p, (0, 2))
+        let p = qp(pattern, "[a, b]");
+        assert_extent!(p, (0, 6))
+    }
+
+    #[test]
+    fn pattern_with_slice_and_subslices() {
+        let p = qp(pattern, "[a, b..]");
+        assert_extent!(p, (0, 8))
+    }
+
+    #[test]
+    fn pattern_with_slice_and_modified_subslices() {
+        let p = qp(pattern, "[a, ref mut b..]");
+        assert_extent!(p, (0, 16))
     }
 
     #[test]

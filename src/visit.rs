@@ -183,27 +183,29 @@ pub trait Visitor {
     fn visit_path_component(&mut self, &PathComponent) -> Control { Control::Continue }
     fn visit_pathed_ident(&mut self, &PathedIdent) -> Control { Control::Continue }
     fn visit_pattern(&mut self, &Pattern) -> Control { Control::Continue }
-    fn visit_pattern_name(&mut self, &PatternName) -> Control { Control::Continue }
-    fn visit_pattern_bundle_member(&mut self, &PatternBundleMember) -> Control { Control::Continue }
+    fn visit_pattern_box(&mut self, &PatternBox) -> Control { Control::Continue }
     fn visit_pattern_byte(&mut self, &PatternByte) -> Control { Control::Continue }
     fn visit_pattern_byte_string(&mut self, &PatternByteString) -> Control { Control::Continue }
     fn visit_pattern_character(&mut self, &PatternCharacter) -> Control { Control::Continue }
     fn visit_pattern_ident(&mut self, &PatternIdent) -> Control { Control::Continue }
     fn visit_pattern_kind(&mut self, &PatternKind) -> Control { Control::Continue }
     fn visit_pattern_macro_call(&mut self, &PatternMacroCall) -> Control { Control::Continue }
+    fn visit_pattern_name(&mut self, &PatternName) -> Control { Control::Continue }
     fn visit_pattern_number(&mut self, &PatternNumber) -> Control { Control::Continue }
     fn visit_pattern_range_exclusive(&mut self, &PatternRangeExclusive) -> Control { Control::Continue }
     fn visit_pattern_range_inclusive(&mut self, &PatternRangeInclusive) -> Control { Control::Continue }
     fn visit_pattern_reference(&mut self, &PatternReference) -> Control { Control::Continue }
     fn visit_pattern_slice(&mut self, &PatternSlice) -> Control { Control::Continue }
+    fn visit_pattern_slice_member(&mut self, &PatternSliceMember) -> Control { Control::Continue }
+    fn visit_pattern_slice_subslice(&mut self, &PatternSliceSubslice) -> Control { Control::Continue }
     fn visit_pattern_string(&mut self, &PatternString) -> Control { Control::Continue }
     fn visit_pattern_struct(&mut self, &PatternStruct) -> Control { Control::Continue }
     fn visit_pattern_struct_field(&mut self, &PatternStructField) -> Control { Control::Continue }
     fn visit_pattern_struct_field_long(&mut self, &PatternStructFieldLong) -> Control { Control::Continue }
     fn visit_pattern_struct_field_short(&mut self, &PatternStructFieldShort) -> Control { Control::Continue }
     fn visit_pattern_tuple(&mut self, &PatternTuple) -> Control { Control::Continue }
+    fn visit_pattern_tuple_member(&mut self, &PatternTupleMember) -> Control { Control::Continue }
     fn visit_pattern_wildcard(&mut self, &PatternWildcard) -> Control { Control::Continue }
-    fn visit_pattern_box(&mut self, &PatternBox) -> Control { Control::Continue }
     fn visit_range(&mut self, &Range) -> Control { Control::Continue }
     fn visit_range_inclusive(&mut self, &RangeInclusive) -> Control { Control::Continue }
     fn visit_reference(&mut self, &Reference) -> Control { Control::Continue }
@@ -373,7 +375,7 @@ pub trait Visitor {
     fn exit_path_component(&mut self, &PathComponent) {}
     fn exit_pathed_ident(&mut self, &PathedIdent) {}
     fn exit_pattern(&mut self, &Pattern) {}
-    fn exit_pattern_bundle_member(&mut self, &PatternBundleMember) {}
+    fn exit_pattern_box(&mut self, &PatternBox) {}
     fn exit_pattern_byte(&mut self, &PatternByte) {}
     fn exit_pattern_byte_string(&mut self, &PatternByteString) {}
     fn exit_pattern_character(&mut self, &PatternCharacter) {}
@@ -386,14 +388,16 @@ pub trait Visitor {
     fn exit_pattern_range_inclusive(&mut self, &PatternRangeInclusive) {}
     fn exit_pattern_reference(&mut self, &PatternReference) {}
     fn exit_pattern_slice(&mut self, &PatternSlice) {}
+    fn exit_pattern_slice_member(&mut self, &PatternSliceMember) {}
+    fn exit_pattern_slice_subslice(&mut self, &PatternSliceSubslice) {}
     fn exit_pattern_string(&mut self, &PatternString) {}
     fn exit_pattern_struct(&mut self, &PatternStruct) {}
     fn exit_pattern_struct_field(&mut self, &PatternStructField) {}
     fn exit_pattern_struct_field_long(&mut self, &PatternStructFieldLong) {}
     fn exit_pattern_struct_field_short(&mut self, &PatternStructFieldShort) {}
     fn exit_pattern_tuple(&mut self, &PatternTuple) {}
+    fn exit_pattern_tuple_member(&mut self, &PatternTupleMember) {}
     fn exit_pattern_wildcard(&mut self, &PatternWildcard) {}
-    fn exit_pattern_box(&mut self, &PatternBox) {}
     fn exit_range(&mut self, &Range) {}
     fn exit_range_inclusive(&mut self, &RangeInclusive) {}
     fn exit_reference(&mut self, &Reference) {}
