@@ -139,6 +139,7 @@ pub trait Visitor {
     fn visit_extern_block_member_function_argument_named(&mut self, &ExternBlockMemberFunctionArgumentNamed) -> Control { Control::Continue }
     fn visit_extern_block_member_function_argument_variadic(&mut self, &ExternBlockMemberFunctionArgumentVariadic) -> Control { Control::Continue }
     fn visit_extern_block_member_static(&mut self, &ExternBlockMemberStatic) -> Control { Control::Continue }
+    fn visit_extern_block_member_type(&mut self, &ExternBlockMemberType) -> Control { Control::Continue }
     fn visit_field_access(&mut self, &FieldAccess) -> Control { Control::Continue }
     fn visit_file(&mut self, &File) -> Control { Control::Continue }
     fn visit_for_loop(&mut self, &ForLoop) -> Control { Control::Continue }
@@ -328,6 +329,7 @@ pub trait Visitor {
     fn exit_extern_block_member_function_argument_named(&mut self, &ExternBlockMemberFunctionArgumentNamed) {}
     fn exit_extern_block_member_function_argument_variadic(&mut self, &ExternBlockMemberFunctionArgumentVariadic) {}
     fn exit_extern_block_member_static(&mut self, &ExternBlockMemberStatic) {}
+    fn exit_extern_block_member_type(&mut self, &ExternBlockMemberType) {}
     fn exit_field_access(&mut self, &FieldAccess) {}
     fn exit_file(&mut self, &File) {}
     fn exit_for_loop(&mut self, &ForLoop) {}

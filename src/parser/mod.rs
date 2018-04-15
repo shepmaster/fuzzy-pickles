@@ -1744,6 +1744,7 @@ fn extern_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExternBl
 fn extern_block_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExternBlockMember> {
     pm.alternate(pt)
         .one(map(extern_block_static, ExternBlockMember::Static))
+        .one(map(extern_block_type, ExternBlockMember::Type))
         .one(map(extern_block_member_function, ExternBlockMember::Function))
         .finish()
 }
@@ -1760,6 +1761,20 @@ fn extern_block_static<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, E
         typ        = typ;
         _          = semicolon;
     }, |pm: &mut Master, pt| ExternBlockMemberStatic { extent: pm.state.ex(spt, pt), visibility, is_mut, name, typ, whitespace: Vec::new() })
+}
+
+fn extern_block_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExternBlockMemberType> {
+    sequence!(pm, pt, {
+        spt        = point;
+        visibility = optional(visibility);
+        _          = kw_type;
+        name       = ident;
+        _          = semicolon;
+    }, |pm: &mut Master, pt| ExternBlockMemberType {
+        extent: pm.state.ex(spt, pt),
+        visibility,
+        name,
+    })
 }
 
 // TODO: Massively duplicated!!!
@@ -2639,12 +2654,6 @@ mod test {
     }
 
     #[test]
-    fn item_attribute_containing() {
-        let p = qp(item, r#"#![feature(sweet)]"#);
-        assert_extent!(p, (0, 18))
-    }
-
-    #[test]
     fn item_extern_block_with_static() {
         let p = qp(item, r#"extern { static FOO: u32; }"#);
         assert_extent!(p, (0, 27))
@@ -2654,6 +2663,24 @@ mod test {
     fn item_extern_block_with_static_and_qualifiers() {
         let p = qp(item, r#"extern { pub static mut FOO: u32; }"#);
         assert_extent!(p, (0, 35))
+    }
+
+    #[test]
+    fn item_extern_block_with_type() {
+        let p = qp(item, r#"extern { type opaque; }"#);
+        assert_extent!(p, (0, 23))
+    }
+
+    #[test]
+    fn item_extern_block_with_type_and_qualifiers() {
+        let p = qp(item, r#"extern { pub type opaque; }"#);
+        assert_extent!(p, (0, 27))
+    }
+
+    #[test]
+    fn item_attribute_containing() {
+        let p = qp(item, r#"#![feature(sweet)]"#);
+        assert_extent!(p, (0, 18))
     }
 
     #[test]
