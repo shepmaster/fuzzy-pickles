@@ -20,6 +20,9 @@ struct Cli {
     /// Don't output any statistics
     #[structopt(long = "check-only")]
     check_only: bool,
+    /// Report parsing failures, but do not exit on them
+    #[structopt(long = "keep-going")]
+    keep_going: bool,
     /// Pass multiple times for more detail
     #[structopt(long = "verbose", short = "v", parse(from_occurrences))]
     verbosity: u8,
@@ -53,7 +56,13 @@ main!(|args: Cli, log_level: verbosity| {
         let file = match fuzzy_pickles::parse_rust_file(&s) {
             Ok(file) => file,
             Err(detail) => {
-                bail!("Unable to parse {}\n{}", fname, detail.with_text(&s));
+                let message = format!("Unable to parse {}\n{}", fname, detail.with_text(&s));
+                if args.keep_going {
+                    eprintln!("{}", message);
+                    continue;
+                } else {
+                    bail!("{}", message);
+                }
             }
         };
 
