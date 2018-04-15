@@ -3,6 +3,6 @@ rust: nightly
 cache: cargo
 sudo: false
 script:
-- cargo build --verbose
-- cargo test --verbose
-- cargo run --bin=stats $(git ls-files '*rs') > /dev/null
+- cargo build --verbose --all
+- cargo test --verbose --all
+- cargo run -p stats -- -vv --check-only $(git ls-files '*rs')
