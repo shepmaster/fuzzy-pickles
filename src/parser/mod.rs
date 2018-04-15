@@ -182,6 +182,7 @@ pub(crate) enum Error {
     ExpectedAs,
     ExpectedAsterisk,
     ExpectedAt,
+    ExpectedAuto,
     #[allow(unused)]
     ExpectedBackslash,
     ExpectedBang,
@@ -369,6 +370,7 @@ shims! [
 
     // Keywords
     (kw_as, Token::into_as, Error::ExpectedAs),
+    (kw_auto, Token::into_auto, Error::ExpectedAuto),
     (kw_box, Token::into_box, Error::ExpectedBox),
     (kw_break, Token::into_break, Error::ExpectedBreak),
     (kw_const, Token::into_const, Error::ExpectedConst),
@@ -1404,6 +1406,7 @@ fn p_trait<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Trait> {
         spt        = point;
         visibility = optional(visibility);
         is_unsafe  = optional(kw_unsafe);
+        is_auto    = optional(kw_auto);
         _          = kw_trait;
         name       = ident;
         generics   = optional(generic_declarations);
@@ -1416,6 +1419,7 @@ fn p_trait<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Trait> {
         extent: pm.state.ex(spt, pt),
         visibility,
         is_unsafe,
+        is_auto,
         name,
         generics,
         bounds,
@@ -2416,6 +2420,12 @@ mod test {
     fn item_trait() {
         let p = qp(item, "trait Foo {}");
         assert_extent!(p, (0, 12))
+    }
+
+    #[test]
+    fn item_auto_trait() {
+        let p = qp(item, "auto trait Foo {}");
+        assert_extent!(p, (0, 17))
     }
 
     #[test]
