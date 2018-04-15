@@ -1482,6 +1482,7 @@ pub struct ExternBlock {
 pub enum ExternBlockMember {
     Function(ExternBlockMemberFunction),
     Static(ExternBlockMemberStatic),
+    Type(ExternBlockMemberType),
 }
 
 #[derive(Debug, HasExtent, Visit)]
@@ -1492,6 +1493,13 @@ pub struct ExternBlockMemberStatic {
     pub name: Ident,
     pub typ: Type,
     pub whitespace: Vec<Whitespace>,
+}
+
+#[derive(Debug, HasExtent, Visit)]
+pub struct ExternBlockMemberType {
+    pub extent: Extent,
+    pub visibility: Option<Visibility>,
+    pub name: Ident,
 }
 
 #[derive(Debug, HasExtent, Visit)]
