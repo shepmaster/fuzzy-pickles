@@ -208,6 +208,7 @@ pub(crate) enum Error {
     ExpectedDoubleEquals,
     ExpectedDoubleLeftAngle,
     ExpectedDoublePeriod,
+    ExpectedDoublePeriodEquals,
     ExpectedDoublePipe,
     ExpectedDoubleRightAngle,
     ExpectedElse,
@@ -431,6 +432,7 @@ shims! [
     (double_equals, Token::into_double_equals, Error::ExpectedDoubleEquals),
     (double_left_angle, Token::into_double_left_angle, Error::ExpectedDoubleLeftAngle),
     (double_period, Token::into_double_period, Error::ExpectedDoublePeriod),
+    (double_period_equals, Token::into_double_period_equals, Error::ExpectedDoublePeriodEquals),
     (double_pipe, Token::into_double_pipe, Error::ExpectedDoublePipe),
     (double_right_angle, Token::into_double_right_angle, Error::ExpectedDoubleRightAngle),
     (equals, Token::into_equals, Error::ExpectedEquals),
@@ -1204,17 +1206,27 @@ fn pattern_range_exclusive<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
     })
 }
 
+fn range_inclusive_operator<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, RangeInclusiveOperator>
+{
+    pm.alternate(pt)
+        .one(map(triple_period, RangeInclusiveOperator::Legacy))
+        .one(map(double_period_equals, RangeInclusiveOperator::Recommended))
+        .finish()
+}
+
 fn pattern_range_inclusive<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
     Progress<'s, PatternRangeInclusive>
 {
     sequence!(pm, pt, {
-        spt   = point;
-        start = pattern_range_component;
-        _     = triple_period;
-        end   = pattern_range_component;
+        spt      = point;
+        start    = pattern_range_component;
+        operator = range_inclusive_operator;
+        end      = pattern_range_component;
     }, |pm: &mut Master, pt| PatternRangeInclusive {
         extent: pm.state.ex(spt, pt),
         start,
+        operator,
         end,
         whitespace: Vec::new()
     })
@@ -3283,30 +3295,60 @@ mod test {
 
     #[test]
     fn pattern_with_numeric_inclusive_range() {
-        let p = qp(pattern, "1 ... 10");
+        let p = qp(pattern, "1 ..= 10");
         assert_extent!(p, (0, 8))
     }
 
     #[test]
     fn pattern_with_numeric_inclusive_range_negative() {
-        let p = qp(pattern, "-10 ... -1");
+        let p = qp(pattern, "-10 ..= -1");
         assert_extent!(p, (0, 10))
     }
 
     #[test]
     fn pattern_with_character_inclusive_range() {
-        let p = qp(pattern, "'a'...'z'");
+        let p = qp(pattern, "'a'..='z'");
         assert_extent!(p, (0, 9))
     }
 
     #[test]
     fn pattern_with_byte_inclusive_range() {
-        let p = qp(pattern, "b'a'...b'z'");
+        let p = qp(pattern, "b'a'..=b'z'");
         assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn pattern_with_pathed_ident_inclusive_range() {
+        let p = qp(pattern, "foo::a..=z");
+        assert_extent!(p, (0, 10))
+    }
+
+    #[test]
+    fn pattern_with_legacy_numeric_inclusive_range() {
+        let p = qp(pattern, "1 ... 10");
+        assert_extent!(p, (0, 8))
+    }
+
+    #[test]
+    fn pattern_with_legacy_numeric_inclusive_range_negative() {
+        let p = qp(pattern, "-10 ... -1");
+        assert_extent!(p, (0, 10))
+    }
+
+    #[test]
+    fn pattern_with_legacy_character_inclusive_range() {
+        let p = qp(pattern, "'a'...'z'");
+        assert_extent!(p, (0, 9))
+    }
+
+    #[test]
+    fn pattern_with_legacy_byte_inclusive_range() {
+        let p = qp(pattern, "b'a'...b'z'");
+        assert_extent!(p, (0, 11))
+    }
+
+    #[test]
+    fn pattern_with_legacy_pathed_ident_inclusive_range() {
         let p = qp(pattern, "foo::a...z");
         assert_extent!(p, (0, 10))
     }

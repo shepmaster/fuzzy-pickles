@@ -158,7 +158,7 @@ enum OperatorPrefix {
     Negate(Extent),
     Not(Extent),
     RangeExclusive(Extent),
-    RangeInclusive(Extent),
+    RangeInclusive(RangeInclusiveOperator),
     Reference { is_mutable: Option<Extent> },
 }
 
@@ -188,7 +188,7 @@ enum OperatorInfix {
     MulAssign(Extent),
     NotEqual(Extent),
     RangeExclusive(Extent),
-    RangeInclusive(Extent),
+    RangeInclusive(RangeInclusiveOperator),
     ShiftLeft(Extent),
     ShiftLeftAssign(Extent),
     ShiftRight(Extent),
@@ -303,7 +303,7 @@ fn operator_prefix<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
     pm.alternate(pt)
         .one(map(kw_box, OperatorPrefix::Box))
         // 3 characters
-        .one(map(triple_period, OperatorPrefix::RangeInclusive))
+        .one(map(range_inclusive_operator, OperatorPrefix::RangeInclusive))
         // 2 characters
         .one(map(double_period, OperatorPrefix::RangeExclusive))
         // 1 character
@@ -331,7 +331,7 @@ fn operator_infix<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
         // 3 characters
         .one(map(shift_left_equals, OperatorInfix::ShiftLeftAssign))
         .one(map(shift_right_equals, OperatorInfix::ShiftRightAssign))
-        .one(map(triple_period, OperatorInfix::RangeInclusive))
+        .one(map(range_inclusive_operator, OperatorInfix::RangeInclusive))
         // 2 characters
         .one(map(ampersand_equals, OperatorInfix::BitwiseAndAssign))
         .one(map(caret_equals, OperatorInfix::BitwiseXorAssign))
@@ -598,11 +598,12 @@ impl<'s> ShuntingYard<'s> {
                     })
                 })
             },
-            Prefix(Attributed { extent, attributes, value: OperatorPrefix::RangeInclusive(..) }) => {
+            Prefix(Attributed { extent, attributes, value: OperatorPrefix::RangeInclusive(operator) }) => {
                 self.apply_maybe_prefix(pm, op_range, extent, attributes, |extent, expr| {
                     Expression::RangeInclusive(RangeInclusive {
                         extent,
                         lhs: None,
+                        operator,
                         rhs: expr.map(Box::new),
                     })
                 })
@@ -653,11 +654,12 @@ impl<'s> ShuntingYard<'s> {
             Infix(OperatorInfix::Sub(..)) => self.apply_binary(pm, op_range, BinaryOp::Sub),
             Infix(OperatorInfix::SubAssign(..)) => self.apply_binary(pm, op_range, BinaryOp::SubAssign),
 
-            Infix(OperatorInfix::RangeInclusive(..)) => {
+            Infix(OperatorInfix::RangeInclusive(operator)) => {
                 self.apply_maybe_infix(pm, op_range, |extent, lhs, rhs| {
                     Expression::RangeInclusive(RangeInclusive {
                         extent,
                         lhs: Some(Box::new(lhs)),
+                        operator,
                         rhs: rhs.map(Box::new),
                     }).into()
                 })
@@ -1936,24 +1938,48 @@ mod test {
 
     #[test]
     fn expr_range_inclusive_both() {
-        let p = qp(expression, "1...2");
+        let p = qp(expression, "1..=2");
         assert_extent!(p, (0, 5))
     }
 
     #[test]
     fn expr_range_inclusive_left() {
-        let p = qp(expression, "3...");
+        let p = qp(expression, "3..=");
         assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn expr_range_inclusive_right() {
-        let p = qp(expression, "...4");
+        let p = qp(expression, "..=4");
         assert_extent!(p, (0, 4))
     }
 
     #[test]
     fn expr_range_inclusive_none() {
+        let p = qp(expression, "..=");
+        assert_extent!(p, (0, 3))
+    }
+
+    #[test]
+    fn expr_range_inclusive_legacy_both() {
+        let p = qp(expression, "1...2");
+        assert_extent!(p, (0, 5))
+    }
+
+    #[test]
+    fn expr_range_inclusive_legacy_left() {
+        let p = qp(expression, "3...");
+        assert_extent!(p, (0, 4))
+    }
+
+    #[test]
+    fn expr_range_inclusive_legacy_right() {
+        let p = qp(expression, "...4");
+        assert_extent!(p, (0, 4))
+    }
+
+    #[test]
+    fn expr_range_inclusive_legacy_none() {
         let p = qp(expression, "...");
         assert_extent!(p, (0, 3))
     }

@@ -42,6 +42,7 @@ pub enum Token {
     DoubleEquals(Extent),
     DoubleLeftAngle(Extent),
     DoublePeriod(Extent),
+    DoublePeriodEquals(Extent),
     DoublePipe(Extent),
     DoubleRightAngle(Extent),
     Equals(Extent),
@@ -164,6 +165,7 @@ impl Token {
             DoubleEquals(s)        |
             DoubleLeftAngle(s)     |
             DoublePeriod(s)        |
+            DoublePeriodEquals(s)  |
             DoublePipe(s)          |
             DoubleRightAngle(s)    |
             Else(s)                |
@@ -428,6 +430,7 @@ fn single_token<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token> {
         .one(map(literal(">>="), Token::ShiftRightEquals))
         .one(map(literal("<<="), Token::ShiftLeftEquals))
         .one(map(literal("..."), Token::TriplePeriod))
+        .one(map(literal("..="), Token::DoublePeriodEquals))
 
         // Symbols - 2 character
         .one(map(literal("!="), Token::NotEqual))
