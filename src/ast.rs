@@ -1033,7 +1033,15 @@ pub struct Range {
 pub struct RangeInclusive {
     pub extent: Extent,
     pub lhs: Option<Box<Attributed<Expression>>>,
+    #[visit(ignore)]
+    pub operator: RangeInclusiveOperator,
     pub rhs: Option<Box<Attributed<Expression>>>,
+}
+
+#[derive(Debug, HasExtent, Decompose)]
+pub enum RangeInclusiveOperator {
+    Legacy(Extent),
+    Recommended(Extent),
 }
 
 #[derive(Debug, HasExtent, Visit, Decompose)]
@@ -1315,6 +1323,8 @@ pub struct PatternRangeExclusive {
 pub struct PatternRangeInclusive {
     pub extent: Extent,
     pub start: PatternRangeComponent,
+    #[visit(ignore)]
+    pub operator: RangeInclusiveOperator,
     pub end: PatternRangeComponent,
     pub whitespace: Vec<Whitespace>,
 }
