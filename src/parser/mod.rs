@@ -882,8 +882,8 @@ fn block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Block> {
 
 fn statement<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Statement> {
     pm.alternate(pt)
-        .one(map(statement_expression, Statement::Expression))
         .one(map(attributed(item), Statement::Item))
+        .one(map(statement_expression, Statement::Expression))
         .one(map(statement_empty, Statement::Empty))
         .finish()
 }
@@ -3079,6 +3079,13 @@ mod test {
     fn statement_any_item() {
         let p = qp(statement, "struct Foo {}");
         assert_extent!(p, (0, 13))
+    }
+
+    #[test]
+    fn statement_union() {
+        // Since `union` is a weird contextual keyword, it's worth testing specially
+        let p = qp(statement, "union union { union: union }");
+        assert_extent!(p, (0, 28))
     }
 
     #[test]
