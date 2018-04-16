@@ -1254,19 +1254,34 @@ pub struct PatternStructFieldShort {
 #[derive(Debug, HasExtent, Visit)]
 pub struct PatternTuple {
     pub extent: Extent,
-    pub members: Vec<PatternBundleMember>,
+    pub members: Vec<PatternTupleMember>,
+}
+
+#[derive(Debug, HasExtent, Visit, Decompose)]
+pub enum PatternTupleMember {
+    Pattern(Pattern),
+    Wildcard(Extent),
 }
 
 #[derive(Debug, HasExtent, Visit)]
 pub struct PatternSlice {
     pub extent: Extent,
-    pub members: Vec<PatternBundleMember>,
+    pub members: Vec<PatternSliceMember>,
 }
 
 #[derive(Debug, HasExtent, Visit, Decompose)]
-pub enum PatternBundleMember {
+pub enum PatternSliceMember {
     Pattern(Pattern),
+    Subslice(PatternSliceSubslice),
     Wildcard(Extent),
+}
+
+#[derive(Debug, HasExtent, Visit)]
+pub struct PatternSliceSubslice {
+    pub extent: Extent,
+    pub is_ref: Option<Extent>,
+    pub is_mut: Option<Extent>,
+    pub name: Ident,
 }
 
 #[derive(Debug, HasExtent, Visit)]
