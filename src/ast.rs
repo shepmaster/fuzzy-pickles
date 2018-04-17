@@ -1,8 +1,15 @@
+//! The components of a Rust Abstract Syntax Tree (AST)
+
+// Potential cleanups:
+//
+// - Split expressions, patterns, types into separate modules?
+
 use std;
 
 use {Extent, HasExtent};
 use visit::{Visit, Visitor};
 
+/// An entire Rust file
 #[derive(Debug, Visit)]
 pub struct File {
     pub items: Vec<Attributed<Item>>,
@@ -27,18 +34,39 @@ pub enum Item {
     Union(Union),
 }
 
+/// An attribute that applies to the subsequent element
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// #[derive(Debug)]
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Attribute {
     pub extent: Extent,
     pub text: Extent,
 }
 
+/// An attribute that applies to the containing element
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// #![feature(nll)]
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct AttributeContaining {
     pub extent: Extent,
     pub text: Extent,
 }
 
+/// A lifetime identifier
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// 'static
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Lifetime {
     pub extent: Extent,
@@ -51,12 +79,26 @@ pub enum Whitespace {
     Whitespace(Extent),
 }
 
+/// A single-line comment
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// // Hello, world!
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Comment {
     pub extent: Extent,
     pub text: Extent,
 }
 
+/// A `use` item
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// use std::collections::HashMap;
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Use {
     pub extent: Extent,
@@ -65,6 +107,14 @@ pub struct Use {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// The names imported by the `use` item
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// use std::collections::HashMap;
+/// //  ^^^^^^^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct UsePath {
     pub extent: Extent,
@@ -79,6 +129,14 @@ pub enum UseTail {
     Multi(UseTailMulti),
 }
 
+/// A single name imported by the `use` item
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// use std::collections::HashMap;
+/// //                    ^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct UseTailIdent {
     pub extent: Extent,
@@ -86,17 +144,42 @@ pub struct UseTailIdent {
     pub rename: Option<Ident>,
 }
 
+/// A wildcard name imported by the `use` item
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// use std::collections::*;
+/// //                    ^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct UseTailGlob {
     pub extent: Extent,
 }
 
+/// A collection of names imported by the `use` item
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// use std::collections::{BTreeMap, HashMap};
+/// //                    ^^^^^^^^^^^^^^^^^^^
+/// ```
+// TODO: rename to "collection"?
 #[derive(Debug, HasExtent, Visit)]
 pub struct UseTailMulti {
     pub extent: Extent,
     pub paths: Vec<UsePath>,
 }
 
+/// A function definition
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn hello() {}
+/// ```
+// TODO: rename to "function definition"?
 #[derive(Debug, HasExtent, Visit)]
 pub struct Function {
     pub extent: Extent,
@@ -105,6 +188,16 @@ pub struct Function {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A function definition's signature
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+///     pub fn hello(x: i32) -> bool { false }
+/// //  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/// ```
+// TODO: rename to "function signature"?
+// TODO: are we allowing `self` in free functions?
 #[derive(Debug, HasExtent, Visit)]
 pub struct FunctionHeader {
     pub extent: Extent,
@@ -118,16 +211,34 @@ pub struct FunctionHeader {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// Qualifiers that apply to functions
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+///     const unsafe extern "C" fn example() {}
+/// //  ^^^^^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct FunctionQualifiers {
     pub extent: Extent,
+    // TODO: do we allow parsing this on a free function?
     pub is_default: Option<Extent>,
     pub is_const: Option<Extent>,
     pub is_unsafe: Option<Extent>,
     pub is_extern: Option<Extent>,
+    // TODO: abi should be predicated on `extern` being present
     pub abi: Option<String>,
 }
 
+/// The signature of a function in a trait declaration
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// pub trait Monster { fn roar(&self) {} }
+/// //                  ^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TraitImplFunctionHeader {
     pub extent: Extent,
@@ -141,6 +252,15 @@ pub struct TraitImplFunctionHeader {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// Generic lifetime and type parameters
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// struct A<'a, T> {}
+/// //      ^^^^^^^
+/// ```
+// TODO: rename to "parameters"?
 #[derive(Debug, HasExtent, Visit)]
 pub struct GenericDeclarations {
     pub extent: Extent,
@@ -148,6 +268,14 @@ pub struct GenericDeclarations {
     pub types: Vec<Attributed<GenericDeclarationType>>,
 }
 
+/// Generic lifetime parameters
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// struct A<'a, 'b: 'a> {}
+/// //       ^^  ^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct GenericDeclarationLifetime {
     pub extent: Extent,
@@ -155,6 +283,14 @@ pub struct GenericDeclarationLifetime {
     pub bounds: Vec<Lifetime>,
 }
 
+/// Generic type parameters
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// struct A<T, U: Debug, V = i32> {}
+/// //       ^  ^^^^^^^^  ^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct GenericDeclarationType {
     pub extent: Extent,
@@ -163,6 +299,16 @@ pub struct GenericDeclarationType {
     pub default: Option<Type>,
 }
 
+/// A concrete type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a(_: i32, _: [bool; 4]) -> Option<(f32, f64)>
+/// //      ^^^      ^^^^                 ^^^  ^^^
+/// //              ^^^^^^^^^            ^^^^^^^^^^
+/// //                            ^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Type {
     pub extent: Extent,
@@ -185,6 +331,14 @@ pub enum TypeKind {
     Uninhabited(Extent),
 }
 
+/// A reference in a type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() -> &'a mut i32 {}
+/// //        ^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TypeReference {
     pub extent: Extent,
@@ -192,6 +346,15 @@ pub struct TypeReference {
     pub typ: Box<Type>,
 }
 
+/// The qualifiers for a reference in a type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() -> &'a mut i32 {}
+/// //        ^^^^^^^
+/// ```
+// TODO: rename to qualifiers?
 #[derive(Debug, HasExtent, Visit)]
 pub struct TypeReferenceKind {
     pub extent: Extent,
@@ -200,6 +363,14 @@ pub struct TypeReferenceKind {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A pointer in a type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() -> *const bool {}
+/// //        ^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TypePointer {
     pub extent: Extent,
@@ -214,6 +385,14 @@ pub enum TypePointerKind {
     Mutable,
 }
 
+/// An array in a type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() -> [u8; 16] {}
+/// //        ^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TypeArray {
     pub extent: Extent,
@@ -222,6 +401,14 @@ pub struct TypeArray {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A type with a higher-ranked trait bound
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() -> for<'a> &'a i16 {}
+/// //        ^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TypeHigherRankedTraitBounds {
     pub extent: Extent,
@@ -237,6 +424,14 @@ pub enum TypeHigherRankedTraitBoundsChild {
     Reference(TypeReference),
 }
 
+/// An unnamed implementation of a trait
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() -> impl Iterator<Item = u8> {}
+/// //        ^^^^^^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TypeImplTrait {
     pub extent: Extent,
@@ -250,12 +445,28 @@ pub enum TypeAdditional {
     Lifetime(Lifetime),
 }
 
+/// A named type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() -> ::std::collections::HashMap<u8, u8> {}
+/// //        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TypeNamed {
     pub extent: Extent,
     pub path: Vec<TypeNamedComponent>,
 }
 
+/// A component of a named type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() -> ::std::collections::HashMap<u8, u8> {}
+/// //          ^^^  ^^^^^^^^^^^  ^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TypeNamedComponent {
     pub extent: Extent,
@@ -263,6 +474,14 @@ pub struct TypeNamedComponent {
     pub generics: Option<TypeGenerics>,
 }
 
+/// A disambiguation of a type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() -> <Vec<u8> as IntoIterator>::Item {}
+/// //        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TypeDisambiguation {
     pub extent: Extent,
@@ -272,6 +491,14 @@ pub struct TypeDisambiguation {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A slice as a type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() -> &[u8] {}
+/// //         ^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TypeSlice {
     pub extent: Extent,
@@ -279,6 +506,14 @@ pub struct TypeSlice {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A tuple as a type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() -> (i32, u8) {}
+/// //        ^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TypeTuple {
     pub extent: Extent,
@@ -291,6 +526,15 @@ pub enum TypeGenerics {
     Angle(TypeGenericsAngle),
 }
 
+/// Generic parameter declarations in a function style
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() -> Fn(i32) -> bool {}
+/// //          ^^^^^^^^^^^^^
+/// ```
+// TODO: rename to "parameters" / "declaration"?
 #[derive(Debug, HasExtent, Visit)]
 pub struct TypeGenericsFunction {
     pub extent: Extent,
@@ -299,6 +543,14 @@ pub struct TypeGenericsFunction {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// Generic parameter declarations in the basic style
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() -> HashMap<i32, u8> {}
+/// //               ^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TypeGenericsAngle {
     pub extent: Extent,
@@ -313,6 +565,15 @@ pub enum TypeGenericsAngleMember {
     AssociatedType(AssociatedType)
 }
 
+/// An associated item in a type with generics
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() -> impl Iterator<Item = bool> {}
+/// //                      ^^^^^^^^^^^
+/// ```
+// TODO: add "type" to the name?
 #[derive(Debug, HasExtent, Visit)]
 pub struct AssociatedType {
     pub extent: Extent,
@@ -321,6 +582,14 @@ pub struct AssociatedType {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A function pointer as a type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() -> fn(i8) -> bool {}
+/// //        ^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TypeFunction {
     pub extent: Extent,
@@ -336,6 +605,14 @@ pub enum TypeFunctionArgument {
     Variadic(Extent),
 }
 
+/// The named argument of a function pointer
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() -> fn(a: i32) {}
+/// //           ^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TypeFunctionArgumentNamed {
     pub extent: Extent,
@@ -343,18 +620,43 @@ pub struct TypeFunctionArgumentNamed {
     pub typ: Type
 }
 
+/// A single identifier
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn main() {}
+/// // ^^^^
+/// ```
 #[derive(Debug, Copy, Clone, HasExtent, Visit)]
 pub struct Ident {
     pub extent: Extent,
 }
 
-// TODO: Can we reuse the path from the `use` statement?
+/// The path that an item is visible in
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// pub(in foo) struct A;
+/// //     ^^^
+/// ```
+// TODO: make this a more specific name; `Path` is overly generic for this usage
 #[derive(Debug, HasExtent, Visit)]
 pub struct Path {
     pub extent: Extent,
+    // TODO: Can we reuse the path from the `use` statement?
     pub components: Vec<Ident>,
 }
 
+/// A module-qualified identifier
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { ::std::thread::spawn(); }
+/// //       ^^^^^^^^^^^^^^^^^^^^
+/// ```
 // TODO: Can we reuse the path from the `use` statement?
 #[derive(Debug, HasExtent, Visit)]
 pub struct PathedIdent {
@@ -362,6 +664,14 @@ pub struct PathedIdent {
     pub components: Vec<PathComponent>,
 }
 
+/// A component of a module-qualified identifier
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { ::std::thread::spawn(); }
+/// //         ^^^  ^^^^^^  ^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct PathComponent {
     pub extent: Extent,
@@ -369,6 +679,14 @@ pub struct PathComponent {
     pub turbofish: Option<Turbofish>,
 }
 
+/// Allows specifying concrete types
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { None::<u8>; }
+/// //           ^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Turbofish {
     pub extent: Extent,
@@ -384,6 +702,13 @@ impl From<Ident> for PathedIdent {
     }
 }
 
+/// A constant value
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// pub const NAME: &str = "Rust";
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Const {
     pub extent: Extent,
@@ -394,6 +719,13 @@ pub struct Const {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A static value
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// pub static NAME: &str = "Rust";
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Static {
     pub extent: Extent,
@@ -405,6 +737,14 @@ pub struct Static {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A struct definition
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// pub struct A { count: i32 }
+/// ```
+// TODO: rename to "definition"?
 #[derive(Debug, HasExtent, Visit)]
 pub struct Struct {
     pub extent: Extent,
@@ -423,6 +763,14 @@ pub enum StructDefinitionBody {
     Empty(Extent),
 }
 
+/// A struct defined using curly braces
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// struct A { count: i32 }
+/// //       ^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct StructDefinitionBodyBrace {
     pub extent: Extent,
@@ -430,6 +778,14 @@ pub struct StructDefinitionBodyBrace {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A named field of a struct
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// struct A { pub count: i32 }
+/// //         ^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct StructDefinitionFieldNamed {
     pub extent: Extent,
@@ -439,6 +795,14 @@ pub struct StructDefinitionFieldNamed {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A struct defined using parenthesis
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// struct Meters(u32);
+/// //           ^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct StructDefinitionBodyTuple {
     pub extent: Extent,
@@ -446,6 +810,14 @@ pub struct StructDefinitionBodyTuple {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// An unnamed field of a struct
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// struct Meters(pub u32);
+/// //            ^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct StructDefinitionFieldUnnamed {
     pub extent: Extent,
@@ -453,6 +825,13 @@ pub struct StructDefinitionFieldUnnamed {
     pub typ: Type,
 }
 
+/// A union definition
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// union Bits { big: u32, little: [u8; 4] }
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Union {
     pub extent: Extent,
@@ -464,6 +843,13 @@ pub struct Union {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// An enumeration of multiple types
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// pub enum Option<T> { Some(T), None }
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Enum {
     pub extent: Extent,
@@ -475,6 +861,14 @@ pub struct Enum {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A single member of an enum
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// pub enum Option<T> { Some(T), None }
+/// //                   ^^^^^^^  ^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct EnumVariant {
     pub extent: Extent,
@@ -483,14 +877,14 @@ pub struct EnumVariant {
     pub whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)] // HasExtent?
+#[derive(Debug, Visit, Decompose)] // TODO: HasExtent?
 pub enum EnumVariantBody {
     Tuple(Vec<Attributed<StructDefinitionFieldUnnamed>>),
     Struct(StructDefinitionBodyBrace),
     Unit(Option<Attributed<Expression>>),
 }
 
-#[derive(Debug, Visit, Decompose)] // HasExtent?
+#[derive(Debug, Visit, Decompose)] // TODO: HasExtent?
 pub enum Argument {
     SelfArgument(SelfArgument),
     Named(NamedArgument),
@@ -502,6 +896,14 @@ pub enum SelfArgument {
     Shorthand(SelfArgumentShorthand),
 }
 
+/// The `self` argument with an explicit type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// impl A { fn b(self: Box<Self>) {} }
+/// //            ^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct SelfArgumentLonghand {
     pub extent: Extent,
@@ -511,6 +913,14 @@ pub struct SelfArgumentLonghand {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// The `self` argument with an implicit type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// impl A { fn b(&mut self) {} }
+/// //            ^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct SelfArgumentShorthand {
     pub extent: Extent,
@@ -525,6 +935,14 @@ pub enum SelfArgumentShorthandQualifier {
     Mut(Extent),
 }
 
+/// A function argument with a name
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a(age: u8) {}
+/// //   ^^^^^^^
+/// ```
 #[derive(Debug, Visit)] // HasExtent?
 pub struct NamedArgument {
     pub name: Pattern,
@@ -538,6 +956,16 @@ pub enum TraitImplArgument {
     Named(TraitImplArgumentNamed),
 }
 
+/// An argument of a trait's function declaration
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// trait X { fn a(b: bool, i32); }
+/// //             ^^^^^^^  ^^^
+/// ```
+// TODO: "Trait impl" sounds confusing; why not just trait or trait defn?
+// TODO: "named" is a lie here, as well
 #[derive(Debug, Visit)] // HasExtent?
 pub struct TraitImplArgumentNamed {
     pub name: Option<Pattern>,
@@ -545,6 +973,15 @@ pub struct TraitImplArgumentNamed {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A single where clause
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// struct A where for<'a> &'a str: Sized {}
+/// //             ^^^^^^^^^^^^^^^^^^^^^^
+/// ```
+// TODO: rename to where clause?
 #[derive(Debug, HasExtent, Visit)]
 pub struct Where {
     pub extent: Extent,
@@ -558,6 +995,14 @@ pub enum WhereKind {
     Type(WhereType),
 }
 
+/// A single where clause applying to a lifetime
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// struct A<'a, 'b> where &'a: &'b {}
+/// //                     ^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct WhereLifetime {
     pub extent: Extent,
@@ -565,6 +1010,14 @@ pub struct WhereLifetime {
     pub bounds: Vec<Lifetime>,
 }
 
+/// A single where clause applying to a type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// struct A<T> where A: Debug {}
+/// //                ^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct WhereType {
     pub extent: Extent,
@@ -572,6 +1025,14 @@ pub struct WhereType {
     pub bounds: TraitBounds,
 }
 
+/// The trait bounds of a type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// struct A<'a, T> where A: 'a + ?Sized + Debug {}
+/// //                       ^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TraitBounds {
     pub extent: Extent,
@@ -585,18 +1046,44 @@ pub enum TraitBound {
     Relaxed(TraitBoundRelaxed),
 }
 
+/// A lifetime bound on a type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// struct A<'a, T> where A: 'a + ?Sized + Debug {}
+/// //                       ^^
+///
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TraitBoundLifetime {
     pub extent: Extent,
     pub lifetime: Lifetime,
 }
 
+/// A standard trait bound on a type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// struct A<'a, T> where A: 'a + ?Sized + Debug {}
+/// //                                     ^^^^^
+///
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TraitBoundNormal {
     pub extent: Extent,
     pub typ: TraitBoundType,
 }
 
+/// A relaxed trait bound on a type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// struct A<'a, T> where A: 'a + ?Sized + Debug {}
+/// //                            ^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TraitBoundRelaxed {
     pub extent: Extent,
@@ -612,6 +1099,15 @@ pub enum TraitBoundType {
     HigherRankedTraitBounds(TypeHigherRankedTraitBounds),
 }
 
+/// A collection of statements and an optional final expression
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { if true {} else {} }
+/// //               ^^      ^^
+/// //     ^^^^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Block {
     pub extent: Extent,
@@ -620,6 +1116,14 @@ pub struct Block {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A block which allows calling unsafe code
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { unsafe {} }
+/// //       ^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct UnsafeBlock {
     pub extent: Extent,
@@ -627,6 +1131,14 @@ pub struct UnsafeBlock {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// An expression surrounded by parenthesis
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { (1 + 1) }
+/// //       ^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Parenthetical {
     pub extent: Extent,
@@ -640,6 +1152,13 @@ pub enum Statement {
     Empty(Extent),
 }
 
+/// An element that can have attributes applied to it.
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// #[inline(never)] fn a() {}
+/// ```
 #[derive(Debug)]
 pub struct Attributed<T> {
     pub extent: Extent,
@@ -755,6 +1274,14 @@ impl Expression {
     }
 }
 
+/// A single unexpanded macro
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { println!("Hello, world!"); }
+/// //       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct MacroCall {
     pub extent: Extent,
@@ -770,6 +1297,14 @@ pub enum MacroCallArgs {
     Square(Extent),
 }
 
+/// A variable declaration
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { let b: u8 = 42; }
+/// //       ^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Let {
     pub extent: Extent,
@@ -779,18 +1314,42 @@ pub struct Let {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A tuple expression
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { (100, true, 42.42); }
+/// //       ^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Tuple {
     pub extent: Extent,
     pub members: Vec<Attributed<Expression>>,
 }
 
+/// The question mark / try / early exit operator
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { 42?; }
+/// //       ^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TryOperator {
     pub extent: Extent,
     pub target: Box<Attributed<Expression>>,
 }
 
+/// Access to a field of a struct
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { thing.one; }
+/// //       ^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct FieldAccess {
     pub extent: Extent,
@@ -804,6 +1363,14 @@ pub enum FieldName {
     Number(Extent),
 }
 
+/// A number literal
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { 0xDEAD_BEEF; }
+/// //       ^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Number {
     pub extent: Extent,
@@ -820,6 +1387,14 @@ pub enum NumberValue {
     Octal(NumberOctal),
 }
 
+/// A binary number literal
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { 0b0110_u8; }
+/// //       ^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct NumberBinary {
     pub extent: Extent,
@@ -829,6 +1404,14 @@ pub struct NumberBinary {
     pub suffix: Option<Extent>,
 }
 
+/// A decimal number literal
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { 1234.5678_f32; }
+/// //       ^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct NumberDecimal {
     pub extent: Extent,
@@ -838,6 +1421,14 @@ pub struct NumberDecimal {
     pub suffix: Option<Extent>,
 }
 
+/// A hexadecimal number literal
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { 0xAA_BB_CC_DD; }
+/// //       ^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct NumberHexadecimal {
     pub extent: Extent,
@@ -847,6 +1438,14 @@ pub struct NumberHexadecimal {
     pub suffix: Option<Extent>,
 }
 
+/// An octal number literal
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { 0o0755; }
+/// //       ^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct NumberOctal {
     pub extent: Extent,
@@ -856,6 +1455,15 @@ pub struct NumberOctal {
     pub suffix: Option<Extent>,
 }
 
+/// A variable expression
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { my_variable; }
+/// //       ^^^^^^^^^^^
+/// ```
+// TODO: This name is too generic
 #[derive(Debug, HasExtent, Visit)]
 pub struct Value {
     pub extent: Extent,
@@ -863,6 +1471,14 @@ pub struct Value {
     pub literal: Option<StructLiteral>,
 }
 
+/// Literal creation of a struct
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { Monster { hp: 42, gold: 100 } }
+/// //       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct StructLiteral {
     pub extent: Extent,
@@ -871,13 +1487,29 @@ pub struct StructLiteral {
     pub whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)] // HasExtent?
+/// A field of a struct literal
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { Monster { hp: 42, gold: 100 } }
+/// //                 ^^^^^^  ^^^^^^^^^
+/// ```
+#[derive(Debug, Visit)] // TODO: HasExtent?
 pub struct StructLiteralField {
     pub name: Ident,
     pub value: Attributed<Expression>,
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A function, method, or closure call
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { greet_user("Vivian"); }
+/// //       ^^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Call {
     pub extent: Extent,
@@ -885,6 +1517,14 @@ pub struct Call {
     pub args: Vec<Attributed<Expression>>,
 }
 
+/// The iterator-based loop
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { for i in 0..10 {} }
+/// //       ^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct ForLoop {
     pub extent: Extent,
@@ -895,6 +1535,14 @@ pub struct ForLoop {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// The infinite loop
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { loop {} }
+/// //       ^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Loop {
     pub extent: Extent,
@@ -903,6 +1551,14 @@ pub struct Loop {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// The conditional, pattern-matching variable scope
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { if let Some(name) = current_player {} }
+/// //       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct IfLet {
     pub extent: Extent,
@@ -912,6 +1568,14 @@ pub struct IfLet {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// The boolean-based loop
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { while players_count < 1 {} }
+/// //       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct While {
     pub extent: Extent,
@@ -921,6 +1585,14 @@ pub struct While {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// The conditional, pattern-matching loop
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { while let Some(i) = iterator.next() {} }
+/// //       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct WhileLet {
     pub extent: Extent,
@@ -931,6 +1603,14 @@ pub struct WhileLet {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A unary operator
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { !false; }
+/// //       ^^^^^^
+/// ```
 // TODO: Should this be the same as dereference? What about reference?
 #[derive(Debug, HasExtent, Visit)]
 pub struct Unary {
@@ -946,6 +1626,14 @@ pub enum UnaryOp {
     Not,
 }
 
+/// A binary operator
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { 1 + 1; }
+/// //       ^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Binary {
     pub extent: Extent,
@@ -988,6 +1676,14 @@ pub enum BinaryOp {
     SubAssign,
 }
 
+/// Boolean conditional control flow
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { if a {} else if b {} else {} }
+/// //       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct If {
     pub extent: Extent,
@@ -998,6 +1694,14 @@ pub struct If {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// Pattern-matching conditional control flow
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { match 1 { 0 => true, 1 => { false } _ => true } }
+/// //       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Match {
     pub extent: Extent,
@@ -1006,6 +1710,14 @@ pub struct Match {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A single pattern of a `match`
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { match 1 { 0 if false => true, _ => { true } } }
+/// //                 ^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct MatchArm {
     pub extent: Extent,
@@ -1022,13 +1734,30 @@ pub enum MatchHand {
     Expression(Attributed<Expression>),
 }
 
+/// An exclusive range
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { 0..10; }
+/// //       ^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
+// TODO: rename "exclusive"
 pub struct Range {
     pub extent: Extent,
     pub lhs: Option<Box<Attributed<Expression>>>,
     pub rhs: Option<Box<Attributed<Expression>>>,
 }
 
+/// An inclusive range
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { 0..=10; }
+/// //       ^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct RangeInclusive {
     pub extent: Extent,
@@ -1050,12 +1779,28 @@ pub enum Array {
     Repeated(ArrayRepeated),
 }
 
+/// An array with all members explcitly listed
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { [1, 2, 3]; }
+/// //       ^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct ArrayExplicit {
     pub extent: Extent,
     pub values: Vec<Attributed<Expression>>,
 }
 
+/// An array with an example value and a length
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { [42; 10]; }
+/// //       ^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct ArrayRepeated {
     pub extent: Extent,
@@ -1064,6 +1809,14 @@ pub struct ArrayRepeated {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// The `box` keyword expression
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { box 42; }
+/// //       ^^^^^^
+/// ```
 // TODO: Rename this visitor function?
 #[derive(Debug, HasExtent, Visit)]
 pub struct ExpressionBox {
@@ -1071,6 +1824,14 @@ pub struct ExpressionBox {
     pub target: Box<Attributed<Expression>>,
 }
 
+/// Inline type conversion
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { 42u8 as u64; }
+/// //       ^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct AsType {
     pub extent: Extent,
@@ -1078,6 +1839,14 @@ pub struct AsType {
     pub typ: Type,
 }
 
+/// Inline type specification
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { iterator.collect() : Vec<_>; }
+/// //       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Ascription {
     pub extent: Extent,
@@ -1085,30 +1854,71 @@ pub struct Ascription {
     pub typ: Type,
 }
 
+/// A character literal
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { 'x'; }
+/// //       ^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Character {
     pub extent: Extent,
     pub value: Extent,
 }
 
+/// A string literal
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { "hello"; }
+/// //       ^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct String {
     pub extent: Extent,
     pub value: Extent,
 }
 
+/// A byte literal
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { b'x'; }
+/// //       ^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Byte {
     pub extent: Extent,
     pub value: Character,
 }
 
+/// A byte string literal
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { b"hello"; }
+/// //       ^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct ByteString {
     pub extent: Extent,
     pub value: String,
 }
 
+/// The square-bracket operator for slicing and indexing
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { value[0]; }
+/// //       ^^^^^^^^
+/// ```
+// TODO: rename to "index"?
 #[derive(Debug, HasExtent, Visit)]
 pub struct Slice {
     pub extent: Extent,
@@ -1116,6 +1926,14 @@ pub struct Slice {
     pub index: Box<Attributed<Expression>>,
 }
 
+/// A closure
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { move |a| a + 2; }
+/// //       ^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Closure {
     pub extent: Extent,
@@ -1127,13 +1945,29 @@ pub struct Closure {
     pub whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)] // HasExtent?
+/// A closure's argument
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { |a, b: i32| a + b; }
+/// //        ^  ^^^^^^
+/// ```
+#[derive(Debug, Visit)] // TODO: HasExtent?
 pub struct ClosureArg {
     pub name: Pattern,
     pub typ: Option<Type>,
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A reference of an expression
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { & mut 42; }
+/// //       ^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Reference {
     pub extent: Extent,
@@ -1141,6 +1975,14 @@ pub struct Reference {
     pub target: Box<Attributed<Expression>>,
 }
 
+/// A dereference of an expression
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { *42; }
+/// //       ^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Dereference {
     pub extent: Extent,
@@ -1148,6 +1990,14 @@ pub struct Dereference {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// Type disambiguation
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { <Vec<u8> as IntoIterator>::into_iter(scores); }
+/// //       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Disambiguation {
     pub extent: Extent,
@@ -1157,6 +2007,14 @@ pub struct Disambiguation {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// Exit from a function or closure
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { return 42; }
+/// //       ^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Return {
     pub extent: Extent,
@@ -1164,6 +2022,14 @@ pub struct Return {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// Advance to the next iteration of a loop
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { 'v: loop { continue 'v; } }
+/// //                  ^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Continue {
     pub extent: Extent,
@@ -1171,6 +2037,14 @@ pub struct Continue {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// Exit from a loop
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { loop { break 42; } }
+/// //              ^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Break {
     pub extent: Extent,
@@ -1179,6 +2053,14 @@ pub struct Break {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A component used in pattern matching
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a(mut b: i32) { if let Some(foo) = x {} }
+/// //   ^^^^^                ^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Pattern {
     pub extent: Extent,
@@ -1186,6 +2068,15 @@ pub struct Pattern {
     pub kind: PatternKind,
 }
 
+/// A renaming of a matched pattern
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { let ref mut a @ _; }
+/// //           ^^^^^^^^^^^
+/// ```
+// TODO: clarify name to show it's stranger?
 #[derive(Debug, HasExtent, Visit)]
 pub struct PatternName {
     pub extent: Extent,
@@ -1213,6 +2104,14 @@ pub enum PatternKind {
     Tuple(PatternTuple),
 }
 
+/// A basic pattern match
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { let ref mut b; }
+/// //           ^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct PatternIdent {
     pub extent: Extent,
@@ -1222,6 +2121,14 @@ pub struct PatternIdent {
     pub tuple: Option<PatternTuple>,
 }
 
+/// Pattern matching against a struct
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { let Monster { name, .. }; }
+/// //           ^^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct PatternStruct {
     pub extent: Extent,
@@ -1232,12 +2139,20 @@ pub struct PatternStruct {
     pub whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit, Decompose)] // HasExtent?
+#[derive(Debug, Visit, Decompose)] // TODO: HasExtent?
 pub enum PatternStructField {
     Long(PatternStructFieldLong),
     Short(PatternStructFieldShort),
 }
 
+/// Pattern matching a struct's field with recursive patterns
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { let Monster { name: scary_name }; }
+/// //                     ^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct PatternStructFieldLong {
     pub extent: Extent,
@@ -1246,11 +2161,27 @@ pub struct PatternStructFieldLong {
     pub whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Visit)] // HasExtent?
+/// Pattern matching a struct's field with simple names
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { let Monster { name }; }
+/// //                     ^^^^
+/// ```
+#[derive(Debug, Visit)] // TODO: HasExtent?
 pub struct PatternStructFieldShort {
     pub ident: PatternIdent
 }
 
+/// Pattern matching a tuple
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { let (tx, rx); }
+/// //           ^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct PatternTuple {
     pub extent: Extent,
@@ -1263,6 +2194,14 @@ pub enum PatternTupleMember {
     Wildcard(Extent),
 }
 
+/// Pattern matching a slice
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { let [a, b, ..]; }
+/// //           ^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct PatternSlice {
     pub extent: Extent,
@@ -1276,6 +2215,14 @@ pub enum PatternSliceMember {
     Wildcard(Extent),
 }
 
+/// Pattern matching a subslice
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { let [a, ref mut b..]; }
+/// //               ^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct PatternSliceSubslice {
     pub extent: Extent,
@@ -1284,35 +2231,69 @@ pub struct PatternSliceSubslice {
     pub name: Ident,
 }
 
-#[derive(Debug, HasExtent, Visit)]
-pub struct PatternWildcard {
-    pub extent: Extent,
-}
-
+/// Pattern matching a byte literal
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { let Some(b'x'); }
+/// //                ^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct PatternByte {
     pub extent: Extent,
     pub value: Byte,
 }
 
+/// Pattern matching a character literal
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { let Some('x') }
+/// //                ^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct PatternCharacter {
     pub extent: Extent,
     pub value: Character,
 }
 
+/// Pattern matching a byte string literal
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { let Some(b"abc") }
+/// //                ^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct PatternByteString {
     pub extent: Extent,
     pub value: ByteString,
 }
 
+/// Pattern matching a string literal
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { let Some("abc"); }
+/// //                ^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct PatternString {
     pub extent: Extent,
     pub value: String,
 }
 
+/// Pattern matching a number literal
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { let 0xDEAD_BEEF; }
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct PatternNumber {
     pub extent: Extent,
@@ -1320,12 +2301,28 @@ pub struct PatternNumber {
     pub value: Number,
 }
 
+/// A macro call that expands into a pattern
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { let magic!(); }
+/// //           ^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct PatternMacroCall {
     pub extent: Extent,
     pub value: MacroCall,
 }
 
+/// Pattern matching against an exclusive range
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { let 0..10; }
+/// //           ^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct PatternRangeExclusive {
     pub extent: Extent,
@@ -1334,6 +2331,14 @@ pub struct PatternRangeExclusive {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// Pattern matching against an inclusive range
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { let 0..=10; }
+/// //           ^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct PatternRangeInclusive {
     pub extent: Extent,
@@ -1352,6 +2357,14 @@ pub enum PatternRangeComponent {
     Number(PatternNumber),
 }
 
+/// Pattern matching against a reference
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { let &mut x; }
+/// //           ^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct PatternReference {
     pub extent: Extent,
@@ -1360,6 +2373,14 @@ pub struct PatternReference {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// Pattern matching against a box
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { let box x; }
+/// //           ^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct PatternBox {
     pub extent: Extent,
@@ -1367,6 +2388,13 @@ pub struct PatternBox {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// Defines a trait
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// pub trait Iterator { type Item; fn next(&mut self) -> Option<Self::Item>; }
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Trait {
     pub extent: Extent,
@@ -1389,6 +2417,14 @@ pub enum TraitMember {
     MacroCall(MacroCall),
 }
 
+/// A trait's function
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// pub trait Iterator { type Item; fn next(&mut self) -> Option<Self::Item>; }
+/// //                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TraitMemberFunction {
     pub extent: Extent,
@@ -1396,6 +2432,14 @@ pub struct TraitMemberFunction {
     pub body: Option<Block>,
 }
 
+/// A trait's associated type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// pub trait Iterator { type Item; fn next(&mut self) -> Option<Self::Item>; }
+/// //                   ^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TraitMemberType {
     pub extent: Extent,
@@ -1405,6 +2449,14 @@ pub struct TraitMemberType {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A trait's associated constant
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// pub trait Number { const MAX: Self; }
+/// //                 ^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TraitMemberConst {
     pub extent: Extent,
@@ -1414,6 +2466,13 @@ pub struct TraitMemberConst {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// Implementation details for a type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// impl Ogre { const GOLD: u8 = 200; fn health(&self) -> u16 { 42 } }
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Impl {
     pub extent: Extent,
@@ -1431,6 +2490,14 @@ pub enum ImplKind {
     Inherent(ImplOfInherent),
 }
 
+/// An implementation of a trait for a type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// impl Monster for Ogre { }
+/// //   ^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct ImplOfTrait {
     pub extent: Extent,
@@ -1440,6 +2507,14 @@ pub struct ImplOfTrait {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// Inherent implementation for a type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// impl Ogre {}
+/// //   ^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct ImplOfInherent {
     pub extent: Extent,
@@ -1461,6 +2536,14 @@ pub enum ImplMember {
     MacroCall(MacroCall),
 }
 
+/// A function in an implementation block
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// impl Ogre { fn roar(&self) {} }
+/// //          ^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct ImplFunction {
     pub extent: Extent,
@@ -1468,6 +2551,14 @@ pub struct ImplFunction {
     pub body: Block,
 }
 
+/// A type in an implementation block
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// impl Monster for Ogre { type Gold = u8; }
+/// //                      ^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct ImplType {
     pub extent: Extent,
@@ -1476,6 +2567,14 @@ pub struct ImplType {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A constant in an implementation block
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// impl Ogre { const GOLD: u8 = 42; }
+/// //          ^^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct ImplConst {
     pub extent: Extent,
@@ -1486,6 +2585,13 @@ pub struct ImplConst {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// An extern crate declaration
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// pub extern crate fuzzy_pickles as neat_code;
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Crate {
     pub extent: Extent,
@@ -1495,6 +2601,13 @@ pub struct Crate {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// Functions, types, and variables provided via FFI
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// extern "C" { fn putc(c: u8); }
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct ExternBlock {
     pub extent: Extent,
@@ -1510,6 +2623,14 @@ pub enum ExternBlockMember {
     Type(ExternBlockMemberType),
 }
 
+/// A static variable accessed via FFI
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// extern "C" { static VERSION: *const u8; }
+/// //           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct ExternBlockMemberStatic {
     pub extent: Extent,
@@ -1520,6 +2641,14 @@ pub struct ExternBlockMemberStatic {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// An opaque FFI type
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// extern "C" { type CoolType; }
+/// //           ^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct ExternBlockMemberType {
     pub extent: Extent,
@@ -1527,6 +2656,14 @@ pub struct ExternBlockMemberType {
     pub name: Ident,
 }
 
+/// A function provided from FFI
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// extern "C" { fn putc(c: u8); }
+/// //           ^^^^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct ExternBlockMemberFunction {
     pub extent: Extent,
@@ -1545,6 +2682,14 @@ pub enum ExternBlockMemberFunctionArgument {
     Variadic(ExternBlockMemberFunctionArgumentVariadic),
 }
 
+/// A named argument to a FFI function
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// extern "C" { fn printf(s: *const u8, ...); }
+/// //                     ^^^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct ExternBlockMemberFunctionArgumentNamed {
     pub extent: Extent,
@@ -1553,11 +2698,26 @@ pub struct ExternBlockMemberFunctionArgumentNamed {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A variadic list of arguments to a FFI function
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// extern "C" { fn printf(s: *const u8, ...); }
+/// //                                   ^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct ExternBlockMemberFunctionArgumentVariadic {
     pub extent: Extent,
 }
 
+/// A type alias
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// type Point = (i32, i32);
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct TypeAlias {
     pub extent: Extent,
@@ -1569,6 +2729,13 @@ pub struct TypeAlias {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A module of code
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// mod details {}
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Module {
     pub extent: Extent,
@@ -1578,6 +2745,14 @@ pub struct Module {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// Visibility modifiers for an element
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+///     pub(crate) struct Ogre;
+/// //  ^^^^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, Visit)]
 pub struct Visibility {
     pub extent: Extent,
