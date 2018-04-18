@@ -205,7 +205,6 @@ pub trait Visitor {
     fn visit_pattern_struct_field_short(&mut self, &PatternStructFieldShort) -> Control { Control::Continue }
     fn visit_pattern_tuple(&mut self, &PatternTuple) -> Control { Control::Continue }
     fn visit_pattern_tuple_member(&mut self, &PatternTupleMember) -> Control { Control::Continue }
-    fn visit_pattern_wildcard(&mut self, &PatternWildcard) -> Control { Control::Continue }
     fn visit_range(&mut self, &Range) -> Control { Control::Continue }
     fn visit_range_inclusive(&mut self, &RangeInclusive) -> Control { Control::Continue }
     fn visit_reference(&mut self, &Reference) -> Control { Control::Continue }
@@ -397,7 +396,6 @@ pub trait Visitor {
     fn exit_pattern_struct_field_short(&mut self, &PatternStructFieldShort) {}
     fn exit_pattern_tuple(&mut self, &PatternTuple) {}
     fn exit_pattern_tuple_member(&mut self, &PatternTupleMember) {}
-    fn exit_pattern_wildcard(&mut self, &PatternWildcard) {}
     fn exit_range(&mut self, &Range) {}
     fn exit_range_inclusive(&mut self, &RangeInclusive) {}
     fn exit_reference(&mut self, &Reference) {}
