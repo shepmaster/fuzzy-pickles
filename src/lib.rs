@@ -19,6 +19,8 @@ pub mod parser;
 
 use std::fmt;
 
+/// A pair of `(start, end)` points corresponding to something
+/// interesting in the source text.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Extent(pub usize, pub usize);
 
@@ -62,6 +64,7 @@ impl<'a> std::ops::Index<&'a Extent> for str {
     }
 }
 
+/// A type that has an extent
 pub trait HasExtent {
     fn extent(&self) -> Extent;
 }
@@ -143,9 +146,7 @@ impl<'a> HumanTextError<'a> {
     }
 }
 
-// Construct a point, initialize  the master. This is what stores errors
-// todo: rename?
-
+/// The entrypoint to parsing Rust code.
 pub fn parse_rust_file(file: &str) -> Result<ast::File, ErrorDetail> {
     use parser::{attributed, item, Point, Master, State};
     use tokenizer::{Token, Tokens};
