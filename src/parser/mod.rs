@@ -137,14 +137,14 @@ impl State {
         let relative_tokens = start.s;
 
         let start_offset = |pt: Point| -> usize {
-            let (a, _) = relative_tokens[0].extent();
+            let Extent(a, _) = relative_tokens[0].extent();
             let a_x = pt.sub_offset.map_or(0, |x| x + 1) as usize;
             a + a_x
         };
 
         let end_offset = |pt: Point| -> usize {
             let offset = pt.offset - start.offset - 1;
-            let (_, b) = relative_tokens[offset].extent();
+            let Extent(_, b) = relative_tokens[offset].extent();
             let b_x = pt.sub_offset.map_or(0, |x| x + 1) as usize;
             b + b_x
         };
@@ -153,18 +153,18 @@ impl State {
             Ordering::Less => {
                 let a = start_offset(start);
                 let b = end_offset(end);
-                (a, b)
+                Extent(a, b)
             }
             Ordering::Equal => {
                 match start.sub_offset.cmp(&end.sub_offset) {
                     Ordering::Less => {
                         let a = start_offset(start);
                         let b = start_offset(end);
-                        (a, b)
+                        Extent(a, b)
                     }
                     Ordering::Equal => {
                         let a = start_offset(start);
-                        (a, a)
+                        Extent(a, a)
                     }
                     Ordering::Greater => panic!("points are backwards ({:?}, {:?})", start, end),
                 }
@@ -515,45 +515,45 @@ fn token<'s, F, T>(token_convert: F, error: Error) ->
 fn split(token: Token, n: u8) -> Option<(Token, Token)> {
     match (token, n) {
         (Token::DoubleLeftAngle(extent), 0) => {
-            let (s, e) = extent;
-            let a = Token::LeftAngle((s, s+1));
-            let b = Token::LeftAngle((s+1, e));
+            let Extent(s, e) = extent;
+            let a = Token::LeftAngle(Extent(s, s+1));
+            let b = Token::LeftAngle(Extent(s+1, e));
             Some((a, b))
         }
         (Token::DoubleRightAngle(extent), 0) => {
-            let (s, e) = extent;
-            let a = Token::RightAngle((s, s+1));
-            let b = Token::RightAngle((s+1, e));
+            let Extent(s, e) = extent;
+            let a = Token::RightAngle(Extent(s, s+1));
+            let b = Token::RightAngle(Extent(s+1, e));
             Some((a, b))
         }
         (Token::ShiftRightEquals(extent), 0) => {
-            let (s, e) = extent;
-            let a = Token::RightAngle((s, s+1));
-            let b = Token::GreaterThanOrEquals((s+1, e));
+            let Extent(s, e) = extent;
+            let a = Token::RightAngle(Extent(s, s+1));
+            let b = Token::GreaterThanOrEquals(Extent(s+1, e));
             Some((a, b))
         }
         (Token::ShiftRightEquals(extent), 1) => {
-            let (s, e) = extent;
-            let a = Token::RightAngle((s+1, s+2));
-            let b = Token::Equals((s+2, e));
+            let Extent(s, e) = extent;
+            let a = Token::RightAngle(Extent(s+1, s+2));
+            let b = Token::Equals(Extent(s+2, e));
             Some((a, b))
         }
         (Token::GreaterThanOrEquals(extent), 0) => {
-            let (s, e) = extent;
-            let a = Token::RightAngle((s, s+1));
-            let b = Token::Equals((s+1, e));
+            let Extent(s, e) = extent;
+            let a = Token::RightAngle(Extent(s, s+1));
+            let b = Token::Equals(Extent(s+1, e));
             Some((a, b))
         }
         (Token::DoublePipe(extent), 0) => {
-            let (s, e) = extent;
-            let a = Token::Pipe((s, s+1));
-            let b = Token::Pipe((s+1, e));
+            let Extent(s, e) = extent;
+            let a = Token::Pipe(Extent(s, s+1));
+            let b = Token::Pipe(Extent(s+1, e));
             Some((a, b))
         }
         (Token::DoubleAmpersand(extent), 0) => {
-            let (s, e) = extent;
-            let a = Token::Ampersand((s, s+1));
-            let b = Token::Ampersand((s+1, e));
+            let Extent(s, e) = extent;
+            let a = Token::Ampersand(Extent(s, s+1));
+            let b = Token::Ampersand(Extent(s+1, e));
             Some((a, b))
         }
         _ => None

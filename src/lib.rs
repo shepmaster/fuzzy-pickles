@@ -19,7 +19,32 @@ pub mod parser;
 
 use std::fmt;
 
-pub type Extent = (usize, usize);
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Extent(pub usize, pub usize);
+
+impl PartialEq<(usize, usize)> for Extent {
+    fn eq(&self, other: &(usize, usize)) -> bool {
+        (self.0, self.1) == *other
+    }
+}
+
+impl PartialEq<Extent> for (usize, usize) {
+    fn eq(&self, other: &Extent) -> bool {
+        (other.0, other.1) == *self
+    }
+}
+
+impl From<(usize, usize)> for Extent {
+    fn from(other: (usize, usize)) -> Extent {
+        Extent(other.0, other.1)
+    }
+}
+
+impl From<Extent> for (usize, usize) {
+    fn from(other: Extent) -> (usize, usize) {
+        (other.0, other.1)
+    }
+}
 
 pub trait HasExtent {
     fn extent(&self) -> Extent;
