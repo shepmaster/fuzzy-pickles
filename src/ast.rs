@@ -374,12 +374,13 @@ pub struct TypeReferenceKind {
 #[derive(Debug, HasExtent, ExtentIndex, Visit)]
 pub struct TypePointer {
     pub extent: Extent,
+    #[visit(ignore)]
     pub kind: TypePointerKind,
     pub typ: Box<Type>,
     pub whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TypePointerKind {
     Const,
     Mutable,
@@ -1357,7 +1358,7 @@ pub struct FieldAccess {
     pub field: FieldName,
 }
 
-#[derive(Debug, HasExtent, ExtentIndex, Decompose)]
+#[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
 pub enum FieldName {
     Path(PathComponent),
     Number(Extent),
@@ -1615,12 +1616,13 @@ pub struct WhileLet {
 #[derive(Debug, HasExtent, ExtentIndex, Visit)]
 pub struct Unary {
     pub extent: Extent,
+    #[visit(ignore)]
     pub op: UnaryOp,
     pub value: Box<Attributed<Expression>>,
     pub whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum UnaryOp {
     Negate,
     Not,
@@ -1637,6 +1639,7 @@ pub enum UnaryOp {
 #[derive(Debug, HasExtent, ExtentIndex, Visit)]
 pub struct Binary {
     pub extent: Extent,
+    #[visit(ignore)]
     pub op: BinaryOp,
     pub lhs: Box<Attributed<Expression>>,
     pub rhs: Box<Attributed<Expression>>,
@@ -2349,7 +2352,7 @@ pub struct PatternRangeInclusive {
     pub whitespace: Vec<Whitespace>,
 }
 
-#[derive(Debug, Decompose)]
+#[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
 pub enum PatternRangeComponent {
     Ident(PathedIdent),
     Byte(Byte),

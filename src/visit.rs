@@ -40,47 +40,10 @@ impl<T> Visit for Vec<T>
     }
 }
 
-// Cheap hacks to avoid having to annotate every terminal `Extent` and
-// enum; just visit them and don't do anything.
-
-// An extent without any context is pretty useless.
+// Cheap hack to avoid having to annotate every terminal `Extent`;
+// just visit them and don't do anything. An extent without any
+// context is pretty useless.
 impl Visit for Extent {
-    fn visit<V>(&self, _v: &mut V)
-        where V: Visitor
-    {}
-}
-
-// Can't imagine we'd ever want to count the number of additions;
-// without the lhs/rhs there's not much benefit.
-impl Visit for UnaryOp {
-    fn visit<V>(&self, _v: &mut V)
-        where V: Visitor
-    {}
-}
-impl Visit for BinaryOp {
-    fn visit<V>(&self, _v: &mut V)
-        where V: Visitor
-    {}
-}
-
-// We *might* want to visit this, to enable checking for "large" tuple
-// indexes or poor variable names?
-impl Visit for FieldName {
-    fn visit<V>(&self, _v: &mut V)
-        where V: Visitor
-    {}
-}
-
-// We *might* want to continue visiting the children to be able to
-// inspect the character / number?
-impl Visit for PatternRangeComponent {
-    fn visit<V>(&self, _v: &mut V)
-        where V: Visitor
-    {}
-}
-
-// Knowing if an unknown pointer is mutable has no benefit.
-impl Visit for TypePointerKind {
     fn visit<V>(&self, _v: &mut V)
         where V: Visitor
     {}
@@ -141,6 +104,7 @@ pub trait Visitor {
     fn visit_extern_block_member_static(&mut self, &ExternBlockMemberStatic) -> Control { Control::Continue }
     fn visit_extern_block_member_type(&mut self, &ExternBlockMemberType) -> Control { Control::Continue }
     fn visit_field_access(&mut self, &FieldAccess) -> Control { Control::Continue }
+    fn visit_field_name(&mut self, &FieldName) -> Control { Control::Continue }
     fn visit_file(&mut self, &File) -> Control { Control::Continue }
     fn visit_for_loop(&mut self, &ForLoop) -> Control { Control::Continue }
     fn visit_function(&mut self, &Function) -> Control { Control::Continue }
@@ -192,6 +156,7 @@ pub trait Visitor {
     fn visit_pattern_macro_call(&mut self, &PatternMacroCall) -> Control { Control::Continue }
     fn visit_pattern_name(&mut self, &PatternName) -> Control { Control::Continue }
     fn visit_pattern_number(&mut self, &PatternNumber) -> Control { Control::Continue }
+    fn visit_pattern_range_component(&mut self, &PatternRangeComponent) -> Control { Control::Continue }
     fn visit_pattern_range_exclusive(&mut self, &PatternRangeExclusive) -> Control { Control::Continue }
     fn visit_pattern_range_inclusive(&mut self, &PatternRangeInclusive) -> Control { Control::Continue }
     fn visit_pattern_reference(&mut self, &PatternReference) -> Control { Control::Continue }
@@ -332,6 +297,7 @@ pub trait Visitor {
     fn exit_extern_block_member_static(&mut self, &ExternBlockMemberStatic) {}
     fn exit_extern_block_member_type(&mut self, &ExternBlockMemberType) {}
     fn exit_field_access(&mut self, &FieldAccess) {}
+    fn exit_field_name(&mut self, &FieldName) {}
     fn exit_file(&mut self, &File) {}
     fn exit_for_loop(&mut self, &ForLoop) {}
     fn exit_function(&mut self, &Function) {}
@@ -383,6 +349,7 @@ pub trait Visitor {
     fn exit_pattern_macro_call(&mut self, &PatternMacroCall) {}
     fn exit_pattern_name(&mut self, &PatternName) {}
     fn exit_pattern_number(&mut self, &PatternNumber) {}
+    fn exit_pattern_range_component(&mut self, &PatternRangeComponent) {}
     fn exit_pattern_range_exclusive(&mut self, &PatternRangeExclusive) {}
     fn exit_pattern_range_inclusive(&mut self, &PatternRangeInclusive) {}
     fn exit_pattern_reference(&mut self, &PatternReference) {}
