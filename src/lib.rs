@@ -78,6 +78,7 @@ impl HasExtent for Extent {
     fn extent(&self) -> Extent { *self }
 }
 
+/// Information about a tokenization or parsing error
 #[derive(Debug, PartialEq)]
 pub enum ErrorDetail {
     Tokenizer(tokenizer::ErrorDetail),
@@ -85,6 +86,7 @@ pub enum ErrorDetail {
 }
 
 impl ErrorDetail {
+    /// Enhance the error with the source code
     pub fn with_text<'a>(&'a self, text: &'a str) -> ErrorDetailText<'a> {
         ErrorDetailText { detail: self, text }
     }
@@ -102,6 +104,7 @@ impl From<parser::ErrorDetail> for ErrorDetail {
     }
 }
 
+/// Information about a tokenization or parsing error including original source code
 #[derive(Debug)]
 pub struct ErrorDetailText<'a> {
     detail: &'a ErrorDetail,
