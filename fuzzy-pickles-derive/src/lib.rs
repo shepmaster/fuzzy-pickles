@@ -37,6 +37,21 @@ pub fn has_extent_derive(input: TokenStream) -> TokenStream {
     gen.parse().expect("Unable to generate")
 }
 
+#[proc_macro_derive(ExtentIndex)]
+pub fn extent_index_derive(input: TokenStream) -> TokenStream {
+    // Construct a string representation of the type definition
+    let s = input.to_string();
+
+    // Parse the string representation
+    let ast = syn::parse_macro_input(&s).expect("Unable to parse input");
+
+    // Build the impl
+    let gen = impl_extent_index(&ast);
+
+    // Return the generated impl
+    gen.parse().expect("Unable to generate")
+}
+
 fn camelcase_to_snake_case(camelcase: &str) -> String {
     let mut s = String::new();
 
@@ -263,6 +278,30 @@ fn impl_has_extent(ast: &syn::MacroInput) -> quote::Tokens {
         impl ::HasExtent for #name {
             fn extent(&self) -> Extent {
                 #body
+            }
+        }
+    }
+}
+
+fn impl_extent_index(ast: &syn::MacroInput) -> quote::Tokens {
+    let name = &ast.ident;
+
+    quote! {
+        impl ::std::ops::Index<#name> for str {
+            type Output = str;
+
+            fn index(&self, i: #name) -> &Self::Output {
+                let Extent(s, e) = i.extent();
+                &self[s..e]
+            }
+        }
+
+        impl<'a> ::std::ops::Index<&'a #name> for str {
+            type Output = str;
+
+            fn index(&self, i: &'a #name) -> &Self::Output {
+                let Extent(s, e) = i.extent();
+                &self[s..e]
             }
         }
     }

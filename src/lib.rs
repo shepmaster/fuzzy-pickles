@@ -46,6 +46,22 @@ impl From<Extent> for (usize, usize) {
     }
 }
 
+impl std::ops::Index<Extent> for str {
+    type Output = str;
+
+    fn index(&self, Extent(s, e): Extent) -> &Self::Output {
+        &self[s..e]
+    }
+}
+
+impl<'a> std::ops::Index<&'a Extent> for str {
+    type Output = str;
+
+    fn index(&self, &Extent(s, e): &'a Extent) -> &Self::Output {
+        &self[s..e]
+    }
+}
+
 pub trait HasExtent {
     fn extent(&self) -> Extent;
 }
