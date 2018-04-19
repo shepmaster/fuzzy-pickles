@@ -9,7 +9,7 @@ use std::{
 
 use fuzzy_pickles::{
     ast,
-    visit::{Control, Visit, Visitor},
+    visit::{Visit, Visitor},
 };
 
 use quicli::prelude::*;
@@ -35,10 +35,9 @@ struct Stats {
     statements: usize,
 }
 
-impl Visitor for Stats {
-    fn visit_statement(&mut self, _: &ast::Statement) -> Control {
+impl<'ast> Visitor<'ast> for Stats {
+    fn exit_statement(&mut self, _: &ast::Statement) {
         self.statements +=1;
-        Control::Continue
     }
 }
 

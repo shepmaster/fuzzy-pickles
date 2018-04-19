@@ -77,8 +77,9 @@ fn impl_visit(ast: &syn::MacroInput) -> quote::Tokens {
 
     quote! {
         impl ::visit::Visit for #name {
-            fn visit<V>(&self, v: &mut V)
-                where V: ::visit::Visitor
+            fn visit<'ast, V>(&'ast self, v: &mut V)
+            where
+                V: ::visit::Visitor<'ast>,
             {
                 if ::visit::Control::Continue == v.#method_name(self) {
                     #visit_fields;

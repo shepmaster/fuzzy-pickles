@@ -1181,8 +1181,9 @@ impl<T> std::ops::Deref for Attributed<T> {
 macro_rules! visit_attributed {
     ($typ:ty, $visit:ident, $exit:ident) => {
         impl Visit for Attributed<$typ> {
-            fn visit<V>(&self, v: &mut V)
-                where V: Visitor
+            fn visit<'ast, V>(&'ast self, v: &mut V)
+            where
+                V: Visitor<'ast>
             {
                 v.$visit(self);
                 self.attributes.visit(v);
