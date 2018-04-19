@@ -9,7 +9,7 @@
 use std;
 
 use {Extent, HasExtent};
-use visit::{Visit, Visitor};
+use visit::{Visit, Visitor, VisitorMut};
 
 /// An entire Rust file
 #[derive(Debug, Visit)]
@@ -1238,6 +1238,16 @@ macro_rules! visit_attributed {
                 v.$visit(self);
                 self.attributes.visit(v);
                 self.value.visit(v);
+                v.$exit(self);
+            }
+
+            fn visit_mut<V>(&mut self, v: &mut V)
+            where
+                V: VisitorMut
+            {
+                v.$visit(self);
+                self.attributes.visit_mut(v);
+                self.value.visit_mut(v);
                 v.$exit(self);
             }
         }

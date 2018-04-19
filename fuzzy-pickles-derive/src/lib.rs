@@ -73,7 +73,8 @@ fn impl_visit(ast: &syn::MacroInput) -> quote::Tokens {
     let method_name: quote::Ident = format!("visit{}", method_name_base).into();
     let exit_method_name: quote::Ident = format!("exit{}", method_name_base).into();
 
-    let visit_fields = impl_visit_fields(ast);
+    let visit_fields = impl_visit_fields(ast, IsMut(false));
+    let visit_fields_mut = impl_visit_fields(ast, IsMut(true));
 
     quote! {
         impl ::visit::Visit for #name {
@@ -86,21 +87,48 @@ fn impl_visit(ast: &syn::MacroInput) -> quote::Tokens {
                 }
                 v.#exit_method_name(self);
             }
+
+            fn visit_mut<V>(&mut self, v: &mut V)
+            where
+                V: ::visit::VisitorMut,
+            {
+                if ::visit::Control::Continue == v.#method_name(self) {
+                    #visit_fields_mut;
+                }
+                v.#exit_method_name(self);
+            }
         }
     }
 }
 
-fn impl_visit_fields(ast: &syn::MacroInput) -> quote::Tokens {
+struct IsMut(bool);
+
+fn impl_visit_fields(ast: &syn::MacroInput, IsMut(is_mut): IsMut) -> quote::Tokens {
     use syn::{Body, VariantData};
+
+    let method = if is_mut {
+        "::visit::Visit::visit_mut"
+    } else {
+        "::visit::Visit::visit"
+    };
+    let method = iter::repeat(syn::Ident::from(method));
 
     match ast.body {
         Body::Enum(ref e) => {
             let enum_name = iter::repeat(&ast.ident);
             let variant_names = e.iter().map(|variant| &variant.ident);
 
-            quote! {
-                match *self {
-                    #(#enum_name::#variant_names(ref x) => ::visit::Visit::visit(x, v),)*
+            if is_mut {
+                quote! {
+                    match *self {
+                        #(#enum_name::#variant_names(ref mut x) => #method(x, v),)*
+                    }
+                }
+            } else {
+                quote! {
+                    match *self {
+                        #(#enum_name::#variant_names(ref x) => #method(x, v),)*
+                    }
                 }
             }
         }
@@ -112,8 +140,14 @@ fn impl_visit_fields(ast: &syn::MacroInput) -> quote::Tokens {
                 .filter(|&(_, ref f)| !is_ignore_field(f))
                 .map(|(i, f)| f.ident.clone().unwrap_or_else(|| i.into()));
 
-            quote! {
-                #(::visit::Visit::visit(&self.#field_names, v);)*
+            if is_mut {
+                quote! {
+                    #(#method(&mut self.#field_names, v);)*
+                }
+            } else {
+                quote! {
+                    #(#method(&self.#field_names, v);)*
+                }
             }
         }
         Body::Struct(VariantData::Unit) => quote! {},
