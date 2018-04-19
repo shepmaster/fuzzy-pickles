@@ -15,6 +15,7 @@ use visit::{Visit, Visitor, VisitorMut};
 #[derive(Debug, Visit)]
 pub struct File {
     pub items: Vec<Attributed<Item>>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
@@ -93,7 +94,7 @@ pub struct Lifetime {
     pub name: Ident,
 }
 
-#[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
+#[derive(Debug, PartialEq, Eq, HasExtent, ExtentIndex, Visit, Decompose)]
 pub enum Whitespace {
     Comment(Comment),
     Whitespace(Extent),
