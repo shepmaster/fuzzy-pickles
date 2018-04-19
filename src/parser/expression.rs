@@ -744,7 +744,7 @@ impl<'s> ShuntingYard<'s> {
         if self.result.is_empty() {
             let extent_of_inner_expression = pm.state.ex(op_range.start, op_range.end);
             let value = f(extent_of_inner_expression, None);
-            let extent = (extent_of_prefix.0, extent_of_inner_expression.1);
+            let extent = Extent(extent_of_prefix.0, extent_of_inner_expression.1);
             let new_expr = Attributed { extent, attributes, value };
             self.result.push(ShuntCar { value: new_expr, spt: op_range.start, ept: op_range.end });
             Ok(())
@@ -774,7 +774,7 @@ impl<'s> ShuntingYard<'s> {
 
         let extent_of_inner_expression = pm.state.ex(op_range.start, expr_ept);
         let value = f(extent_of_inner_expression, expr);
-        let extent = (extent_of_prefix.0, extent_of_inner_expression.1);
+        let extent = Extent(extent_of_prefix.0, extent_of_inner_expression.1);
         let new_expr = Attributed { extent, attributes, value };
         self.result.push(ShuntCar { value: new_expr, spt: op_range.start, ept: expr_ept });
         Ok(())

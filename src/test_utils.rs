@@ -8,5 +8,5 @@ macro_rules! unwrap_as {
 }
 
 macro_rules! assert_extent {
-    ($parsed:expr, $extent:expr) => (assert_eq!(::HasExtent::extent(&$parsed), $extent));
+    ($parsed:expr, $extent:expr) => (assert_eq!(::HasExtent::extent(&$parsed), Extent::from($extent)));
 }

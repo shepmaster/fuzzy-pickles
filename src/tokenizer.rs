@@ -393,7 +393,7 @@ impl<'s> Iterator for Tokens<'s> {
 
         if self.pt.s.is_empty() {
             self.is_exhausted = true;
-            return Some(Ok(Token::EndOfFile((self.pt.offset, self.pt.offset))));
+            return Some(Ok(Token::EndOfFile(Extent(self.pt.offset, self.pt.offset))));
         }
 
         let tok = single_token(&mut self.pm, self.pt);
@@ -882,7 +882,7 @@ fn literal<'s>(expected: &'static str) ->
 }
 
 fn ex(start: Point, end: Point) -> Extent {
-    let ex = (start.offset, end.offset);
+    let ex = Extent(start.offset, end.offset);
     assert!(ex.1 >= ex.0, "{} does not come before {}", ex.1, ex.0);
     ex
 }
@@ -897,7 +897,7 @@ fn split_point_at_non_zero_offset<'s>(pt: Point<'s>, idx: usize, e: Error) ->
         let end = pt.offset + idx;
         let end_pt = Point { s: tail, offset: end };
 
-        peresil::Progress::success(end_pt, (matched, (pt.offset, end)))
+        peresil::Progress::success(end_pt, (matched, Extent(pt.offset, end)))
     }
 }
 
@@ -1011,7 +1011,7 @@ mod test {
         let n = unwrap_as!(s, Number::Decimal);
         assert_eq!(n.integral, (0, 6));
         let n = s.into_simple();
-        assert_eq!(n, Some((0, 6)));
+        assert_eq!(n, Some(Extent(0, 6)));
     }
 
     #[test]
@@ -1036,7 +1036,7 @@ mod test {
         assert_eq!(s.extent(), (0, 2));
         let n = unwrap_as!(s, Number::Decimal);
         assert_eq!(n.integral, (0, 1));
-        assert_eq!(n.fractional, Some((1, 2)));
+        assert_eq!(n.fractional, Some(Extent(1, 2)));
     }
 
     #[test]
@@ -1045,7 +1045,7 @@ mod test {
         assert_eq!(s.extent(), (0, 4));
         let n = unwrap_as!(s, Number::Hexadecimal);
         assert_eq!(n.integral, (2, 3));
-        assert_eq!(n.fractional, Some((3, 4)));
+        assert_eq!(n.fractional, Some(Extent(3, 4)));
     }
 
     #[test]
@@ -1054,7 +1054,7 @@ mod test {
         assert_eq!(s.extent(), (0, 7));
         let n = unwrap_as!(s, Number::Binary);
         assert_eq!(n.integral, (2, 4));
-        assert_eq!(n.fractional, Some((4, 7)));
+        assert_eq!(n.fractional, Some(Extent(4, 7)));
     }
 
     #[test]
@@ -1063,7 +1063,7 @@ mod test {
         assert_eq!(s.extent(), (0, 8));
         let n = unwrap_as!(s, Number::Binary);
         assert_eq!(n.integral, (2, 6));
-        assert_eq!(n.exponent, Some((7, 8)));
+        assert_eq!(n.exponent, Some(Extent(7, 8)));
     }
 
     #[test]
@@ -1072,7 +1072,7 @@ mod test {
         assert_eq!(s.extent(), (0, 12));
         let n = unwrap_as!(s, Number::Octal);
         assert_eq!(n.integral, (2, 7));
-        assert_eq!(n.type_suffix, Some((7, 12)));
+        assert_eq!(n.type_suffix, Some(Extent(7, 12)));
     }
 
     #[test]
@@ -1097,9 +1097,9 @@ mod test {
         assert_eq!(s.extent(), (0, 31));
         let n = unwrap_as!(s, Number::Octal);
         assert_eq!(n.integral, (2, 12));
-        assert_eq!(n.fractional, Some((12, 17)));
-        assert_eq!(n.exponent, Some((18, 24)));
-        assert_eq!(n.type_suffix, Some((24, 31)));
+        assert_eq!(n.fractional, Some(Extent(12, 17)));
+        assert_eq!(n.exponent, Some(Extent(18, 24)));
+        assert_eq!(n.type_suffix, Some(Extent(24, 31)));
     }
 
     #[test]
