@@ -34,6 +34,14 @@ pub enum Item {
     Union(Union),
 }
 
+#[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
+// TODO: rename to outer?
+pub enum Attribute {
+    DocCommentLine(Extent),
+    DocCommentBlock(Extent),
+    Literal(AttributeLiteral),
+}
+
 /// An attribute that applies to the subsequent element
 ///
 /// ### Example Source
@@ -42,9 +50,17 @@ pub enum Item {
 /// #[derive(Debug)]
 /// ```
 #[derive(Debug, HasExtent, ExtentIndex, Visit)]
-pub struct Attribute {
+pub struct AttributeLiteral {
     pub extent: Extent,
     pub text: Extent,
+}
+
+#[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
+// TODO: rename to inner?
+pub enum AttributeContaining {
+    DocCommentLine(Extent),
+    DocCommentBlock(Extent),
+    Literal(AttributeContainingLiteral),
 }
 
 /// An attribute that applies to the containing element
@@ -55,7 +71,7 @@ pub struct Attribute {
 /// #![feature(nll)]
 /// ```
 #[derive(Debug, HasExtent, ExtentIndex, Visit)]
-pub struct AttributeContaining {
+pub struct AttributeContainingLiteral {
     pub extent: Extent,
     pub text: Extent,
 }
@@ -79,17 +95,10 @@ pub enum Whitespace {
     Whitespace(Extent),
 }
 
-/// A single-line comment
-///
-/// ### Example Source
-///
-/// ```rust,ignore
-/// // Hello, world!
-/// ```
-#[derive(Debug, HasExtent, ExtentIndex, Visit)]
-pub struct Comment {
-    pub extent: Extent,
-    pub text: Extent,
+#[derive(Debug, PartialEq, Eq, HasExtent, ExtentIndex, Visit, Decompose)]
+pub enum Comment {
+    Line(Extent),
+    Block(Extent),
 }
 
 /// A `use` item

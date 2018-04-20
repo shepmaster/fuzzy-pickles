@@ -92,7 +92,9 @@ pub trait Visitor<'ast> {
     fn visit_ascription(&mut self, &'ast Ascription) -> Control { Control::Continue }
     fn visit_associated_type(&mut self, &'ast AssociatedType) -> Control { Control::Continue }
     fn visit_attribute(&mut self, &'ast Attribute) -> Control { Control::Continue }
+    fn visit_attribute_literal(&mut self, &'ast AttributeLiteral) -> Control { Control::Continue }
     fn visit_attribute_containing(&mut self, &'ast AttributeContaining) -> Control { Control::Continue }
+    fn visit_attribute_containing_literal(&mut self, &'ast AttributeContainingLiteral) -> Control { Control::Continue }
     fn visit_attributed_enum_variant(&mut self, &'ast Attributed<EnumVariant>) -> Control { Control::Continue }
     fn visit_attributed_expression(&mut self, &'ast Attributed<Expression>) -> Control { Control::Continue }
     fn visit_attributed_extern_block_member(&mut self, &'ast Attributed<ExternBlockMember>) -> Control { Control::Continue }
@@ -285,7 +287,9 @@ pub trait Visitor<'ast> {
     fn exit_ascription(&mut self, &'ast Ascription) {}
     fn exit_associated_type(&mut self, &'ast AssociatedType) {}
     fn exit_attribute(&mut self, &'ast Attribute) {}
+    fn exit_attribute_literal(&mut self, &'ast AttributeLiteral) {}
     fn exit_attribute_containing(&mut self, &'ast AttributeContaining) {}
+    fn exit_attribute_containing_literal(&mut self, &'ast AttributeContainingLiteral) {}
     fn exit_attributed_enum_variant(&mut self, &'ast Attributed<EnumVariant>) {}
     fn exit_attributed_expression(&mut self, &'ast Attributed<Expression>) {}
     fn exit_attributed_extern_block_member(&mut self, &'ast Attributed<ExternBlockMember>) {}
