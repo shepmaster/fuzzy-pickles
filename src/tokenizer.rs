@@ -330,6 +330,7 @@ impl peresil::Recoverable for Error {
     fn recoverable(&self) -> bool { true }
 }
 
+/// Information about a tokenization error
 #[derive(Debug, PartialEq, Eq)]
 pub struct ErrorDetail {
     location: usize,
@@ -337,11 +338,13 @@ pub struct ErrorDetail {
 }
 
 impl ErrorDetail {
+    /// Enhance the error with the source code
     pub fn with_text<'a>(&'a self, text: &'a str) -> ErrorDetailText<'a> {
         ErrorDetailText { detail: self, text }
     }
 }
 
+/// Information about a tokenization error including original source code
 #[derive(Debug)]
 pub struct ErrorDetailText<'a> {
     detail: &'a ErrorDetail,

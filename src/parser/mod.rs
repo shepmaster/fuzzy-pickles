@@ -286,6 +286,7 @@ impl peresil::Recoverable for Error {
     fn recoverable(&self) -> bool { true }
 }
 
+/// Information about a parsing error
 #[derive(Debug, PartialEq)]
 pub struct ErrorDetail {
     pub(crate) location: usize,
@@ -293,11 +294,13 @@ pub struct ErrorDetail {
 }
 
 impl ErrorDetail {
+    /// Enhance the error with the source code
     pub fn with_text<'a>(&'a self, text: &'a str) -> ErrorDetailText<'a> {
         ErrorDetailText { detail: self, text }
     }
 }
 
+/// Information about a parsing error including original source code
 #[derive(Debug)]
 pub struct ErrorDetailText<'a> {
     detail: &'a ErrorDetail,

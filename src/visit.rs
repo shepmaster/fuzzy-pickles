@@ -1,6 +1,9 @@
+//! Visitors of the AST
+
 use ast::*;
 use Extent;
 
+/// An AST node that can be visited
 pub trait Visit {
     fn visit<'ast, V>(&'ast self, &mut V)
     where
@@ -57,12 +60,29 @@ impl Visit for Extent {
     {}
 }
 
+/// Directs the visitor to continue processing the children of the
+/// current code or not.
 #[derive(Debug, PartialEq)]
 pub enum Control {
     Continue,
     Break
 }
 
+/// A visitor of AST nodes
+///
+/// On entry of a node, the corresponding `visit_*` method will be
+/// called. This method may return a [`Control`] to avoid descending
+/// into child nodes.
+///
+/// After visiting all the children of a node, the corresponding
+/// `exit_*` method will be called.
+///
+/// For ease-of-use, all methods in this trait have a default
+/// implementation. Consumers of the trait only need to implement
+/// methods for the nodes they are interested in. The default
+/// implementations for the `visit_*` methods continues processing on
+/// every node.
+// TODO: rename `visit_*` to `entry_*`?
 pub trait Visitor<'ast> {
     fn visit_argument(&mut self, &'ast Argument) -> Control { Control::Continue }
     fn visit_array(&mut self, &'ast Array) -> Control { Control::Continue }
