@@ -10,7 +10,7 @@ pub(crate) fn parse_full<'s, F, T>(f: F, s: &'s str) -> TestResult<T>
     // TODO: Master::once()?
     let tokens = Tokens::new(s).collect::<Result<Vec<_>, _>>().expect("Unable to tokenize");
     let (_ws, tokens): (Vec<_>, Vec<_>) = tokens.into_iter().partition(|t| {
-        t.is_whitespace() || t.is_comment() || t.is_doc_comment() || t.is_comment_block() || t.is_doc_comment_block()
+        t.is_whitespace() || t.is_comment_line() || t.is_comment_block()
     });
 
     let mut pm = Master::with_state(State::new());

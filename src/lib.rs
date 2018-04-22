@@ -153,7 +153,7 @@ pub fn parse_rust_file(file: &str) -> Result<ast::File, ErrorDetail> {
 
     let tokens: Vec<_> = Tokens::new(file).collect::<Result<_, _>>()?;
     let (_ws, tokens): (Vec<_>, Vec<_>) = tokens.into_iter().partition(|t| {
-        t.is_whitespace() || t.is_comment() || t.is_doc_comment() || t.is_comment_block() || t.is_doc_comment_block()
+        t.is_whitespace() || t.is_comment_line() || t.is_comment_block()
     });
 
     let mut pt = Point::new(&tokens);

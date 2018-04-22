@@ -119,10 +119,12 @@ pub enum Token {
     Ident(Extent),
     Number(Number),
     Whitespace(Extent),
-    Comment(Extent),
+    CommentLine(Extent),
     CommentBlock(Extent),
-    DocComment(Extent),
-    DocCommentBlock(Extent),
+    DocCommentOuterLine(Extent),
+    DocCommentInnerLine(Extent),
+    DocCommentOuterBlock(Extent),
+    DocCommentInnerBlock(Extent),
     Lifetime(Extent),
     EndOfFile(Extent),
 }
@@ -150,15 +152,17 @@ impl Token {
             Character(s)           |
             Colon(s)               |
             Comma(s)               |
-            Comment(s)             |
+            CommentLine(s)         |
             CommentBlock(s)        |
             Const(s)               |
             Continue(s)            |
             Crate(s)               |
             Default(s)             |
             DivideEquals(s)        |
-            DocComment(s)          |
-            DocCommentBlock(s)     |
+            DocCommentInnerLine(s) |
+            DocCommentInnerBlock(s)|
+            DocCommentOuterLine(s) |
+            DocCommentOuterBlock(s)|
             Dollar(s)              |
             DoubleAmpersand(s)     |
             DoubleColon(s)         |
@@ -685,18 +689,26 @@ fn whitespace<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
 
 fn comment_or_doc_comment<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token> {
     let spt = pt;
-    if pt.s.starts_with("///") && !pt.s[3..].starts_with("/") {
+    if pt.s.starts_with("///") && !pt.s.starts_with("////") {
         let eol = pt.s.find("\n").unwrap_or(pt.s.len());
         let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
-        Progress::success(pt, Token::DocComment(ex(spt, pt)))
+        Progress::success(pt, Token::DocCommentOuterLine(ex(spt, pt)))
+    } else if pt.s.starts_with("//!") {
+        let eol = pt.s.find("\n").unwrap_or(pt.s.len());
+        let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
+        Progress::success(pt, Token::DocCommentInnerLine(ex(spt, pt)))
     } else if pt.s.starts_with("//") {
         let eol = pt.s.find("\n").unwrap_or(pt.s.len());
         let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
-        Progress::success(pt, Token::Comment(ex(spt, pt)))
-    } else if pt.s.starts_with("/**") && !pt.s[3..].starts_with("*") && !pt.s[3..].starts_with("/") {
+        Progress::success(pt, Token::CommentLine(ex(spt, pt)))
+    } else if pt.s.starts_with("/**") && !pt.s.starts_with("/***") && !pt.s.starts_with("/**/") {
         let eol = pt.s[3..].find("*/").map(|x| 3 + x + 2).unwrap_or(pt.s.len());
         let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
-        Progress::success(pt, Token::DocCommentBlock(ex(spt, pt)))
+        Progress::success(pt, Token::DocCommentOuterBlock(ex(spt, pt)))
+    } else if pt.s.starts_with("/*!") {
+        let eol = pt.s[3..].find("*/").map(|x| 3 + x + 2).unwrap_or(pt.s.len());
+        let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
+        Progress::success(pt, Token::DocCommentInnerBlock(ex(spt, pt)))
     } else if pt.s.starts_with("/*") {
         let eol = pt.s[2..].find("*/").map(|x| 2 + x + 2).unwrap_or(pt.s.len());
         let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
@@ -1164,9 +1176,27 @@ mod test {
     }
 
     #[test]
-    fn doc_comment_block() {
-        let s = tokenize_as!("/** hi */", Token::DocCommentBlock);
+    fn doc_comment_outer_block() {
+        let s = tokenize_as!("/** hi */", Token::DocCommentOuterBlock);
         assert_eq!(s, (0, 9))
+    }
+
+    #[test]
+    fn doc_comment_inner_block() {
+        let s = tokenize_as!("/*! hi */", Token::DocCommentInnerBlock);
+        assert_eq!(s, (0, 9))
+    }
+
+    #[test]
+    fn doc_comment_outer_line() {
+        let s = tokenize_as!("/// hi", Token::DocCommentOuterLine);
+        assert_eq!(s, (0, 6))
+    }
+
+    #[test]
+    fn doc_comment_inner_line() {
+        let s = tokenize_as!("//! hi", Token::DocCommentInnerLine);
+        assert_eq!(s, (0, 6))
     }
 
     #[test]

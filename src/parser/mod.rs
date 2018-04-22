@@ -201,6 +201,10 @@ pub(crate) enum Error {
     ExpectedCrate,
     ExpectedDefault,
     ExpectedDivideEquals,
+    ExpectedDocCommentInnerBlock,
+    ExpectedDocCommentInnerLine,
+    ExpectedDocCommentOuterBlock,
+    ExpectedDocCommentOuterLine,
     #[allow(unused)]
     ExpectedDollar,
     ExpectedDoubleAmpersand,
@@ -461,6 +465,11 @@ shims! [
     (thin_arrow, Token::into_thin_arrow, Error::ExpectedThinArrow),
     (times_equals, Token::into_times_equals, Error::ExpectedTimesEquals),
     (triple_period, Token::into_triple_period, Error::ExpectedTriplePeriod),
+
+    (doc_comment_inner_block, Token::into_doc_comment_inner_block, Error::ExpectedDocCommentInnerBlock),
+    (doc_comment_inner_line, Token::into_doc_comment_inner_line, Error::ExpectedDocCommentInnerLine),
+    (doc_comment_outer_block, Token::into_doc_comment_outer_block, Error::ExpectedDocCommentOuterBlock),
+    (doc_comment_outer_line, Token::into_doc_comment_outer_line, Error::ExpectedDocCommentOuterLine),
 ];
 
 fn token<'s, F, T>(token_convert: F, error: Error) ->
@@ -2332,16 +2341,32 @@ where
 }
 
 fn attribute<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Attribute> {
+    pm.alternate(pt)
+        .one(map(doc_comment_outer_line, Attribute::DocCommentLine))
+        .one(map(doc_comment_outer_block, Attribute::DocCommentBlock))
+        .one(map(attribute_literal, Attribute::Literal))
+        .finish()
+}
+
+fn attribute_literal<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, AttributeLiteral> {
     sequence!(pm, pt, {
         spt  = point;
         _    = hash;
         _    = left_square;
         text = parse_nested_until(Token::is_left_square, Token::is_right_square);
         _    = right_square;
-    }, |pm: &mut Master, pt| Attribute { extent: pm.state.ex(spt, pt), text })
+    }, |pm: &mut Master, pt| AttributeLiteral { extent: pm.state.ex(spt, pt), text })
 }
 
 fn attribute_containing<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, AttributeContaining> {
+    pm.alternate(pt)
+        .one(map(doc_comment_inner_line, AttributeContaining::DocCommentLine))
+        .one(map(doc_comment_inner_block, AttributeContaining::DocCommentBlock))
+        .one(map(attribute_containing_literal, AttributeContaining::Literal))
+        .finish()
+}
+
+fn attribute_containing_literal<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, AttributeContainingLiteral> {
     sequence!(pm, pt, {
         spt  = point;
         _    = hash;
@@ -2349,7 +2374,7 @@ fn attribute_containing<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, 
         _    = left_square;
         text = parse_nested_until(Token::is_left_square, Token::is_right_square);
         _    = right_square;
-    }, |pm: &mut Master, pt| AttributeContaining { extent: pm.state.ex(spt, pt), text })
+    }, |pm: &mut Master, pt| AttributeContainingLiteral { extent: pm.state.ex(spt, pt), text })
 }
 
 #[cfg(test)]
@@ -2721,6 +2746,18 @@ mod test {
     fn item_attribute_containing() {
         let p = qp(item, r#"#![feature(sweet)]"#);
         assert_extent!(p, (0, 18))
+    }
+
+    #[test]
+    fn item_attribute_containing_doc_comment_line() {
+        let p = qp(item, "//! Hello");
+        assert_extent!(p, (0, 9))
+    }
+
+    #[test]
+    fn item_attribute_containing_doc_comment_block() {
+        let p = qp(item, "/*! Hello */");
+        assert_extent!(p, (0, 12))
     }
 
     #[test]
@@ -3674,6 +3711,18 @@ mod test {
     fn struct_with_attributed_field() {
         let p = qp(p_struct, "struct S { #[foo(bar)] #[baz(quux)] field: u8 }");
         assert_extent!(p, (0, 47))
+    }
+
+    #[test]
+    fn struct_with_block_documented_field() {
+        let p = qp(p_struct, "struct S { /** use me */ field: u8 }");
+        assert_extent!(p, (0, 36))
+    }
+
+    #[test]
+    fn struct_with_line_documented_field() {
+        let p = qp(p_struct, "struct S { /// use me\n field: u8 }");
+        assert_extent!(p, (0, 34))
     }
 
     #[test]
