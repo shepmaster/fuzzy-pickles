@@ -1,3 +1,130 @@
+//! # Fuzzy Pickles
+//!
+//! This is a library for parsing Rust code, paying specific attention
+//! to locations of items in the source code — their [`Extent`]s*.
+//!
+//! # Examples
+//!
+//! ## Navigating the AST
+//!
+//! Parsing a Rust file returns an AST of the file. You can delve into
+//! individual parts of a given AST node; every field is public. Enums
+//! contain `is_X`, `as_X`, and `into_X` methods to quickly narrow
+//! down to specific variant. If you'd like to see the raw text of the
+//! node, you can index the original source code text with the AST
+//! node.
+//!
+//! ```
+//! extern crate fuzzy_pickles;
+//!
+//! use fuzzy_pickles::parse_rust_file;
+//!
+//! fn main() {
+//!     let example_source = r#"
+//!     fn main() { let the_variable_name = 1 + 1; }
+//!     "#;
+//!
+//!     let file = parse_rust_file(example_source)
+//!         .expect("Unable to parse source");
+//!
+//!     let main_fn = file.items[0].value.as_function()
+//!         .expect("Not a function");
+//!
+//!     let first_expr = main_fn.body.statements[0].as_expression()
+//!         .expect("Not an expression");
+//!
+//!     let let_expr = first_expr.value.as_let()
+//!         .expect("Not a let expression");
+//!
+//!     let name_pat = let_expr.pattern.kind.as_ident()
+//!         .expect("Not an ident pattern");
+//!     assert_eq!("the_variable_name", &example_source[name_pat]);
+//!
+//!     let value = let_expr.value.as_ref()
+//!         .expect("No value for let");
+//!
+//!     let addition_expr = value.value.as_binary()
+//!         .expect("Not a binary expression");
+//!     assert_eq!("1 + 1", &example_source[addition_expr]);
+//! }
+//! ```
+//!
+//! ## Using a visitor
+//!
+//! Doing this amount of digging can be tedious and error prone,
+//! however. The crate also comes with visitor traits allowing you to
+//! quickly find relevant nodes.
+//!
+//! ```
+//! extern crate fuzzy_pickles;
+//!
+//! use fuzzy_pickles::{parse_rust_file, ast, visit::{Visit, Visitor}};
+//!
+//! #[derive(Debug, Default)]
+//! struct AddVisitor<'ast>(Vec<&'ast ast::Binary>);
+//!
+//! impl<'ast> Visitor<'ast> for AddVisitor<'ast> {
+//!     fn exit_binary(&mut self, binary: &'ast ast::Binary) {
+//!         self.0.push(binary)
+//!     }
+//! }
+//!
+//! fn main() {
+//!     let example_source = r#"
+//!     fn main() { let the_variable_name = 1 + 1; }
+//!     "#;
+//!
+//!     let file = parse_rust_file(example_source)
+//!         .expect("Unable to parse source");
+//!
+//!     let mut v = AddVisitor::default();
+//!     file.visit(&mut v);
+//!
+//!     let binary = v.0.pop().expect("Didn't find the binary operator");
+//!     assert!(v.0.is_empty(), "Found additional binary operators");
+//!     assert_eq!("1 + 1", &example_source[binary])
+//! }
+//! ```
+//!
+//! ## Reporting errors
+//!
+//! The parser attempts to have a reasonable level of detail when the
+//! input source code is malformed.
+//!
+//! ```should_panic
+//! extern crate fuzzy_pickles;
+//!
+//! use fuzzy_pickles::parse_rust_file;
+//!
+//! fn main() {
+//!     // Oops, we forgot to close our parenthesis!
+//!     let example_source = r#"
+//!     fn main( { let the_variable_name = 1 + 1; }
+//!     "#;
+//!
+//!     let error = parse_rust_file(example_source)
+//!         .unwrap_err();
+//!
+//!     let pretty_error = error.with_text(example_source);
+//!     panic!("{}", pretty_error);
+//! }
+//! ```
+//!
+//! This produces an error that shows the offending location and what
+//! possible symbols were expected. We've truncated this output:
+//!
+//! ```text
+//! Unable to parse text (line 2, column 14)
+//!
+//!     fn main( { let the_variable_name = 1 + 1; }
+//!              ^
+//! Expected:
+//!   ExpectedAmpersand
+//!   ExpectedBox
+//!   ...
+//! ```
+//!
+
 #[macro_use]
 extern crate fuzzy_pickles_derive;
 
