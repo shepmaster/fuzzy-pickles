@@ -571,57 +571,61 @@ impl<'s> ShuntingYard<'s> {
 
         match op {
             // TODO: Make into unary ?
-            Prefix(Attributed { extent, attributes, value: OperatorPrefix::Dereference(..) }) => {
+            Prefix(Attributed { extent, attributes, value: OperatorPrefix::Dereference(..), whitespace }) => {
                 self.apply_prefix(pm, op_range, extent, attributes, |extent, expr| {
                     Expression::Dereference(Dereference {
                         extent,
                         target: Box::new(expr),
-                        whitespace: Vec::new(),
+                        whitespace,
                     })
                 })
             },
-            Prefix(Attributed { extent, attributes, value: OperatorPrefix::Reference { is_mutable } }) => {
+            Prefix(Attributed { extent, attributes, value: OperatorPrefix::Reference { is_mutable }, whitespace }) => {
                 self.apply_prefix(pm, op_range, extent, attributes, |extent, expr| {
                     Expression::Reference(Reference {
                         extent,
                         is_mutable,
                         target: Box::new(expr),
+                        whitespace,
                     })
                 })
             },
             // TODO: Make into unary ?
-            Prefix(Attributed { extent, attributes, value: OperatorPrefix::Box(..) }) => {
+            Prefix(Attributed { extent, attributes, value: OperatorPrefix::Box(..), whitespace }) => {
                 self.apply_prefix(pm, op_range, extent, attributes, |extent, expr| {
                     Expression::Box(ExpressionBox {
                         extent,
                         target: Box::new(expr),
+                        whitespace,
                     })
                 })
             },
-            Prefix(Attributed { extent, attributes, value: OperatorPrefix::RangeInclusive(operator) }) => {
+            Prefix(Attributed { extent, attributes, value: OperatorPrefix::RangeInclusive(operator), whitespace }) => {
                 self.apply_maybe_prefix(pm, op_range, extent, attributes, |extent, expr| {
                     Expression::RangeInclusive(RangeInclusive {
                         extent,
                         lhs: None,
                         operator,
                         rhs: expr.map(Box::new),
+                        whitespace,
                     })
                 })
             },
-            Prefix(Attributed { extent, attributes, value: OperatorPrefix::RangeExclusive(..) }) => {
+            Prefix(Attributed { extent, attributes, value: OperatorPrefix::RangeExclusive(..), whitespace }) => {
                 self.apply_maybe_prefix(pm, op_range, extent, attributes, |extent, expr| {
                     Expression::Range(Range {
                         extent,
                         lhs: None,
                         rhs: expr.map(Box::new),
+                        whitespace,
                     })
                 })
             },
-            Prefix(Attributed { extent, attributes, value: OperatorPrefix::Negate(..) }) => {
-                self.apply_unary(pm, op_range, extent, attributes, UnaryOp::Negate)
+            Prefix(Attributed { extent, attributes, value: OperatorPrefix::Negate(..), whitespace }) => {
+                self.apply_unary(pm, op_range, extent, attributes, UnaryOp::Negate, whitespace)
             },
-            Prefix(Attributed { extent, attributes, value: OperatorPrefix::Not(..) }) => {
-                self.apply_unary(pm, op_range, extent, attributes, UnaryOp::Not)
+            Prefix(Attributed { extent, attributes, value: OperatorPrefix::Not(..), whitespace }) => {
+                self.apply_unary(pm, op_range, extent, attributes, UnaryOp::Not, whitespace)
             },
 
             Infix(OperatorInfix::Add(..)) => self.apply_binary(pm, op_range, BinaryOp::Add),
@@ -661,6 +665,7 @@ impl<'s> ShuntingYard<'s> {
                         lhs: Some(Box::new(lhs)),
                         operator,
                         rhs: rhs.map(Box::new),
+                        whitespace: Vec::new(),
                     }).into()
                 })
             },
@@ -670,6 +675,7 @@ impl<'s> ShuntingYard<'s> {
                         extent,
                         lhs: Some(Box::new(lhs)),
                         rhs: rhs.map(Box::new),
+                        whitespace: Vec::new(),
                     }).into()
                 })
             },
@@ -680,6 +686,7 @@ impl<'s> ShuntingYard<'s> {
                         extent,
                         target: Box::new(expr),
                         field,
+                        whitespace: Vec::new(),
                     }).into()
                 })
             },
@@ -689,6 +696,7 @@ impl<'s> ShuntingYard<'s> {
                         extent,
                         target: Box::new(expr),
                         args,
+                        whitespace: Vec::new(),
                     }).into()
                 })
             },
@@ -698,6 +706,7 @@ impl<'s> ShuntingYard<'s> {
                         extent,
                         target: Box::new(expr),
                         index: Box::new(index),
+                        whitespace: Vec::new(),
                     }).into()
                 })
             },
@@ -707,6 +716,7 @@ impl<'s> ShuntingYard<'s> {
                         extent,
                         target: Box::new(expr),
                         typ,
+                        whitespace: Vec::new(),
                     }).into()
                 })
             },
@@ -716,6 +726,7 @@ impl<'s> ShuntingYard<'s> {
                         extent,
                         target: Box::new(expr),
                         typ,
+                        whitespace: Vec::new(),
                     }).into()
                 })
             },
@@ -724,6 +735,7 @@ impl<'s> ShuntingYard<'s> {
                     Expression::TryOperator(TryOperator {
                         extent,
                         target: Box::new(expr),
+                        whitespace: Vec::new(),
                     }).into()
                 })
             },
@@ -745,7 +757,7 @@ impl<'s> ShuntingYard<'s> {
             let extent_of_inner_expression = pm.state.ex(op_range.start, op_range.end);
             let value = f(extent_of_inner_expression, None);
             let extent = Extent(extent_of_prefix.0, extent_of_inner_expression.1);
-            let new_expr = Attributed { extent, attributes, value };
+            let new_expr = Attributed { extent, attributes, value, whitespace: Vec::new() };
             self.result.push(ShuntCar { value: new_expr, spt: op_range.start, ept: op_range.end });
             Ok(())
         } else {
@@ -775,12 +787,12 @@ impl<'s> ShuntingYard<'s> {
         let extent_of_inner_expression = pm.state.ex(op_range.start, expr_ept);
         let value = f(extent_of_inner_expression, expr);
         let extent = Extent(extent_of_prefix.0, extent_of_inner_expression.1);
-        let new_expr = Attributed { extent, attributes, value };
+        let new_expr = Attributed { extent, attributes, value, whitespace: Vec::new() };
         self.result.push(ShuntCar { value: new_expr, spt: op_range.start, ept: expr_ept });
         Ok(())
     }
 
-    fn apply_unary(&mut self, pm: &Master, op_range: PointRange<'s>, extent: Extent, attributes: Vec<Attribute>, op: UnaryOp) ->
+    fn apply_unary(&mut self, pm: &Master, op_range: PointRange<'s>, extent: Extent, attributes: Vec<Attribute>, op: UnaryOp, whitespace: Vec<Whitespace>) ->
         ExprResult<'s, ()>
     {
         self.apply_prefix(pm, op_range, extent, attributes, |extent, expr| {
@@ -788,7 +800,7 @@ impl<'s> ShuntingYard<'s> {
                 extent,
                 op,
                 value: Box::new(expr),
-                whitespace: Vec::new(),
+                whitespace,
             })
         })
     }
@@ -859,7 +871,13 @@ pub(crate) fn expr_macro_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progres
         _    = bang;
         arg  = optional(ident);
         args = expr_macro_call_args;
-    }, |pm: &mut Master, pt| MacroCall { extent: pm.state.ex(spt, pt), name, arg, args })
+    }, |pm: &mut Master, pt| MacroCall {
+        extent: pm.state.ex(spt, pt),
+        name,
+        arg,
+        args,
+        whitespace: Vec::new(),
+    })
 }
 
 fn expr_macro_call_args<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MacroCallArgs> {
@@ -1106,10 +1124,12 @@ fn expr_tuple_or_parenthetical<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progre
             (1, 0) => Expression::Parenthetical(Parenthetical {
                 extent,
                 expression: Box::new(values.pop().expect("Must have one parenthesized value")),
+                whitespace: Vec::new(),
             }),
             _ => Expression::Tuple(Tuple {
                 extent,
                 members: values,
+                whitespace: Vec::new(),
             }),
         }
     })
@@ -1128,7 +1148,11 @@ fn expr_array_explicit<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, A
         _      = left_square;
         values = head_expression_no_longer_ambiguous(zero_or_more_tailed_values(comma, expression));
         _      = right_square;
-    }, |pm: &mut Master, pt| ArrayExplicit { extent: pm.state.ex(spt, pt), values })
+    }, |pm: &mut Master, pt| ArrayExplicit {
+        extent: pm.state.ex(spt, pt),
+        values,
+        whitespace: Vec::new(),
+    })
 }
 
 fn expr_array_repeated<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ArrayRepeated> {
@@ -1183,9 +1207,15 @@ fn expr_closure<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Closure>
 
 fn expr_closure_arg<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ClosureArg> {
     sequence!(pm, pt, {
+        spt  = point;
         name = pattern;
         typ  = optional(expr_closure_arg_type);
-    }, |_, _| ClosureArg { name, typ, whitespace: Vec::new() })
+    }, |pm: &mut Master, pt| ClosureArg {
+        extent: pm.state.ex(spt, pt),
+        name,
+        typ,
+        whitespace: Vec::new(),
+    })
 }
 
 fn expr_closure_arg_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Type> {
@@ -1284,13 +1314,23 @@ fn expr_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Value> {
         sequence!(pm, pt, {
             spt  = point;
             name = pathed_ident;
-        }, |pm: &mut Master, pt| Value { extent: pm.state.ex(spt, pt), name, literal: None })
+        }, |pm: &mut Master, pt| Value {
+            extent: pm.state.ex(spt, pt),
+            name,
+            literal: None,
+            whitespace: Vec::new(),
+        })
     } else {
         sequence!(pm, pt, {
             spt     = point;
             name    = pathed_ident;
             literal = optional(expr_value_struct_literal);
-        }, |pm: &mut Master, pt| Value { extent: pm.state.ex(spt, pt), name, literal })
+        }, |pm: &mut Master, pt| Value {
+            extent: pm.state.ex(spt, pt),
+            name,
+            literal,
+            whitespace: Vec::new(),
+        })
     }
 }
 
@@ -1320,8 +1360,9 @@ fn expr_value_struct_literal_field<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Pr
             extent: pm.state.ex(spt, mpt),
             name: name.into(),
             literal: None,
+            whitespace: Vec::new(),
         }).into());
-        StructLiteralField { name, value, whitespace: Vec::new() }
+        StructLiteralField { extent: pm.state.ex(spt, pt), name, value, whitespace: Vec::new() }
     })
 }
 

@@ -11,6 +11,7 @@ extern crate unicode_xid;
 mod test_utils;
 
 mod combinators;
+mod whitespace_apportioner;
 
 pub mod ast;
 pub mod tokenizer;
@@ -18,6 +19,7 @@ pub mod visit;
 pub mod parser;
 
 use std::fmt;
+use whitespace_apportioner::WhitespaceApportioner;
 
 /// A pair of `(start, end)` points corresponding to something
 /// interesting in the source text.
@@ -146,15 +148,43 @@ impl<'a> HumanTextError<'a> {
     }
 }
 
-/// The entrypoint to parsing Rust code.
-pub fn parse_rust_file(file: &str) -> Result<ast::File, ErrorDetail> {
-    use parser::{attributed, item, Point, Master, State};
+fn extract_whitespace(file: &str) -> Result<(WhitespaceApportioner, Vec<tokenizer::Token>), tokenizer::ErrorDetail> {
     use tokenizer::{Token, Tokens};
 
-    let tokens: Vec<_> = Tokens::new(file).collect::<Result<_, _>>()?;
-    let (_ws, tokens): (Vec<_>, Vec<_>) = tokens.into_iter().partition(|t| {
-        t.is_whitespace() || t.is_comment_line() || t.is_comment_block()
-    });
+    let mut ws = WhitespaceApportioner::default();
+    let mut tokens = Vec::new();
+
+    for token in Tokens::new(file) {
+        let token = token?;
+
+        match token {
+            Token::Whitespace(w) => {
+                ws.push(ast::Whitespace::Whitespace(w))
+            }
+            Token::CommentLine(c) => {
+                let c = ast::Comment::Line(c);
+                ws.push(ast::Whitespace::Comment(c));
+            }
+            Token::CommentBlock(c) => {
+                let c = ast::Comment::Block(c);
+                ws.push(ast::Whitespace::Comment(c));
+            }
+            o => tokens.push(o),
+        }
+    }
+
+    Ok((ws, tokens))
+}
+
+/// The entrypoint to parsing Rust code.
+pub fn parse_rust_file(file: &str) -> Result<ast::File, ErrorDetail> {
+    use {
+        parser::{attributed, item, Point, Master, State},
+        tokenizer::Token,
+        visit::Visit,
+    };
+
+    let (mut ws, tokens) = extract_whitespace(file)?;
 
     let mut pt = Point::new(&tokens);
     let mut pm = Master::with_state(State::new());
@@ -179,13 +209,16 @@ pub fn parse_rust_file(file: &str) -> Result<ast::File, ErrorDetail> {
             },
         };
 
-        if next_pt.offset <= pt.offset {
-            panic!("Unable to make progress");
-        }
+        assert!(next_pt.offset > pt.offset, "Unable to make progress");
         pt = next_pt;
     }
 
-    Ok(ast::File { items: items })
+    let mut file = ast::File { items, whitespace: Vec::new() };
+
+    file.visit_mut(&mut ws);
+    assert!(ws.is_empty(), "Did not assign all whitespace");
+
+    Ok(file)
 }
 
 #[cfg(test)]

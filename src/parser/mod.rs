@@ -634,6 +634,7 @@ fn function_qualifiers<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
             is_unsafe,
             is_extern,
             abi,
+            whitespace: Vec::new(),
         }
     })
 }
@@ -665,7 +666,12 @@ fn generic_declarations<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, 
         lifetimes = zero_or_more_tailed_values(comma, attributed(generic_declaration_lifetime));
         types     = zero_or_more_tailed_values(comma, attributed(generic_declaration_type));
         _         = right_angle;
-    }, |pm: &mut Master, pt| GenericDeclarations { extent: pm.state.ex(spt, pt), lifetimes, types })
+    }, |pm: &mut Master, pt| GenericDeclarations {
+        extent: pm.state.ex(spt, pt),
+        lifetimes,
+        types,
+        whitespace: Vec::new(),
+    })
 }
 
 fn generic_declaration_lifetime<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, GenericDeclarationLifetime> {
@@ -677,6 +683,7 @@ fn generic_declaration_lifetime<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progr
         extent: pm.state.ex(spt, pt),
         name,
         bounds: bounds.unwrap_or_else(Vec::new),
+        whitespace: Vec::new(),
     })
 }
 
@@ -694,7 +701,13 @@ fn generic_declaration_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<
         // Over-permissive; allows interleaving trait bounds and default types
         bounds     = optional(generic_declaration_type_bounds);
         default    = optional(generic_declaration_type_default);
-    }, |pm: &mut Master, pt| GenericDeclarationType { extent: pm.state.ex(spt, pt), name, bounds, default })
+    }, |pm: &mut Master, pt| GenericDeclarationType {
+        extent: pm.state.ex(spt, pt),
+        name,
+        bounds,
+        default,
+        whitespace: Vec::new(),
+    })
 }
 
 fn generic_declaration_type_bounds<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TraitBounds> {
@@ -769,10 +782,16 @@ fn self_argument_qualifier<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
 
 fn function_argument<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Argument> {
     sequence!(pm, pt, {
+        spt  = point;
         name = pattern;
         _    = colon;
         typ  = typ;
-    }, |_, _| Argument::Named(NamedArgument { name, typ, whitespace: Vec::new() }))
+    }, |pm: &mut Master, pt| Argument::Named(NamedArgument {
+        extent: pm.state.ex(spt, pt),
+        name,
+        typ,
+        whitespace: Vec::new(),
+    }))
 }
 
 fn function_return_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Type> {
@@ -798,6 +817,7 @@ fn where_clause_item<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Whe
         extent: pm.state.ex(spt, pt),
         higher_ranked_trait_bounds: hrtbs.unwrap_or_else(Vec::new),
         kind,
+        whitespace: Vec::new(),
     })
 }
 
@@ -813,7 +833,12 @@ fn where_lifetime<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, WhereL
         spt    = point;
         name   = lifetime;
         bounds = generic_declaration_lifetime_bounds;
-    }, |pm: &mut Master, pt| WhereLifetime { extent: pm.state.ex(spt, pt), name, bounds  })
+    }, |pm: &mut Master, pt| WhereLifetime {
+        extent: pm.state.ex(spt, pt),
+        name,
+        bounds,
+        whitespace: Vec::new(),
+    })
 }
 
 fn where_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, WhereType> {
@@ -821,14 +846,23 @@ fn where_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, WhereType>
         spt    = point;
         name   = typ;
         bounds = generic_declaration_type_bounds;
-    }, |pm: &mut Master, pt| WhereType { extent: pm.state.ex(spt, pt), name, bounds  })
+    }, |pm: &mut Master, pt| WhereType {
+        extent: pm.state.ex(spt, pt),
+        name,
+        bounds,
+        whitespace: Vec::new(),
+    })
 }
 
 fn trait_bounds<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TraitBounds> {
     sequence!(pm, pt, {
         spt   = point;
         types = zero_or_more_tailed_values(plus, trait_bound);
-    }, |pm: &mut Master, pt| TraitBounds { extent: pm.state.ex(spt, pt), types })
+    }, |pm: &mut Master, pt| TraitBounds {
+        extent: pm.state.ex(spt, pt),
+        types,
+        whitespace: Vec::new(),
+    })
 }
 
 fn trait_bound<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TraitBound> {
@@ -843,14 +877,22 @@ fn trait_bound_lifetime<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, 
     sequence!(pm, pt, {
         spt      = point;
         lifetime = lifetime;
-    }, |pm: &mut Master, pt| TraitBoundLifetime { extent: pm.state.ex(spt, pt), lifetime })
+    }, |pm: &mut Master, pt| TraitBoundLifetime {
+        extent: pm.state.ex(spt, pt),
+        lifetime,
+        whitespace: Vec::new(),
+    })
 }
 
 fn trait_bound_normal<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TraitBoundNormal> {
     sequence!(pm, pt, {
         spt = point;
         typ = trait_bound_normal_child;
-    }, |pm: &mut Master, pt| TraitBoundNormal { extent: pm.state.ex(spt, pt), typ })
+    }, |pm: &mut Master, pt| TraitBoundNormal {
+        extent: pm.state.ex(spt, pt),
+        typ,
+        whitespace: Vec::new(),
+    })
 }
 
 fn trait_bound_normal_child<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
@@ -926,7 +968,13 @@ fn item_macro_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Macro
         _    = bang;
         arg  = optional(ident);
         args = item_macro_call_args;
-    }, |pm: &mut Master, pt| MacroCall { extent: pm.state.ex(spt, pt), name, arg, args })
+    }, |pm: &mut Master, pt| MacroCall {
+        extent: pm.state.ex(spt, pt),
+        name,
+        arg,
+        args,
+        whitespace: Vec::new(),
+    })
 }
 
 fn item_macro_call_args<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MacroCallArgs> {
@@ -1003,13 +1051,16 @@ fn convert_number(n: tokenizer::Number) -> Number {
     }
 }
 
-
 fn path<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Path> {
     sequence!(pm, pt, {
         spt        = point;
         _          = optional(double_colon);
         components = one_or_more_tailed_values(double_colon, ident);
-    }, |pm: &mut Master, pt| Path { extent: pm.state.ex(spt, pt), components })
+    }, |pm: &mut Master, pt| Path {
+        extent: pm.state.ex(spt, pt),
+        components,
+        whitespace: Vec::new(),
+    })
 }
 
 fn pathed_ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PathedIdent> {
@@ -1017,7 +1068,11 @@ fn pathed_ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PathedId
         spt        = point;
         _          = optional(double_colon);
         components = one_or_more_tailed_values(double_colon, path_component);
-    }, |pm: &mut Master, pt| PathedIdent { extent: pm.state.ex(spt, pt), components })
+    }, |pm: &mut Master, pt| PathedIdent {
+        extent: pm.state.ex(spt, pt),
+        components,
+        whitespace: Vec::new(),
+    })
 }
 
 fn path_component<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PathComponent> {
@@ -1025,7 +1080,12 @@ fn path_component<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PathCo
         spt       = point;
         ident     = ident;
         turbofish = optional(turbofish);
-    }, |pm: &mut Master, pt| PathComponent { extent: pm.state.ex(spt, pt), ident, turbofish })
+    }, |pm: &mut Master, pt| PathComponent {
+        extent: pm.state.ex(spt, pt),
+        ident,
+        turbofish,
+        whitespace: Vec::new(),
+    })
 }
 
 fn turbofish<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Turbofish> {
@@ -1036,7 +1096,12 @@ fn turbofish<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Turbofish> 
         lifetimes = zero_or_more_tailed_values(comma, lifetime);
         types     = zero_or_more_tailed_values(comma, typ);
         _     = right_angle;
-    }, |pm: &mut Master, pt| Turbofish { extent: pm.state.ex(spt, pt), lifetimes, types })
+    }, |pm: &mut Master, pt| Turbofish {
+        extent: pm.state.ex(spt, pt),
+        lifetimes,
+        types,
+        whitespace: Vec::new(),
+    })
 }
 
 fn pattern<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Pattern> {
@@ -1044,7 +1109,12 @@ fn pattern<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Pattern> {
         spt  = point;
         name = optional(pattern_name);
         kind = pattern_kind;
-    }, |pm: &mut Master, pt| Pattern { extent: pm.state.ex(spt, pt), name, kind })
+    }, |pm: &mut Master, pt| Pattern {
+        extent: pm.state.ex(spt, pt),
+        name,
+        kind,
+        whitespace: Vec::new(),
+    })
 }
 
 fn pattern_name<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternName> {
@@ -1085,7 +1155,14 @@ fn pattern_ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Pattern
         is_mut = optional(ext(kw_mut));
         ident  = pathed_ident;
         tuple  = optional(pattern_tuple);
-    }, |pm: &mut Master, pt| PatternIdent { extent: pm.state.ex(spt, pt), is_ref, is_mut, ident, tuple })
+    }, |pm: &mut Master, pt| PatternIdent {
+        extent: pm.state.ex(spt, pt),
+        is_ref,
+        is_mut,
+        ident,
+        tuple,
+        whitespace: Vec::new(),
+    })
 }
 
 fn pattern_tuple<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternTuple> {
@@ -1094,7 +1171,11 @@ fn pattern_tuple<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Pattern
         _       = left_paren;
         members = zero_or_more_tailed_values(comma, pattern_tuple_member);
         _       = right_paren;
-    }, |pm: &mut Master, pt| PatternTuple { extent: pm.state.ex(spt, pt), members })
+    }, |pm: &mut Master, pt| PatternTuple {
+        extent: pm.state.ex(spt, pt),
+        members,
+        whitespace: Vec::new(),
+    })
 }
 
 fn pattern_tuple_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
@@ -1112,7 +1193,11 @@ fn pattern_slice<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Pattern
         _       = left_square;
         members = zero_or_more_tailed_values(comma, pattern_slice_member);
         _       = right_square;
-    }, |pm: &mut Master, pt| PatternSlice { extent: pm.state.ex(spt, pt), members })
+    }, |pm: &mut Master, pt| PatternSlice {
+        extent: pm.state.ex(spt, pt),
+        members,
+        whitespace: Vec::new(),
+    })
 }
 
 fn pattern_slice_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
@@ -1137,6 +1222,7 @@ fn pattern_slice_subslice<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s
         is_ref,
         is_mut,
         name,
+        whitespace: Vec::new(),
     })
 }
 
@@ -1161,7 +1247,7 @@ fn pattern_struct_field<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, 
     pm.alternate(pt)
         .one(map(pattern_struct_field_long, PatternStructField::Long))
         .one(map(map(pattern_ident, |ident| {
-            PatternStructFieldShort { ident }
+            PatternStructFieldShort { extent: ident.extent, ident, whitespace: Vec::new() }
         }), PatternStructField::Short))
         .finish()
 }
@@ -1198,7 +1284,12 @@ fn pattern_number<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Patter
         spt         = point;
         is_negative = optional(minus);
         value       = number_literal;
-    }, |pm: &mut Master, pt| PatternNumber { extent: pm.state.ex(spt, pt), is_negative, value })
+    }, |pm: &mut Master, pt| PatternNumber {
+        extent: pm.state.ex(spt, pt),
+        is_negative,
+        value,
+        whitespace: Vec::new(),
+    })
 }
 
 fn pattern_reference<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternReference> {
@@ -1279,7 +1370,11 @@ fn pattern_range_component<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'
 }
 
 fn pattern_macro_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PatternMacroCall> {
-    expr_macro_call(pm, pt).map(|value| PatternMacroCall { extent: value.extent, value })
+    expr_macro_call(pm, pt).map(|value| PatternMacroCall {
+        extent: value.extent,
+        value,
+        whitespace: Vec::new(),
+    })
 }
 
 fn p_struct<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Struct> {
@@ -1359,6 +1454,7 @@ fn tuple_defn_field<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Stru
         extent: pm.state.ex(spt, pt),
         visibility,
         typ,
+        whitespace: Vec::new(),
     })
 }
 
@@ -1493,7 +1589,12 @@ fn trait_member_function<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s,
         spt    = point;
         header = trait_impl_function_header;
         body   = trait_impl_function_body;
-    }, |pm: &mut Master, pt| TraitMemberFunction { extent: pm.state.ex(spt, pt), header, body })
+    }, |pm: &mut Master, pt| TraitMemberFunction {
+        extent: pm.state.ex(spt, pt),
+        header,
+        body,
+        whitespace: Vec::new(),
+    })
 }
 
 fn trait_member_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TraitMemberType> {
@@ -1597,9 +1698,15 @@ fn trait_impl_function_arglist<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progre
 
 fn trait_impl_function_argument<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TraitImplArgument> {
     sequence!(pm, pt, {
+        spt  = point;
         name = optional(trait_impl_function_argument_name);
         typ  = typ;
-    }, |_, _| TraitImplArgument::Named(TraitImplArgumentNamed { name, typ, whitespace: Vec::new() }))
+    }, |pm: &mut Master, pt| TraitImplArgument::Named(TraitImplArgumentNamed {
+        extent: pm.state.ex(spt, pt),
+        name,
+        typ,
+        whitespace: Vec::new(),
+    }))
 }
 
 fn trait_impl_function_argument_name<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
@@ -1695,7 +1802,12 @@ fn impl_function<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplFun
         spt    = point;
         header = function_header;
         body   = block;
-    }, |pm: &mut Master, pt| ImplFunction { extent: pm.state.ex(spt, pt), header, body })
+    }, |pm: &mut Master, pt| ImplFunction {
+        extent: pm.state.ex(spt, pt),
+        header,
+        body,
+        whitespace: Vec::new(),
+    })
 }
 
 fn impl_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ImplType> {
@@ -1823,6 +1935,7 @@ fn extern_block_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ext
         extent: pm.state.ex(spt, pt),
         visibility,
         name,
+        whitespace: Vec::new(),
     })
 }
 
@@ -1916,8 +2029,11 @@ fn use_path<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, UsePath> {
         spt  = point;
         path = zero_or_more(use_path_component);
         tail = use_tail;
-    }, move |pm: &mut Master, pt| {
-        UsePath { extent: pm.state.ex(spt, pt), path, tail }
+    }, move |pm: &mut Master, pt| UsePath {
+        extent: pm.state.ex(spt, pt),
+        path,
+        tail,
+        whitespace: Vec::new(),
     })
 }
 
@@ -1941,7 +2057,12 @@ fn use_tail_ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, UseTai
         spt    = point;
         name   = ident;
         rename = optional(use_tail_ident_rename);
-    }, |pm: &mut Master, pt| UseTailIdent { extent: pm.state.ex(spt, pt), name, rename })
+    }, |pm: &mut Master, pt| UseTailIdent {
+        extent: pm.state.ex(spt, pt),
+        name,
+        rename,
+        whitespace: Vec::new(),
+    })
 }
 
 fn use_tail_ident_rename<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ident> {
@@ -1964,7 +2085,11 @@ fn use_tail_multi<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, UseTai
         _     = left_curly;
         paths = zero_or_more_tailed_values(comma, use_path);
         _     = right_curly;
-    }, |pm: &mut Master, pt| UseTailMulti { extent: pm.state.ex(spt, pt), paths })
+    }, |pm: &mut Master, pt| UseTailMulti {
+        extent: pm.state.ex(spt, pt),
+        paths,
+        whitespace: Vec::new(),
+    })
 }
 
 fn type_alias<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeAlias> {
@@ -2019,14 +2144,24 @@ fn typ<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Type> {
         spt        = point;
         kind       = typ_kind;
         additional = zero_or_more_tailed_values_resume(plus, typ_additional);
-    }, |pm: &mut Master, pt| Type { extent: pm.state.ex(spt, pt), kind, additional })
+    }, |pm: &mut Master, pt| Type {
+        extent: pm.state.ex(spt, pt),
+        kind,
+        additional,
+        whitespace: Vec::new(),
+    })
 }
 
 fn typ_single<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Type> {
     sequence!(pm, pt, {
         spt  = point;
         kind = typ_kind;
-    }, |pm: &mut Master, pt| Type { extent: pm.state.ex(spt, pt), kind, additional: vec![] })
+    }, |pm: &mut Master, pt| Type {
+        extent: pm.state.ex(spt, pt),
+        kind,
+        additional: vec![],
+        whitespace: Vec::new(),
+    })
 }
 
 fn typ_kind<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeKind> {
@@ -2050,7 +2185,12 @@ fn typ_reference<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeRef
         spt  = point;
         kind = typ_reference_kind;
         typ  = typ;
-    }, |pm: &mut Master, pt| TypeReference { extent: pm.state.ex(spt, pt), kind, typ: Box::new(typ) })
+    }, |pm: &mut Master, pt| TypeReference {
+        extent: pm.state.ex(spt, pt),
+        kind,
+        typ: Box::new(typ),
+        whitespace: Vec::new(),
+    })
 }
 
 fn typ_reference_kind<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeReferenceKind> {
@@ -2084,7 +2224,11 @@ fn typ_tuple<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeTuple> 
         _     = left_paren;
         types = zero_or_more_tailed_values(comma, typ);
         _     = right_paren;
-    }, |pm: &mut Master, pt| TypeTuple { extent: pm.state.ex(spt, pt), types })
+    }, |pm: &mut Master, pt| TypeTuple {
+        extent: pm.state.ex(spt, pt),
+        types,
+        whitespace: Vec::new(),
+    })
 }
 
 fn typ_higher_ranked_trait_bounds<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
@@ -2140,7 +2284,11 @@ fn typ_named<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeNamed> 
         spt  = point;
         _    = optional(double_colon);
         path = one_or_more_tailed_values(double_colon, typ_named_component);
-    }, |pm: &mut Master, pt| TypeNamed { extent: pm.state.ex(spt, pt), path })
+    }, |pm: &mut Master, pt| TypeNamed {
+        extent: pm.state.ex(spt, pt),
+        path,
+        whitespace: Vec::new(),
+    })
 }
 
 fn typ_named_component<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeNamedComponent> {
@@ -2148,7 +2296,12 @@ fn typ_named_component<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, T
         spt      = point;
         ident    = ident;
         generics = optional(typ_generics);
-    }, |pm: &mut Master, pt| TypeNamedComponent { extent: pm.state.ex(spt, pt), ident, generics })
+    }, |pm: &mut Master, pt| TypeNamedComponent {
+        extent: pm.state.ex(spt, pt),
+        ident,
+        generics,
+        whitespace: Vec::new(),
+    })
 }
 
 fn typ_disambiguation<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeDisambiguation> {
@@ -2298,6 +2451,7 @@ fn typ_function_argument<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
         extent: pm.state.ex(spt, pt),
         name,
         typ,
+        whitespace: Vec::new(),
     }))
 }
 
@@ -2336,6 +2490,7 @@ where
             extent: pm.state.ex(spt, pt),
             attributes,
             value,
+            whitespace: Vec::new(),
         })
     }
 }
@@ -2355,7 +2510,11 @@ fn attribute_literal<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Att
         _    = left_square;
         text = parse_nested_until(Token::is_left_square, Token::is_right_square);
         _    = right_square;
-    }, |pm: &mut Master, pt| AttributeLiteral { extent: pm.state.ex(spt, pt), text })
+    }, |pm: &mut Master, pt| AttributeLiteral {
+        extent: pm.state.ex(spt, pt),
+        text,
+        whitespace: Vec::new(),
+    })
 }
 
 fn attribute_containing<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, AttributeContaining> {
@@ -2374,7 +2533,11 @@ fn attribute_containing_literal<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progr
         _    = left_square;
         text = parse_nested_until(Token::is_left_square, Token::is_right_square);
         _    = right_square;
-    }, |pm: &mut Master, pt| AttributeContainingLiteral { extent: pm.state.ex(spt, pt), text })
+    }, |pm: &mut Master, pt| AttributeContainingLiteral {
+        extent: pm.state.ex(spt, pt),
+        text,
+        whitespace: Vec::new(),
+    })
 }
 
 #[cfg(test)]

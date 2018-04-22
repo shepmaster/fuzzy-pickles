@@ -3,16 +3,19 @@
 // Potential cleanups:
 //
 // - Split expressions, patterns, types into separate modules?
+// - Any struct with just an extent and a value should be checked for redundancy
+// - All types should have public fields
 
 use std;
 
 use {Extent, HasExtent};
-use visit::{Visit, Visitor};
+use visit::{Visit, Visitor, VisitorMut};
 
 /// An entire Rust file
 #[derive(Debug, Visit)]
 pub struct File {
     pub items: Vec<Attributed<Item>>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
@@ -53,6 +56,7 @@ pub enum Attribute {
 pub struct AttributeLiteral {
     pub extent: Extent,
     pub text: Extent,
+    pub whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
@@ -74,6 +78,7 @@ pub enum AttributeContaining {
 pub struct AttributeContainingLiteral {
     pub extent: Extent,
     pub text: Extent,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A lifetime identifier
@@ -89,7 +94,7 @@ pub struct Lifetime {
     pub name: Ident,
 }
 
-#[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
+#[derive(Debug, PartialEq, Eq, HasExtent, ExtentIndex, Visit, Decompose)]
 pub enum Whitespace {
     Comment(Comment),
     Whitespace(Extent),
@@ -129,6 +134,7 @@ pub struct UsePath {
     pub extent: Extent,
     pub path: Vec<Ident>,
     pub tail: UseTail,
+    pub whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
@@ -151,6 +157,7 @@ pub struct UseTailIdent {
     pub extent: Extent,
     pub name: Ident,
     pub rename: Option<Ident>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A wildcard name imported by the `use` item
@@ -179,6 +186,7 @@ pub struct UseTailGlob {
 pub struct UseTailMulti {
     pub extent: Extent,
     pub paths: Vec<UsePath>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A function definition
@@ -238,6 +246,7 @@ pub struct FunctionQualifiers {
     pub is_extern: Option<Extent>,
     // TODO: abi should be predicated on `extern` being present
     pub abi: Option<String>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// The signature of a function in a trait declaration
@@ -275,6 +284,7 @@ pub struct GenericDeclarations {
     pub extent: Extent,
     pub lifetimes: Vec<Attributed<GenericDeclarationLifetime>>,
     pub types: Vec<Attributed<GenericDeclarationType>>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// Generic lifetime parameters
@@ -290,6 +300,7 @@ pub struct GenericDeclarationLifetime {
     pub extent: Extent,
     pub name: Lifetime,
     pub bounds: Vec<Lifetime>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// Generic type parameters
@@ -306,6 +317,7 @@ pub struct GenericDeclarationType {
     pub name: Ident,
     pub bounds: Option<TraitBounds>,
     pub default: Option<Type>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A concrete type
@@ -323,6 +335,7 @@ pub struct Type {
     pub extent: Extent,
     pub kind: TypeKind,
     pub additional: Vec<TypeAdditional>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
@@ -353,6 +366,7 @@ pub struct TypeReference {
     pub extent: Extent,
     pub kind: TypeReferenceKind,
     pub typ: Box<Type>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// The qualifiers for a reference in a type
@@ -467,6 +481,7 @@ pub enum TypeAdditional {
 pub struct TypeNamed {
     pub extent: Extent,
     pub path: Vec<TypeNamedComponent>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A component of a named type
@@ -482,6 +497,7 @@ pub struct TypeNamedComponent {
     pub extent: Extent,
     pub ident: Ident,
     pub generics: Option<TypeGenerics>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A disambiguation of a type
@@ -528,6 +544,7 @@ pub struct TypeSlice {
 pub struct TypeTuple {
     pub extent: Extent,
     pub types: Vec<Type>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
@@ -627,7 +644,8 @@ pub enum TypeFunctionArgument {
 pub struct TypeFunctionArgumentNamed {
     pub extent: Extent,
     pub name: Option<Ident>,
-    pub typ: Type
+    pub typ: Type,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A single identifier
@@ -657,6 +675,7 @@ pub struct Path {
     pub extent: Extent,
     // TODO: Can we reuse the path from the `use` statement?
     pub components: Vec<Ident>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A module-qualified identifier
@@ -672,6 +691,24 @@ pub struct Path {
 pub struct PathedIdent {
     pub extent: Extent,
     pub components: Vec<PathComponent>,
+    pub whitespace: Vec<Whitespace>,
+}
+
+impl From<Ident> for PathedIdent {
+    fn from(other: Ident) -> PathedIdent {
+        PathedIdent {
+            extent: other.extent,
+            components: vec![
+                PathComponent {
+                    extent: other.extent,
+                    ident: other,
+                    turbofish: None,
+                    whitespace: Vec::new(),
+                },
+            ],
+            whitespace: Vec::new(),
+        }
+    }
 }
 
 /// A component of a module-qualified identifier
@@ -687,6 +724,7 @@ pub struct PathComponent {
     pub extent: Extent,
     pub ident: Ident,
     pub turbofish: Option<Turbofish>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// Allows specifying concrete types
@@ -702,14 +740,7 @@ pub struct Turbofish {
     pub extent: Extent,
     pub lifetimes: Vec<Lifetime>,
     pub types: Vec<Type>,
-}
-
-impl From<Ident> for PathedIdent {
-    fn from(other: Ident) -> PathedIdent {
-        PathedIdent { extent: other.extent, components: vec![
-            PathComponent { extent: other.extent, ident: other, turbofish: None },
-        ] }
-    }
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A constant value
@@ -833,6 +864,7 @@ pub struct StructDefinitionFieldUnnamed {
     pub extent: Extent,
     pub visibility: Option<Visibility>,
     pub typ: Type,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A union definition
@@ -953,8 +985,9 @@ pub enum SelfArgumentShorthandQualifier {
 /// fn a(age: u8) {}
 /// //   ^^^^^^^
 /// ```
-#[derive(Debug, Visit)] // HasExtent?
+#[derive(Debug, HasExtent, ExtentIndex, Visit)]
 pub struct NamedArgument {
+    pub extent: Extent,
     pub name: Pattern,
     pub typ: Type,
     pub whitespace: Vec<Whitespace>,
@@ -976,8 +1009,9 @@ pub enum TraitImplArgument {
 /// ```
 // TODO: "Trait impl" sounds confusing; why not just trait or trait defn?
 // TODO: "named" is a lie here, as well
-#[derive(Debug, Visit)] // HasExtent?
+#[derive(Debug, HasExtent, ExtentIndex, Visit)]
 pub struct TraitImplArgumentNamed {
+    pub extent: Extent,
     pub name: Option<Pattern>,
     pub typ: Type,
     pub whitespace: Vec<Whitespace>,
@@ -997,6 +1031,7 @@ pub struct Where {
     pub extent: Extent,
     pub higher_ranked_trait_bounds: Vec<Lifetime>,
     pub kind: WhereKind,
+    pub whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
@@ -1018,6 +1053,7 @@ pub struct WhereLifetime {
     pub extent: Extent,
     pub name: Lifetime,
     pub bounds: Vec<Lifetime>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A single where clause applying to a type
@@ -1033,6 +1069,7 @@ pub struct WhereType {
     pub extent: Extent,
     pub name: Type,
     pub bounds: TraitBounds,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// The trait bounds of a type
@@ -1047,6 +1084,7 @@ pub struct WhereType {
 pub struct TraitBounds {
     pub extent: Extent,
     pub types: Vec<TraitBound>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
@@ -1069,6 +1107,7 @@ pub enum TraitBound {
 pub struct TraitBoundLifetime {
     pub extent: Extent,
     pub lifetime: Lifetime,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A standard trait bound on a type
@@ -1084,6 +1123,7 @@ pub struct TraitBoundLifetime {
 pub struct TraitBoundNormal {
     pub extent: Extent,
     pub typ: TraitBoundType,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A relaxed trait bound on a type
@@ -1153,6 +1193,7 @@ pub struct UnsafeBlock {
 pub struct Parenthetical {
     pub extent: Extent,
     pub expression: Box<Attributed<Expression>>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
@@ -1174,6 +1215,7 @@ pub struct Attributed<T> {
     pub extent: Extent,
     pub attributes: Vec<Attribute>,
     pub value: T,
+    pub whitespace: Vec<Whitespace>,
 }
 
 impl<T> HasExtent for Attributed<T> {
@@ -1199,6 +1241,16 @@ macro_rules! visit_attributed {
                 self.value.visit(v);
                 v.$exit(self);
             }
+
+            fn visit_mut<V>(&mut self, v: &mut V)
+            where
+                V: VisitorMut
+            {
+                v.$visit(self);
+                self.attributes.visit_mut(v);
+                self.value.visit_mut(v);
+                v.$exit(self);
+            }
         }
     };
 }
@@ -1221,6 +1273,7 @@ impl From<Expression> for Attributed<Expression> {
             extent: value.extent(),
             attributes: vec![],
             value,
+            whitespace: Vec::new(),
         }
     }
 }
@@ -1299,6 +1352,7 @@ pub struct MacroCall {
     pub name: Ident,
     pub arg: Option<Ident>,
     pub args: MacroCallArgs,
+    pub whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
@@ -1337,6 +1391,7 @@ pub struct Let {
 pub struct Tuple {
     pub extent: Extent,
     pub members: Vec<Attributed<Expression>>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// The question mark / try / early exit operator
@@ -1351,6 +1406,7 @@ pub struct Tuple {
 pub struct TryOperator {
     pub extent: Extent,
     pub target: Box<Attributed<Expression>>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// Access to a field of a struct
@@ -1366,6 +1422,7 @@ pub struct FieldAccess {
     pub extent: Extent,
     pub target: Box<Attributed<Expression>>,
     pub field: FieldName,
+    pub whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
@@ -1480,6 +1537,7 @@ pub struct Value {
     pub extent: Extent,
     pub name: PathedIdent,
     pub literal: Option<StructLiteral>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// Literal creation of a struct
@@ -1506,8 +1564,9 @@ pub struct StructLiteral {
 /// fn a() { Monster { hp: 42, gold: 100 } }
 /// //                 ^^^^^^  ^^^^^^^^^
 /// ```
-#[derive(Debug, Visit)] // TODO: HasExtent?
+#[derive(Debug, HasExtent, ExtentIndex, Visit)]
 pub struct StructLiteralField {
+    pub extent: Extent,
     pub name: Ident,
     pub value: Attributed<Expression>,
     pub whitespace: Vec<Whitespace>,
@@ -1526,6 +1585,7 @@ pub struct Call {
     pub extent: Extent,
     pub target: Box<Attributed<Expression>>,
     pub args: Vec<Attributed<Expression>>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// The iterator-based loop
@@ -1761,6 +1821,7 @@ pub struct Range {
     pub extent: Extent,
     pub lhs: Option<Box<Attributed<Expression>>>,
     pub rhs: Option<Box<Attributed<Expression>>>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// An inclusive range
@@ -1778,6 +1839,7 @@ pub struct RangeInclusive {
     #[visit(ignore)]
     pub operator: RangeInclusiveOperator,
     pub rhs: Option<Box<Attributed<Expression>>>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, HasExtent, ExtentIndex, Decompose)]
@@ -1804,6 +1866,7 @@ pub enum Array {
 pub struct ArrayExplicit {
     pub extent: Extent,
     pub values: Vec<Attributed<Expression>>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// An array with an example value and a length
@@ -1835,6 +1898,7 @@ pub struct ArrayRepeated {
 pub struct ExpressionBox {
     pub extent: Extent,
     pub target: Box<Attributed<Expression>>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// Inline type conversion
@@ -1850,6 +1914,7 @@ pub struct AsType {
     pub extent: Extent,
     pub target: Box<Attributed<Expression>>,
     pub typ: Type,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// Inline type specification
@@ -1865,6 +1930,7 @@ pub struct Ascription {
     pub extent: Extent,
     pub target: Box<Attributed<Expression>>,
     pub typ: Type,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A character literal
@@ -1937,6 +2003,7 @@ pub struct Slice {
     pub extent: Extent,
     pub target: Box<Attributed<Expression>>,
     pub index: Box<Attributed<Expression>>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A closure
@@ -1966,8 +2033,9 @@ pub struct Closure {
 /// fn a() { |a, b: i32| a + b; }
 /// //        ^  ^^^^^^
 /// ```
-#[derive(Debug, Visit)] // TODO: HasExtent?
+#[derive(Debug, HasExtent, ExtentIndex, Visit)]
 pub struct ClosureArg {
+    pub extent: Extent,
     pub name: Pattern,
     pub typ: Option<Type>,
     pub whitespace: Vec<Whitespace>,
@@ -1986,6 +2054,7 @@ pub struct Reference {
     pub extent: Extent,
     pub is_mutable: Option<Extent>,
     pub target: Box<Attributed<Expression>>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A dereference of an expression
@@ -2079,6 +2148,7 @@ pub struct Pattern {
     pub extent: Extent,
     pub name: Option<PatternName>,
     pub kind: PatternKind,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A renaming of a matched pattern
@@ -2132,6 +2202,7 @@ pub struct PatternIdent {
     pub is_mut: Option<Extent>,
     pub ident: PathedIdent,
     pub tuple: Option<PatternTuple>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// Pattern matching against a struct
@@ -2182,9 +2253,11 @@ pub struct PatternStructFieldLong {
 /// fn a() { let Monster { name }; }
 /// //                     ^^^^
 /// ```
-#[derive(Debug, Visit)] // TODO: HasExtent?
+#[derive(Debug, HasExtent, ExtentIndex, Visit)]
 pub struct PatternStructFieldShort {
-    pub ident: PatternIdent
+    pub extent: Extent,
+    pub ident: PatternIdent,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// Pattern matching a tuple
@@ -2199,6 +2272,7 @@ pub struct PatternStructFieldShort {
 pub struct PatternTuple {
     pub extent: Extent,
     pub members: Vec<PatternTupleMember>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
@@ -2219,6 +2293,7 @@ pub enum PatternTupleMember {
 pub struct PatternSlice {
     pub extent: Extent,
     pub members: Vec<PatternSliceMember>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
@@ -2242,6 +2317,7 @@ pub struct PatternSliceSubslice {
     pub is_ref: Option<Extent>,
     pub is_mut: Option<Extent>,
     pub name: Ident,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// Pattern matching a byte literal
@@ -2312,6 +2388,7 @@ pub struct PatternNumber {
     pub extent: Extent,
     pub is_negative: Option<Extent>,
     pub value: Number,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A macro call that expands into a pattern
@@ -2326,6 +2403,7 @@ pub struct PatternNumber {
 pub struct PatternMacroCall {
     pub extent: Extent,
     pub value: MacroCall,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// Pattern matching against an exclusive range
@@ -2443,6 +2521,7 @@ pub struct TraitMemberFunction {
     pub extent: Extent,
     pub header: TraitImplFunctionHeader,
     pub body: Option<Block>,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A trait's associated type
@@ -2562,6 +2641,7 @@ pub struct ImplFunction {
     pub extent: Extent,
     pub header: FunctionHeader,
     pub body: Block,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A type in an implementation block
@@ -2667,6 +2747,7 @@ pub struct ExternBlockMemberType {
     pub extent: Extent,
     pub visibility: Option<Visibility>,
     pub name: Ident,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// A function provided from FFI
