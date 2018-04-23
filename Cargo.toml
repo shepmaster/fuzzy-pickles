@@ -8,10 +8,7 @@ members = ["dump", "stats", "tokenizer"]
 
 [dependencies]
 unicode-xid = "0.0.4"
-
-[dependencies.peresil]
-git = "https://github.com/shepmaster/peresil"
-features = ["combinators"]
+peresil = "0.4.0-alpha"
 
 [dependencies.fuzzy-pickles-derive]
 path = "fuzzy-pickles-derive"
