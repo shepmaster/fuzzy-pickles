@@ -964,7 +964,7 @@ impl ImplicitSeparator for Statement {
 fn item_macro_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MacroCall> {
     sequence!(pm, pt, {
         spt  = point;
-        name = ident;
+        name = pathed_ident;
         _    = bang;
         arg  = optional(ident);
         args = item_macro_call_args;
@@ -2636,9 +2636,15 @@ mod test {
     }
 
     #[test]
+    fn item_macro_call_with_path() {
+        let p = qp(item, "foo::bar!();");
+        assert_extent!(p, (0, 12))
+    }
+
+    #[test]
     fn item_macro_call_all_space() {
-        let p = qp(item, "foo ! bar [ ] ;");
-        assert_extent!(p, (0, 15))
+        let p = qp(item, "foo :: bar ! baz [ ] ;");
+        assert_extent!(p, (0, 22))
     }
 
     #[test]

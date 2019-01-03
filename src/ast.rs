@@ -1349,7 +1349,7 @@ impl Expression {
 #[derive(Debug, HasExtent, ExtentIndex, Visit)]
 pub struct MacroCall {
     pub extent: Extent,
-    pub name: Ident,
+    pub name: PathedIdent,
     pub arg: Option<Ident>,
     pub args: MacroCallArgs,
     pub whitespace: Vec<Whitespace>,
