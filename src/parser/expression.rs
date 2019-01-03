@@ -867,7 +867,7 @@ impl<'s> ShuntingYard<'s> {
 pub(crate) fn expr_macro_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MacroCall> {
     sequence!(pm, pt, {
         spt  = point;
-        name = ident;
+        name = pathed_ident;
         _    = bang;
         arg  = optional(ident);
         args = expr_macro_call_args;
@@ -1945,6 +1945,12 @@ mod test {
     fn expr_macro_call_with_ident() {
         let p = qp(expression, "macro_rules! foo { }");
         assert_extent!(p, (0, 20))
+    }
+
+    #[test]
+    fn expr_macro_call_with_path() {
+        let p = qp(expression, "my_crate::my_macro!()");
+        assert_extent!(p, (0, 21))
     }
 
     #[test]
