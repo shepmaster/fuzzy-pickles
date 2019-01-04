@@ -146,7 +146,7 @@ pub mod visit;
 pub mod parser;
 
 use std::fmt;
-use whitespace_apportioner::WhitespaceApportioner;
+use crate::whitespace_apportioner::WhitespaceApportioner;
 
 /// A pair of `(start, end)` points corresponding to something
 /// interesting in the source text.
@@ -276,7 +276,7 @@ impl<'a> HumanTextError<'a> {
 }
 
 fn extract_whitespace(file: &str) -> Result<(WhitespaceApportioner, Vec<tokenizer::Token>), tokenizer::ErrorDetail> {
-    use tokenizer::{Token, Tokens};
+    use crate::tokenizer::{Token, Tokens};
 
     let mut ws = WhitespaceApportioner::default();
     let mut tokens = Vec::new();
@@ -305,7 +305,7 @@ fn extract_whitespace(file: &str) -> Result<(WhitespaceApportioner, Vec<tokenize
 
 /// The entrypoint to parsing Rust code.
 pub fn parse_rust_file(file: &str) -> Result<ast::File, ErrorDetail> {
-    use {
+    use crate::{
         parser::{attributed, item, Point, Master, State},
         tokenizer::Token,
         visit::Visit,

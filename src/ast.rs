@@ -8,8 +8,8 @@
 
 use std;
 
-use {Extent, HasExtent};
-use visit::{Visit, Visitor, VisitorMut};
+use crate::{Extent, HasExtent};
+use crate::visit::{Visit, Visitor, VisitorMut};
 
 /// An entire Rust file
 #[derive(Debug, Visit)]

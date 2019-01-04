@@ -3,7 +3,7 @@ use std::{
     collections::BTreeMap,
 };
 
-use ::{
+use crate::{
     ast::*,
     HasExtent,
     visit::VisitorMut,
@@ -36,7 +36,7 @@ impl WhitespaceApportioner {
         self.0.is_empty()
     }
 
-    fn divvy_up(&mut self, node_extent: ::Extent, whitespace: &mut Vec<Whitespace>) {
+    fn divvy_up(&mut self, node_extent: crate::Extent, whitespace: &mut Vec<Whitespace>) {
         // This could be optimized with the right data structure
         let contained_whitespace_keys: Vec<_> = self.0.range(node_extent.0..node_extent.1)
             .map(|(k, _)| k)
@@ -215,12 +215,12 @@ impl VisitorMut for WhitespaceApportioner {
 
 #[cfg(test)]
 mod test {
-    use ::{parse_rust_file, Extent};
+    use crate::{parse_rust_file, Extent};
 
     macro_rules! assert_whitespace {
         ($a:expr, $b:expr) => {
-            let a = $a.iter().map(::HasExtent::extent).collect::<Vec<_>>();
-            let b = $b.iter().map(::HasExtent::extent).collect::<Vec<_>>();
+            let a = $a.iter().map(crate::HasExtent::extent).collect::<Vec<_>>();
+            let b = $b.iter().map(crate::HasExtent::extent).collect::<Vec<_>>();
             assert_eq!(a, b);
         }
     }

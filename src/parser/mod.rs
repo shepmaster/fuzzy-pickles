@@ -5,9 +5,9 @@ mod expression;
 #[macro_use]
 mod test_utils;
 
-use {Extent, HumanTextError};
-use ast::*;
-use combinators::*;
+use crate::{Extent, HumanTextError};
+use crate::ast::*;
+use crate::combinators::*;
 use self::{
     combinators::*,
     expression::{
@@ -18,7 +18,7 @@ use self::{
         statement_expression,
     },
 };
-use tokenizer::{self, Token};
+use crate::tokenizer::{self, Token};
 use peresil;
 use peresil::combinators::*;
 use std::{self, fmt};
