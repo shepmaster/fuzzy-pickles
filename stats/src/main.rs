@@ -1,5 +1,5 @@
-#[macro_use]
 extern crate quicli;
+extern crate structopt;
 extern crate fuzzy_pickles;
 
 use std::{
@@ -13,6 +13,7 @@ use fuzzy_pickles::{
 };
 
 use quicli::prelude::*;
+use structopt::StructOpt;
 
 /// Get statistics about Rust files
 #[derive(Debug, StructOpt)]
@@ -23,9 +24,8 @@ struct Cli {
     /// Report parsing failures, but do not exit on them
     #[structopt(long = "keep-going")]
     keep_going: bool,
-    /// Pass multiple times for more detail
-    #[structopt(long = "verbose", short = "v", parse(from_occurrences))]
-    verbosity: u8,
+    #[structopt(flatten)]
+    verbosity: Verbosity,
     /// The files to read
     files: Vec<String>,
 }
@@ -41,7 +41,10 @@ impl<'ast> Visitor<'ast> for Stats {
     }
 }
 
-main!(|args: Cli, log_level: verbosity| {
+fn main() -> CliResult {
+    let args = Cli::from_args();
+    args.verbosity.setup_env_logger(&env!("CARGO_PKG_NAME"))?;
+
     for fname in &args.files {
         info!("Processing file {}", fname);
 
@@ -60,7 +63,7 @@ main!(|args: Cli, log_level: verbosity| {
                     eprintln!("{}", message);
                     continue;
                 } else {
-                    bail!("{}", message);
+                    panic!("{}", message);
                 }
             }
         };
@@ -73,4 +76,6 @@ main!(|args: Cli, log_level: verbosity| {
             println!("{}: {} statements", fname, stats.statements);
         }
     }
-});
+
+    Ok(())
+}

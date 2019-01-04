@@ -5,4 +5,5 @@ authors = ["Jake Goulding <jake.goulding@gmail.com>"]
 
 [dependencies]
 fuzzy-pickles = { path = ".." }
-quicli = "0.2.0"
+quicli = "0.4.0"
+structopt = "0.2"
