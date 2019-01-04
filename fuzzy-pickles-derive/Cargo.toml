@@ -3,6 +3,10 @@ authors = ["Jake Goulding <jake.goulding@gmail.com>"]
 name = "fuzzy-pickles-derive"
 version = "0.1.0"
 
+description = "Procedural macros for fuzzy-pickles"
+repository = "https://github.com/shepmaster/fuzzy-pickles"
+license = "MIT/Apache-2.0"
+
 [lib]
 proc-macro = true
 
