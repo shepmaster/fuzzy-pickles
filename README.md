@@ -18,9 +18,6 @@ It has anti-goals as well! The parser does not:
 - attempt to perform *semantic* analysis of Rust code.
 - guarantee to reject all syntactically-invalid code.
 
-While Peresil works with stable Rust, our usage of it requires some
-**nightly-only** features.
-
 [Strata Rust]: https://github.com/shepmaster/strata-rust
 [Peresil]: https://github.com/shepmaster/peresil
 
