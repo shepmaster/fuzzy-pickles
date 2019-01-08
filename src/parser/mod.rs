@@ -2039,9 +2039,16 @@ fn use_path<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, UsePath> {
 
 fn use_path_component<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ident> {
     sequence!(pm, pt, {
-        name = ident;
+        name = use_path_member;
         _    = double_colon;
     }, |_, _| name)
+}
+
+fn use_path_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ident> {
+    pm.alternate(pt)
+        .one(map(kw_crate, |extent| Ident { extent }))
+        .one(ident)
+        .finish()
 }
 
 fn use_tail<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, UseTail> {
@@ -2597,6 +2604,12 @@ mod test {
     fn parse_use_with_nested() {
         let p = qp(p_use, "use foo::{self, inner::{self, Type}};");
         assert_extent!(p, (0, 37))
+    }
+
+    #[test]
+    fn parse_use_with_crate() {
+        let p = qp(p_use, "use crate::foo;");
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
