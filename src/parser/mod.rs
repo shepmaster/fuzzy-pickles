@@ -1078,7 +1078,7 @@ fn pathed_ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PathedId
 fn path_component<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PathComponent> {
     sequence!(pm, pt, {
         spt       = point;
-        ident     = ident;
+        ident     = path_member;
         turbofish = optional(turbofish);
     }, |pm: &mut Master, pt| PathComponent {
         extent: pm.state.ex(spt, pt),
@@ -2039,12 +2039,12 @@ fn use_path<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, UsePath> {
 
 fn use_path_component<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ident> {
     sequence!(pm, pt, {
-        name = use_path_member;
+        name = path_member;
         _    = double_colon;
     }, |_, _| name)
 }
 
-fn use_path_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ident> {
+fn path_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ident> {
     pm.alternate(pt)
         .one(map(kw_crate, |extent| Ident { extent }))
         .one(ident)
@@ -3320,6 +3320,12 @@ mod test {
     fn pathed_ident_with_leading_separator() {
         let p = qp(pathed_ident, "::foo");
         assert_extent!(p, (0, 5))
+    }
+
+    #[test]
+    fn pathed_ident_with_crate() {
+        let p = qp(pathed_ident, "crate::foo");
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
