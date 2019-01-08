@@ -200,6 +200,7 @@ pub(crate) enum Error {
     ExpectedContinue,
     ExpectedCrate,
     ExpectedDefault,
+    ExpectedDyn,
     ExpectedDivideEquals,
     ExpectedDocCommentInnerBlock,
     ExpectedDocCommentInnerLine,
@@ -385,6 +386,7 @@ shims! [
     (kw_continue, Token::into_continue, Error::ExpectedContinue),
     (kw_crate, Token::into_crate, Error::ExpectedCrate),
     (kw_default, Token::into_default, Error::ExpectedDefault),
+    (kw_dyn, Token::into_dyn, Error::ExpectedDyn),
     (kw_else, Token::into_else, Error::ExpectedElse),
     (kw_enum, Token::into_enum, Error::ExpectedEnum),
     (kw_extern, Token::into_extern, Error::ExpectedExtern),
@@ -650,8 +652,10 @@ fn function_qualifier_extern<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
 
 fn ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ident> {
     pm.alternate(pt)
+        // Contextual or edition keywords
         .one(kw_default)
         .one(kw_self_ident)
+        .one(kw_dyn)
         .one(kw_union)
         .one(ident_normal)
         .finish()
