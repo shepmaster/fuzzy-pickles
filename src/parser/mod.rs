@@ -2181,6 +2181,7 @@ fn typ_kind<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeKind> {
         .one(map(typ_disambiguation, TypeKind::Disambiguation))
         .one(map(typ_function, TypeKind::Function))
         .one(map(typ_higher_ranked_trait_bounds, TypeKind::HigherRankedTraitBounds))
+        .one(map(typ_dyn_trait, TypeKind::DynTrait))
         .one(map(typ_impl_trait, TypeKind::ImplTrait))
         .one(map(typ_named, TypeKind::Named))
         .one(map(typ_pointer, TypeKind::Pointer))
@@ -2271,6 +2272,14 @@ fn typ_higher_ranked_trait_bounds_child<'s>(pm: &mut Master<'s>, pt: Point<'s>) 
         .one(map(typ_function, TypeHigherRankedTraitBoundsChild::Function))
         .one(map(typ_reference, TypeHigherRankedTraitBoundsChild::Reference))
         .finish()
+}
+
+fn typ_dyn_trait<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeDynTrait> {
+    sequence!(pm, pt, {
+        spt  = point;
+        _    = kw_dyn;
+        name = typ_named;
+    }, |pm: &mut Master, pt| TypeDynTrait { extent: pm.state.ex(spt, pt), name, whitespace: Vec::new() })
 }
 
 fn typ_impl_trait<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeImplTrait> {
@@ -3692,6 +3701,12 @@ mod test {
     #[test]
     fn type_with_generics_all_space() {
         let p = qp(typ, "A < T >");
+        assert_extent!(p, (0, 7))
+    }
+
+    #[test]
+    fn type_dyn_trait() {
+        let p = qp(typ, "dyn Foo");
         assert_extent!(p, (0, 7))
     }
 

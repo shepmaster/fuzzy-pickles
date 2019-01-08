@@ -276,6 +276,7 @@ pub trait Visitor<'ast> {
     fn visit_type_alias(&mut self, _: &'ast TypeAlias) -> Control { Control::Continue }
     fn visit_type_array(&mut self, _: &'ast TypeArray) -> Control { Control::Continue }
     fn visit_type_disambiguation(&mut self, _: &'ast TypeDisambiguation) -> Control { Control::Continue }
+    fn visit_type_dyn_trait(&mut self, _: &'ast TypeDynTrait) -> Control { Control::Continue }
     fn visit_type_function(&mut self, _: &'ast TypeFunction) -> Control { Control::Continue }
     fn visit_type_function_argument(&mut self, _: &'ast TypeFunctionArgument) -> Control { Control::Continue }
     fn visit_type_function_argument_named(&mut self, _: &'ast TypeFunctionArgumentNamed) -> Control { Control::Continue }
@@ -471,6 +472,7 @@ pub trait Visitor<'ast> {
     fn exit_type_alias(&mut self, _: &'ast TypeAlias) {}
     fn exit_type_array(&mut self, _: &'ast TypeArray) {}
     fn exit_type_disambiguation(&mut self, _: &'ast TypeDisambiguation) {}
+    fn exit_type_dyn_trait(&mut self, _: &'ast TypeDynTrait) {}
     fn exit_type_function(&mut self, _: &'ast TypeFunction) {}
     fn exit_type_function_argument(&mut self, _: &'ast TypeFunctionArgument) {}
     fn exit_type_function_argument_named(&mut self, _: &'ast TypeFunctionArgumentNamed) {}
@@ -675,6 +677,7 @@ pub trait VisitorMut {
     fn visit_type_alias(&mut self, _: &mut TypeAlias) -> Control { Control::Continue }
     fn visit_type_array(&mut self, _: &mut TypeArray) -> Control { Control::Continue }
     fn visit_type_disambiguation(&mut self, _: &mut TypeDisambiguation) -> Control { Control::Continue }
+    fn visit_type_dyn_trait(&mut self, _: &mut TypeDynTrait) -> Control { Control::Continue }
     fn visit_type_function(&mut self, _: &mut TypeFunction) -> Control { Control::Continue }
     fn visit_type_function_argument(&mut self, _: &mut TypeFunctionArgument) -> Control { Control::Continue }
     fn visit_type_function_argument_named(&mut self, _: &mut TypeFunctionArgumentNamed) -> Control { Control::Continue }
@@ -870,6 +873,7 @@ pub trait VisitorMut {
     fn exit_type_alias(&mut self, _: &mut TypeAlias) {}
     fn exit_type_array(&mut self, _: &mut TypeArray) {}
     fn exit_type_disambiguation(&mut self, _: &mut TypeDisambiguation) {}
+    fn exit_type_dyn_trait(&mut self, _: &mut TypeDynTrait) {}
     fn exit_type_function(&mut self, _: &mut TypeFunction) {}
     fn exit_type_function_argument(&mut self, _: &mut TypeFunctionArgument) {}
     fn exit_type_function_argument_named(&mut self, _: &mut TypeFunctionArgumentNamed) {}

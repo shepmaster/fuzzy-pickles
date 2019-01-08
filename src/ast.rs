@@ -344,6 +344,7 @@ pub enum TypeKind {
     Disambiguation(TypeDisambiguation),
     Function(TypeFunction),
     HigherRankedTraitBounds(TypeHigherRankedTraitBounds),
+    DynTrait(TypeDynTrait),
     ImplTrait(TypeImplTrait),
     Named(TypeNamed),
     Pointer(TypePointer),
@@ -446,6 +447,21 @@ pub enum TypeHigherRankedTraitBoundsChild {
     Named(TypeNamed),
     Function(TypeFunction),
     Reference(TypeReference),
+}
+
+/// A trait object
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() -> Box<dyn Iterator<Item = u8>> {}
+/// //            ^^^^^^^^^^^^^^^^^^^^^^^
+/// ```
+#[derive(Debug, HasExtent, ExtentIndex, Visit)]
+pub struct TypeDynTrait {
+    pub extent: Extent,
+    pub name: TypeNamed,
+    pub whitespace: Vec<Whitespace>,
 }
 
 /// An unnamed implementation of a trait
