@@ -2301,7 +2301,7 @@ fn typ_named<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeNamed> 
 fn typ_named_component<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeNamedComponent> {
     sequence!(pm, pt, {
         spt      = point;
-        ident    = ident;
+        ident    = path_member;
         generics = optional(typ_generics);
     }, |pm: &mut Master, pt| TypeNamedComponent {
         extent: pm.state.ex(spt, pt),
@@ -3814,6 +3814,12 @@ mod test {
     #[test]
     fn type_higher_ranked_trait_bounds_on_references() {
         let p = qp(typ, "for <'a> &'a u8");
+        assert_extent!(p, (0, 15))
+    }
+
+    #[test]
+    fn type_with_path() {
+        let p = qp(typ, "crate::foo::Bar");
         assert_extent!(p, (0, 15))
     }
 
