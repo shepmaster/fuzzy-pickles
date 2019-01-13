@@ -1078,7 +1078,7 @@ fn pathed_ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PathedId
 fn path_component<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PathComponent> {
     sequence!(pm, pt, {
         spt       = point;
-        ident     = ident;
+        ident     = path_member;
         turbofish = optional(turbofish);
     }, |pm: &mut Master, pt| PathComponent {
         extent: pm.state.ex(spt, pt),
@@ -2039,9 +2039,16 @@ fn use_path<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, UsePath> {
 
 fn use_path_component<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ident> {
     sequence!(pm, pt, {
-        name = ident;
+        name = path_member;
         _    = double_colon;
     }, |_, _| name)
+}
+
+fn path_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ident> {
+    pm.alternate(pt)
+        .one(map(kw_crate, |extent| Ident { extent }))
+        .one(ident)
+        .finish()
 }
 
 fn use_tail<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, UseTail> {
@@ -2294,7 +2301,7 @@ fn typ_named<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeNamed> 
 fn typ_named_component<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeNamedComponent> {
     sequence!(pm, pt, {
         spt      = point;
-        ident    = ident;
+        ident    = path_member;
         generics = optional(typ_generics);
     }, |pm: &mut Master, pt| TypeNamedComponent {
         extent: pm.state.ex(spt, pt),
@@ -2597,6 +2604,12 @@ mod test {
     fn parse_use_with_nested() {
         let p = qp(p_use, "use foo::{self, inner::{self, Type}};");
         assert_extent!(p, (0, 37))
+    }
+
+    #[test]
+    fn parse_use_with_crate() {
+        let p = qp(p_use, "use crate::foo;");
+        assert_extent!(p, (0, 15))
     }
 
     #[test]
@@ -3310,6 +3323,12 @@ mod test {
     }
 
     #[test]
+    fn pathed_ident_with_crate() {
+        let p = qp(pathed_ident, "crate::foo");
+        assert_extent!(p, (0, 10))
+    }
+
+    #[test]
     fn pathed_ident_with_turbofish() {
         let p = qp(pathed_ident, "foo::<Vec<u8>>");
         assert_extent!(p, (0, 14))
@@ -3795,6 +3814,12 @@ mod test {
     #[test]
     fn type_higher_ranked_trait_bounds_on_references() {
         let p = qp(typ, "for <'a> &'a u8");
+        assert_extent!(p, (0, 15))
+    }
+
+    #[test]
+    fn type_with_path() {
+        let p = qp(typ, "crate::foo::Bar");
         assert_extent!(p, (0, 15))
     }
 
