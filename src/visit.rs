@@ -306,6 +306,7 @@ pub trait Visitor<'ast> {
     fn visit_use_tail_multi(&mut self, _: &'ast UseTailMulti) -> Control { Control::Continue }
     fn visit_value(&mut self, _: &'ast Value) -> Control { Control::Continue }
     fn visit_visibility(&mut self, _: &'ast Visibility) -> Control { Control::Continue }
+    fn visit_visibility_public(&mut self, _: &'ast VisibilityPublic) -> Control { Control::Continue }
     fn visit_where(&mut self, _: &'ast Where) -> Control { Control::Continue }
     fn visit_where_kind(&mut self, _: &'ast WhereKind) -> Control { Control::Continue }
     fn visit_where_lifetime(&mut self, _: &'ast WhereLifetime) -> Control { Control::Continue }
@@ -502,6 +503,7 @@ pub trait Visitor<'ast> {
     fn exit_use_tail_multi(&mut self, _: &'ast UseTailMulti) {}
     fn exit_value(&mut self, _: &'ast Value) {}
     fn exit_visibility(&mut self, _: &'ast Visibility) {}
+    fn exit_visibility_public(&mut self, _: &'ast VisibilityPublic) {}
     fn exit_where(&mut self, _: &'ast Where) {}
     fn exit_where_kind(&mut self, _: &'ast WhereKind) {}
     fn exit_where_lifetime(&mut self, _: &'ast WhereLifetime) {}
@@ -707,6 +709,7 @@ pub trait VisitorMut {
     fn visit_use_tail_multi(&mut self, _: &mut UseTailMulti) -> Control { Control::Continue }
     fn visit_value(&mut self, _: &mut Value) -> Control { Control::Continue }
     fn visit_visibility(&mut self, _: &mut Visibility) -> Control { Control::Continue }
+    fn visit_visibility_public(&mut self, _: &mut VisibilityPublic) -> Control { Control::Continue }
     fn visit_where(&mut self, _: &mut Where) -> Control { Control::Continue }
     fn visit_where_kind(&mut self, _: &mut WhereKind) -> Control { Control::Continue }
     fn visit_where_lifetime(&mut self, _: &mut WhereLifetime) -> Control { Control::Continue }
@@ -903,6 +906,7 @@ pub trait VisitorMut {
     fn exit_use_tail_multi(&mut self, _: &mut UseTailMulti) {}
     fn exit_value(&mut self, _: &mut Value) {}
     fn exit_visibility(&mut self, _: &mut Visibility) {}
+    fn exit_visibility_public(&mut self, _: &mut VisibilityPublic) {}
     fn exit_where(&mut self, _: &mut Where) {}
     fn exit_where_kind(&mut self, _: &mut WhereKind) {}
     fn exit_where_lifetime(&mut self, _: &mut WhereLifetime) {}

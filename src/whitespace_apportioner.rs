@@ -195,7 +195,7 @@ impl VisitorMut for WhitespaceApportioner {
         fn exit_use_tail_ident(&mut self, &mut UseTailIdent) {}
         fn exit_use_tail_multi(&mut self, &mut UseTailMulti) {}
         fn exit_value(&mut self, &mut Value) {}
-        fn exit_visibility(&mut self, &mut Visibility) {}
+        fn exit_visibility_public(&mut self, &mut VisibilityPublic) {}
         fn exit_where(&mut self, &mut Where) {}
         fn exit_where_lifetime(&mut self, &mut WhereLifetime) {}
         fn exit_where_type(&mut self, &mut WhereType) {}

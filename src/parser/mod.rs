@@ -1638,15 +1638,22 @@ fn trait_member_const_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<
 }
 
 fn visibility<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Visibility> {
+    pm.alternate(pt)
+        .one(map(visibility_public, Visibility::Public))
+        .one(map(kw_crate, Visibility::Crate))
+        .finish()
+}
+
+fn visibility_public<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, VisibilityPublic> {
     sequence!(pm, pt, {
         spt       = point;
         _         = kw_pub;
-        qualifier = optional(visibility_qualifier);
-    }, |pm: &mut Master, pt| Visibility { extent: pm.state.ex(spt, pt), qualifier, whitespace: Vec::new() })
+        qualifier = optional(visibility_public_qualifier);
+    }, |pm: &mut Master, pt| VisibilityPublic { extent: pm.state.ex(spt, pt), qualifier, whitespace: Vec::new() })
 }
 
-fn visibility_qualifier<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
-    Progress<'s, VisibilityQualifier>
+fn visibility_public_qualifier<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, VisibilityPublicQualifier>
 {
     sequence!(pm, pt, {
         _         = left_paren;
@@ -1656,12 +1663,12 @@ fn visibility_qualifier<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
 }
 
 fn visibility_qualifier_kind<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
-    Progress<'s, VisibilityQualifier>
+    Progress<'s, VisibilityPublicQualifier>
 {
     pm.alternate(pt)
-        .one(map(kw_self_ident, |_| VisibilityQualifier::SelfIdent))
-        .one(map(kw_crate, |_| VisibilityQualifier::Crate))
-        .one(map(path, VisibilityQualifier::Path))
+        .one(map(kw_self_ident, |_| VisibilityPublicQualifier::SelfIdent))
+        .one(map(kw_crate, |_| VisibilityPublicQualifier::Crate))
+        .one(map(path, VisibilityPublicQualifier::Path))
         .finish()
 }
 
@@ -4146,6 +4153,12 @@ mod test {
     fn visibility_crate() {
         let p = qp(visibility, "pub(crate)");
         assert_extent!(p, (0, 10))
+    }
+
+    #[test]
+    fn visibility_crate_shorthand() {
+        let p = qp(visibility, "crate");
+        assert_extent!(p, (0, 5))
     }
 
     #[test]
