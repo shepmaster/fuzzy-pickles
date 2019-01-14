@@ -2855,6 +2855,12 @@ pub struct Module {
     pub whitespace: Vec<Whitespace>,
 }
 
+#[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
+pub enum Visibility {
+    Public(VisibilityPublic),
+    Crate(Extent),
+}
+
 /// Visibility modifiers for an element
 ///
 /// ### Example Source
@@ -2864,15 +2870,15 @@ pub struct Module {
 /// //  ^^^^^^^^^^
 /// ```
 #[derive(Debug, HasExtent, ExtentIndex, Visit)]
-pub struct Visibility {
+pub struct VisibilityPublic {
     pub extent: Extent,
     #[visit(ignore)]
-    pub qualifier: Option<VisibilityQualifier>,
+    pub qualifier: Option<VisibilityPublicQualifier>,
     pub whitespace: Vec<Whitespace>,
 }
 
 #[derive(Debug)]
-pub enum VisibilityQualifier {
+pub enum VisibilityPublicQualifier {
     Crate,
     SelfIdent,
     Path(Path),
