@@ -200,6 +200,7 @@ pub(crate) enum Error {
     ExpectedContinue,
     ExpectedCrate,
     ExpectedDefault,
+    ExpectedDyn,
     ExpectedDivideEquals,
     ExpectedDocCommentInnerBlock,
     ExpectedDocCommentInnerLine,
@@ -385,6 +386,7 @@ shims! [
     (kw_continue, Token::into_continue, Error::ExpectedContinue),
     (kw_crate, Token::into_crate, Error::ExpectedCrate),
     (kw_default, Token::into_default, Error::ExpectedDefault),
+    (kw_dyn, Token::into_dyn, Error::ExpectedDyn),
     (kw_else, Token::into_else, Error::ExpectedElse),
     (kw_enum, Token::into_enum, Error::ExpectedEnum),
     (kw_extern, Token::into_extern, Error::ExpectedExtern),
@@ -650,8 +652,10 @@ fn function_qualifier_extern<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
 
 fn ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ident> {
     pm.alternate(pt)
+        // Contextual or edition keywords
         .one(kw_default)
         .one(kw_self_ident)
+        .one(kw_dyn)
         .one(kw_union)
         .one(ident_normal)
         .finish()
@@ -2177,6 +2181,7 @@ fn typ_kind<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeKind> {
         .one(map(typ_disambiguation, TypeKind::Disambiguation))
         .one(map(typ_function, TypeKind::Function))
         .one(map(typ_higher_ranked_trait_bounds, TypeKind::HigherRankedTraitBounds))
+        .one(map(typ_dyn_trait, TypeKind::DynTrait))
         .one(map(typ_impl_trait, TypeKind::ImplTrait))
         .one(map(typ_named, TypeKind::Named))
         .one(map(typ_pointer, TypeKind::Pointer))
@@ -2267,6 +2272,14 @@ fn typ_higher_ranked_trait_bounds_child<'s>(pm: &mut Master<'s>, pt: Point<'s>) 
         .one(map(typ_function, TypeHigherRankedTraitBoundsChild::Function))
         .one(map(typ_reference, TypeHigherRankedTraitBoundsChild::Reference))
         .finish()
+}
+
+fn typ_dyn_trait<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeDynTrait> {
+    sequence!(pm, pt, {
+        spt  = point;
+        _    = kw_dyn;
+        name = typ_named;
+    }, |pm: &mut Master, pt| TypeDynTrait { extent: pm.state.ex(spt, pt), name, whitespace: Vec::new() })
 }
 
 fn typ_impl_trait<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeImplTrait> {
@@ -3688,6 +3701,12 @@ mod test {
     #[test]
     fn type_with_generics_all_space() {
         let p = qp(typ, "A < T >");
+        assert_extent!(p, (0, 7))
+    }
+
+    #[test]
+    fn type_dyn_trait() {
+        let p = qp(typ, "dyn Foo");
         assert_extent!(p, (0, 7))
     }
 
