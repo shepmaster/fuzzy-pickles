@@ -2,6 +2,7 @@
 authors = ["Jake Goulding <jake.goulding@gmail.com>"]
 name = "fuzzy-pickles"
 version = "0.1.0"
+edition = "2018"
 
 description = "A low-level parser of Rust source code with high-level visitor implementations"
 

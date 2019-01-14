@@ -8,10 +8,10 @@ use peresil;
 use peresil::combinators::*;
 
 use std;
-use Extent;
+use crate::Extent;
 use super::*;
-use ast::*;
-use tokenizer::Token;
+use crate::ast::*;
+use crate::tokenizer::Token;
 
 pub(crate) fn expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
     Progress<'s, Attributed<Expression>>

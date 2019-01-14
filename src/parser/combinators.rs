@@ -1,8 +1,8 @@
 use peresil;
 
-use Extent;
+use crate::Extent;
 use super::{Master, Progress, Point, Error};
-use tokenizer::Token;
+use crate::tokenizer::Token;
 
 use peresil::combinators::{map, IntoAppend};
 
@@ -279,7 +279,7 @@ mod test {
     use super::super::test_utils::*;
 
     // Some example parsers to play with
-    use parser::{comma, ident, Ident};
+    use crate::parser::{comma, ident, Ident};
 
     fn zero_or_more_tailed_test<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
         Progress<'s, Tailed<Ident>>

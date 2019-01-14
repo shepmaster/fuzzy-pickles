@@ -58,12 +58,12 @@ fn impl_visit(ast: &syn::DeriveInput) -> TokenStream {
     let visit_fields_mut = impl_visit_fields(ast, IsMut(true));
 
     quote! {
-        impl ::visit::Visit for #name {
+        impl crate::visit::Visit for #name {
             fn visit<'ast, V>(&'ast self, v: &mut V)
             where
-                V: ::visit::Visitor<'ast>,
+                V: crate::visit::Visitor<'ast>,
             {
-                if ::visit::Control::Continue == v.#method_name(self) {
+                if crate::visit::Control::Continue == v.#method_name(self) {
                     #visit_fields;
                 }
                 v.#exit_method_name(self);
@@ -71,9 +71,9 @@ fn impl_visit(ast: &syn::DeriveInput) -> TokenStream {
 
             fn visit_mut<V>(&mut self, v: &mut V)
             where
-                V: ::visit::VisitorMut,
+                V: crate::visit::VisitorMut,
             {
-                if ::visit::Control::Continue == v.#method_name(self) {
+                if crate::visit::Control::Continue == v.#method_name(self) {
                     #visit_fields_mut;
                 }
                 v.#exit_method_name(self);
@@ -89,7 +89,7 @@ fn impl_visit_fields(ast: &syn::DeriveInput, IsMut(is_mut): IsMut) -> TokenStrea
 
     let method = if is_mut { "visit_mut" } else { "visit" };
     let method = Ident::new(method, Span::call_site());
-    let method = iter::repeat(quote! { ::visit::Visit::#method });
+    let method = iter::repeat(quote! { crate::visit::Visit::#method });
 
     fn field_names<'a>(fields: impl IntoIterator<Item = &'a syn::Field>) -> Vec<Ident> {
         fields
@@ -269,7 +269,7 @@ fn impl_has_extent(ast: &syn::DeriveInput) -> TokenStream {
 
             quote! {
                 match *self {
-                    #(#enum_name::#variant_names(ref x) => ::HasExtent::extent(x),)*
+                    #(#enum_name::#variant_names(ref x) => crate::HasExtent::extent(x),)*
                 }
             }
         }
@@ -289,7 +289,7 @@ fn impl_has_extent(ast: &syn::DeriveInput) -> TokenStream {
     };
 
     quote! {
-        impl ::HasExtent for #name {
+        impl crate::HasExtent for #name {
             fn extent(&self) -> Extent {
                 #body
             }
@@ -301,7 +301,7 @@ fn impl_extent_index(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
 
     quote! {
-        impl ::std::ops::Index<#name> for str {
+        impl std::ops::Index<#name> for str {
             type Output = str;
 
             fn index(&self, i: #name) -> &Self::Output {
@@ -310,7 +310,7 @@ fn impl_extent_index(ast: &syn::DeriveInput) -> TokenStream {
             }
         }
 
-        impl<'a> ::std::ops::Index<&'a #name> for str {
+        impl<'a> std::ops::Index<&'a #name> for str {
             type Output = str;
 
             fn index(&self, i: &'a #name) -> &Self::Output {
