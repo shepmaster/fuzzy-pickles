@@ -243,6 +243,7 @@ pub struct FunctionQualifiers {
     pub is_default: Option<Extent>,
     pub is_const: Option<Extent>,
     pub is_unsafe: Option<Extent>,
+    pub is_async: Option<Extent>,
     pub is_extern: Option<Extent>,
     // TODO: abi should be predicated on `extern` being present
     pub abi: Option<String>,
