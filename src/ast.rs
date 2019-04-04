@@ -1198,6 +1198,21 @@ pub struct UnsafeBlock {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A block which allows calling async code
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { async {} }
+/// //       ^^^^^^^^
+/// ```
+#[derive(Debug, HasExtent, ExtentIndex, Visit)]
+pub struct AsyncBlock {
+    pub extent: Extent,
+    pub body: Box<Block>,
+    pub whitespace: Vec<Whitespace>,
+}
+
 /// An expression surrounded by parenthesis
 ///
 /// ### Example Source
@@ -1300,6 +1315,7 @@ pub enum Expression {
     Array(Array),
     AsType(AsType),
     Ascription(Ascription),
+    AsyncBlock(AsyncBlock),
     Binary(Binary),
     Block(Box<Block>),
     Box(ExpressionBox),

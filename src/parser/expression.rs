@@ -458,6 +458,7 @@ fn expression_atom<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expre
         .one(map(expr_while_let, Expression::WhileLet))
         .one(map(expr_match, Expression::Match))
         .one(map(expr_unsafe_block, Expression::UnsafeBlock))
+        .one(map(expr_async_block, Expression::AsyncBlock))
         .one(map(expr_block, Expression::Block))
         .one(map(expr_macro_call, Expression::MacroCall))
         .one(map(expr_let, Expression::Let))
@@ -1309,6 +1310,14 @@ fn expr_unsafe_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Uns
     }, |pm: &mut Master, pt| UnsafeBlock { extent: pm.state.ex(spt, pt), body: Box::new(body), whitespace: Vec::new() })
 }
 
+fn expr_async_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, AsyncBlock> {
+    sequence!(pm, pt, {
+        spt  = point;
+        _    = kw_async;
+        body = block;
+    }, |pm: &mut Master, pt| AsyncBlock { extent: pm.state.ex(spt, pt), body: Box::new(body), whitespace: Vec::new() })
+}
+
 fn expr_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Value> {
     if pm.state.expression_ambiguity.is_ambiguous() {
         sequence!(pm, pt, {
@@ -1800,6 +1809,13 @@ mod test {
     fn expr_unsafe_block() {
         let p = qp(expression, "unsafe {}");
         assert_extent!(p, (0, 9))
+    }
+
+    #[test]
+    fn expr_async_block() {
+        let p = qp(expression, "async {}");
+        assert_extent!(p, (0, 8));
+        assert!(p.is_async_block());
     }
 
     #[test]
