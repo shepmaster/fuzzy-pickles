@@ -2051,8 +2051,7 @@ pub struct Slice {
 #[derive(Debug, HasExtent, ExtentIndex, Visit)]
 pub struct Closure {
     pub extent: Extent,
-    #[visit(ignore)]
-    pub is_move: bool,
+    pub is_move: Option<Extent>,
     pub args: Vec<ClosureArg>,
     pub return_type: Option<Type>,
     pub body: Box<Attributed<Expression>>,

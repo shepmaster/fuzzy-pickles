@@ -1191,14 +1191,14 @@ pub(crate) fn expr_byte_string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progre
 fn expr_closure<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Closure> {
     sequence!(pm, pt, {
         spt                 = point;
-        mov                 = optional(kw_move);
+        is_move             = optional(kw_move);
         _                   = pipe;
         args                = zero_or_more_tailed_values(comma, expr_closure_arg);
         _                   = pipe;
         (return_type, body) = expr_closure_return;
     }, |pm: &mut Master, pt| Closure {
         extent: pm.state.ex(spt, pt),
-        is_move: mov.is_some(),
+        is_move,
         args,
         return_type,
         body: Box::new(body),
