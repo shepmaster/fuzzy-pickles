@@ -1191,6 +1191,7 @@ pub(crate) fn expr_byte_string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progre
 fn expr_closure<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Closure> {
     sequence!(pm, pt, {
         spt                 = point;
+        is_async            = optional(kw_async);
         is_move             = optional(kw_move);
         _                   = pipe;
         args                = zero_or_more_tailed_values(comma, expr_closure_arg);
@@ -1198,6 +1199,7 @@ fn expr_closure<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Closure>
         (return_type, body) = expr_closure_return;
     }, |pm: &mut Master, pt| Closure {
         extent: pm.state.ex(spt, pt),
+        is_async,
         is_move,
         args,
         return_type,
@@ -2125,6 +2127,14 @@ mod test {
     fn expr_closure_move() {
         let p = qp(expression, "move || 42");
         assert_extent!(p, (0, 10))
+    }
+
+    #[test]
+    fn expr_closure_async() {
+        let p = qp(expression, "async || 42");
+        assert_extent!(p, (0, 11));
+        let c = unwrap_as!(p.value, Expression::Closure);
+        assert!(c.is_async.is_some());
     }
 
     #[test]
