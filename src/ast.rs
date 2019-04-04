@@ -1210,6 +1210,7 @@ pub struct UnsafeBlock {
 pub struct AsyncBlock {
     pub extent: Extent,
     pub body: Box<Block>,
+    pub is_move: Option<Extent>,
     pub whitespace: Vec<Whitespace>,
 }
 

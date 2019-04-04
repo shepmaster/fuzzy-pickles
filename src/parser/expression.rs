@@ -1312,10 +1312,16 @@ fn expr_unsafe_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Uns
 
 fn expr_async_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, AsyncBlock> {
     sequence!(pm, pt, {
-        spt  = point;
-        _    = kw_async;
-        body = block;
-    }, |pm: &mut Master, pt| AsyncBlock { extent: pm.state.ex(spt, pt), body: Box::new(body), whitespace: Vec::new() })
+        spt     = point;
+        _       = kw_async;
+        is_move = optional(kw_move);
+        body    = block;
+    }, |pm: &mut Master, pt| AsyncBlock {
+        extent: pm.state.ex(spt, pt),
+        is_move,
+        body: Box::new(body),
+        whitespace: Vec::new(),
+    })
 }
 
 fn expr_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Value> {
@@ -1816,6 +1822,14 @@ mod test {
         let p = qp(expression, "async {}");
         assert_extent!(p, (0, 8));
         assert!(p.is_async_block());
+    }
+
+    #[test]
+    fn expr_async_move_block() {
+        let p = qp(expression, "async move {}");
+        assert_extent!(p, (0, 13));
+        let ab = unwrap_as!(p.value, Expression::AsyncBlock);
+        assert!(ab.is_move.is_some());
     }
 
     #[test]
