@@ -125,6 +125,7 @@ pub trait Visitor<'ast> {
     fn visit_as_type(&mut self, _: &'ast AsType) -> Control { Control::Continue }
     fn visit_ascription(&mut self, _: &'ast Ascription) -> Control { Control::Continue }
     fn visit_associated_type(&mut self, _: &'ast AssociatedType) -> Control { Control::Continue }
+    fn visit_async_block(&mut self, _: &'ast AsyncBlock) -> Control { Control::Continue }
     fn visit_attribute(&mut self, _: &'ast Attribute) -> Control { Control::Continue }
     fn visit_attribute_literal(&mut self, _: &'ast AttributeLiteral) -> Control { Control::Continue }
     fn visit_attribute_containing(&mut self, _: &'ast AttributeContaining) -> Control { Control::Continue }
@@ -322,6 +323,7 @@ pub trait Visitor<'ast> {
     fn exit_as_type(&mut self, _: &'ast AsType) {}
     fn exit_ascription(&mut self, _: &'ast Ascription) {}
     fn exit_associated_type(&mut self, _: &'ast AssociatedType) {}
+    fn exit_async_block(&mut self, _: &'ast AsyncBlock) {}
     fn exit_attribute(&mut self, _: &'ast Attribute) {}
     fn exit_attribute_literal(&mut self, _: &'ast AttributeLiteral) {}
     fn exit_attribute_containing(&mut self, _: &'ast AttributeContaining) {}
@@ -528,6 +530,7 @@ pub trait VisitorMut {
     fn visit_as_type(&mut self, _: &mut AsType) -> Control { Control::Continue }
     fn visit_ascription(&mut self, _: &mut Ascription) -> Control { Control::Continue }
     fn visit_associated_type(&mut self, _: &mut AssociatedType) -> Control { Control::Continue }
+    fn visit_async_block(&mut self, _: &mut AsyncBlock) -> Control { Control::Continue }
     fn visit_attribute(&mut self, _: &mut Attribute) -> Control { Control::Continue }
     fn visit_attribute_literal(&mut self, _: &mut AttributeLiteral) -> Control { Control::Continue }
     fn visit_attribute_containing(&mut self, _: &mut AttributeContaining) -> Control { Control::Continue }
@@ -725,6 +728,7 @@ pub trait VisitorMut {
     fn exit_as_type(&mut self, _: &mut AsType) {}
     fn exit_ascription(&mut self, _: &mut Ascription) {}
     fn exit_associated_type(&mut self, _: &mut AssociatedType) {}
+    fn exit_async_block(&mut self, _: &mut AsyncBlock) {}
     fn exit_attribute(&mut self, _: &mut Attribute) {}
     fn exit_attribute_literal(&mut self, _: &mut AttributeLiteral) {}
     fn exit_attribute_containing(&mut self, _: &mut AttributeContaining) {}

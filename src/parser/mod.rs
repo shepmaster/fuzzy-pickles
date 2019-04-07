@@ -181,6 +181,7 @@ pub(crate) enum Error {
     ExpectedAmpersandEquals,
     ExpectedAs,
     ExpectedAsterisk,
+    ExpectedAsync,
     ExpectedAt,
     ExpectedAuto,
     #[allow(unused)]
@@ -379,6 +380,7 @@ shims! [
 
     // Keywords
     (kw_as, Token::into_as, Error::ExpectedAs),
+    (kw_async, Token::into_async, Error::ExpectedAsync),
     (kw_auto, Token::into_auto, Error::ExpectedAuto),
     (kw_box, Token::into_box, Error::ExpectedBox),
     (kw_break, Token::into_break, Error::ExpectedBreak),
@@ -622,6 +624,7 @@ fn function_qualifiers<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
         is_default = optional(ext(kw_default));
         is_const   = optional(ext(kw_const));
         is_unsafe  = optional(ext(kw_unsafe));
+        is_async   = optional(ext(kw_async));
         is_extern  = optional(function_qualifier_extern);
     }, |pm: &mut Master, pt| {
         let is_extern = is_extern;
@@ -634,6 +637,7 @@ fn function_qualifiers<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
             is_default,
             is_const,
             is_unsafe,
+            is_async,
             is_extern,
             abi,
             whitespace: Vec::new(),
@@ -3164,6 +3168,12 @@ mod test {
     fn fn_with_extern_modifier_and_abi() {
         let p = qp(function_header, r#"extern "C" fn foo()"#);
         assert_extent!(p, (0, 19))
+    }
+
+    #[test]
+    fn fn_with_async_modifier() {
+        let p = qp(function_header, "async fn foo()");
+        assert_extent!(p, (0, 14))
     }
 
     #[test]

@@ -458,6 +458,7 @@ fn expression_atom<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expre
         .one(map(expr_while_let, Expression::WhileLet))
         .one(map(expr_match, Expression::Match))
         .one(map(expr_unsafe_block, Expression::UnsafeBlock))
+        .one(map(expr_async_block, Expression::AsyncBlock))
         .one(map(expr_block, Expression::Block))
         .one(map(expr_macro_call, Expression::MacroCall))
         .one(map(expr_let, Expression::Let))
@@ -1190,14 +1191,16 @@ pub(crate) fn expr_byte_string<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progre
 fn expr_closure<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Closure> {
     sequence!(pm, pt, {
         spt                 = point;
-        mov                 = optional(kw_move);
+        is_async            = optional(kw_async);
+        is_move             = optional(kw_move);
         _                   = pipe;
         args                = zero_or_more_tailed_values(comma, expr_closure_arg);
         _                   = pipe;
         (return_type, body) = expr_closure_return;
     }, |pm: &mut Master, pt| Closure {
         extent: pm.state.ex(spt, pt),
-        is_move: mov.is_some(),
+        is_async,
+        is_move,
         args,
         return_type,
         body: Box::new(body),
@@ -1307,6 +1310,20 @@ fn expr_unsafe_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Uns
         _    = kw_unsafe;
         body = block;
     }, |pm: &mut Master, pt| UnsafeBlock { extent: pm.state.ex(spt, pt), body: Box::new(body), whitespace: Vec::new() })
+}
+
+fn expr_async_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, AsyncBlock> {
+    sequence!(pm, pt, {
+        spt     = point;
+        _       = kw_async;
+        is_move = optional(kw_move);
+        body    = block;
+    }, |pm: &mut Master, pt| AsyncBlock {
+        extent: pm.state.ex(spt, pt),
+        is_move,
+        body: Box::new(body),
+        whitespace: Vec::new(),
+    })
 }
 
 fn expr_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Value> {
@@ -1803,6 +1820,21 @@ mod test {
     }
 
     #[test]
+    fn expr_async_block() {
+        let p = qp(expression, "async {}");
+        assert_extent!(p, (0, 8));
+        assert!(p.is_async_block());
+    }
+
+    #[test]
+    fn expr_async_move_block() {
+        let p = qp(expression, "async move {}");
+        assert_extent!(p, (0, 13));
+        let ab = unwrap_as!(p.value, Expression::AsyncBlock);
+        assert!(ab.is_move.is_some());
+    }
+
+    #[test]
     fn expr_if_() {
         let p = qp(expression, "if a {}");
         assert_extent!(p, (0, 7))
@@ -2095,6 +2127,14 @@ mod test {
     fn expr_closure_move() {
         let p = qp(expression, "move || 42");
         assert_extent!(p, (0, 10))
+    }
+
+    #[test]
+    fn expr_closure_async() {
+        let p = qp(expression, "async || 42");
+        assert_extent!(p, (0, 11));
+        let c = unwrap_as!(p.value, Expression::Closure);
+        assert!(c.is_async.is_some());
     }
 
     #[test]

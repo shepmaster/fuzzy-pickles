@@ -243,6 +243,7 @@ pub struct FunctionQualifiers {
     pub is_default: Option<Extent>,
     pub is_const: Option<Extent>,
     pub is_unsafe: Option<Extent>,
+    pub is_async: Option<Extent>,
     pub is_extern: Option<Extent>,
     // TODO: abi should be predicated on `extern` being present
     pub abi: Option<String>,
@@ -1197,6 +1198,22 @@ pub struct UnsafeBlock {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A block which allows calling async code
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { async {} }
+/// //       ^^^^^^^^
+/// ```
+#[derive(Debug, HasExtent, ExtentIndex, Visit)]
+pub struct AsyncBlock {
+    pub extent: Extent,
+    pub body: Box<Block>,
+    pub is_move: Option<Extent>,
+    pub whitespace: Vec<Whitespace>,
+}
+
 /// An expression surrounded by parenthesis
 ///
 /// ### Example Source
@@ -1299,6 +1316,7 @@ pub enum Expression {
     Array(Array),
     AsType(AsType),
     Ascription(Ascription),
+    AsyncBlock(AsyncBlock),
     Binary(Binary),
     Block(Box<Block>),
     Box(ExpressionBox),
@@ -2033,8 +2051,8 @@ pub struct Slice {
 #[derive(Debug, HasExtent, ExtentIndex, Visit)]
 pub struct Closure {
     pub extent: Extent,
-    #[visit(ignore)]
-    pub is_move: bool,
+    pub is_async: Option<Extent>,
+    pub is_move: Option<Extent>,
     pub args: Vec<ClosureArg>,
     pub return_type: Option<Type>,
     pub body: Box<Attributed<Expression>>,
