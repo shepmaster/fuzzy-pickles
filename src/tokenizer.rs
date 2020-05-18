@@ -907,8 +907,8 @@ fn ex(start: Point, end: Point) -> Extent {
     ex
 }
 
-fn split_point_at_non_zero_offset<'s>(pt: Point<'s>, idx: usize, e: Error) ->
-    Progress<'s, (&'s str, Extent)>
+fn split_point_at_non_zero_offset(pt: Point<'_>, idx: usize, e: Error) ->
+    Progress<'_, (&'_ str, Extent)>
 {
     if idx == 0 {
         peresil::Progress::failure(pt, e)
