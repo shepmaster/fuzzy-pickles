@@ -4,10 +4,8 @@
 /// messages are accurate. In addition to precedence, it is also needed
 /// to reduce the total depth of recursion.
 
-use peresil;
 use peresil::combinators::*;
 
-use std;
 use crate::Extent;
 use super::*;
 use crate::ast::*;

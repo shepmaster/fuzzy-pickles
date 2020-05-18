@@ -2,7 +2,6 @@ use std::collections::BTreeSet;
 use std::fmt;
 
 use unicode_xid::UnicodeXID;
-use peresil;
 use peresil::combinators::*;
 
 use crate::{Extent, HumanTextError};

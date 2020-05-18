@@ -19,7 +19,6 @@ use self::{
     },
 };
 use crate::tokenizer::{self, Token};
-use peresil;
 use peresil::combinators::*;
 use std::{self, fmt};
 use std::collections::BTreeSet;

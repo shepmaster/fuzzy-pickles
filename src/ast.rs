@@ -6,8 +6,6 @@
 // - Any struct with just an extent and a value should be checked for redundancy
 // - All types should have public fields
 
-use std;
-
 use crate::{Extent, HasExtent};
 use crate::visit::{Visit, Visitor, VisitorMut};
 

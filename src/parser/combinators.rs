@@ -1,5 +1,3 @@
-use peresil;
-
 use crate::Extent;
 use super::{Master, Progress, Point, Error};
 use crate::tokenizer::Token;
