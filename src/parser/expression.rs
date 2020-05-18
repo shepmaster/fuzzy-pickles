@@ -667,7 +667,7 @@ impl<'s> ShuntingYard<'s> {
                         operator,
                         rhs: rhs.map(Box::new),
                         whitespace: Vec::new(),
-                    }).into()
+                    })
                 })
             },
             Infix(OperatorInfix::RangeExclusive(..)) => {
@@ -677,7 +677,7 @@ impl<'s> ShuntingYard<'s> {
                         lhs: Some(Box::new(lhs)),
                         rhs: rhs.map(Box::new),
                         whitespace: Vec::new(),
-                    }).into()
+                    })
                 })
             },
 
@@ -688,7 +688,7 @@ impl<'s> ShuntingYard<'s> {
                         target: Box::new(expr),
                         field,
                         whitespace: Vec::new(),
-                    }).into()
+                    })
                 })
             },
             Postfix(OperatorPostfix::Call { args }) => {
@@ -698,7 +698,7 @@ impl<'s> ShuntingYard<'s> {
                         target: Box::new(expr),
                         args,
                         whitespace: Vec::new(),
-                    }).into()
+                    })
                 })
             },
             Postfix(OperatorPostfix::Slice { index }) => {
@@ -708,7 +708,7 @@ impl<'s> ShuntingYard<'s> {
                         target: Box::new(expr),
                         index: Box::new(index),
                         whitespace: Vec::new(),
-                    }).into()
+                    })
                 })
             },
             Postfix(OperatorPostfix::AsType { typ }) => {
@@ -718,7 +718,7 @@ impl<'s> ShuntingYard<'s> {
                         target: Box::new(expr),
                         typ,
                         whitespace: Vec::new(),
-                    }).into()
+                    })
                 })
             },
             Postfix(OperatorPostfix::Ascription { typ }) => {
@@ -728,7 +728,7 @@ impl<'s> ShuntingYard<'s> {
                         target: Box::new(expr),
                         typ,
                         whitespace: Vec::new(),
-                    }).into()
+                    })
                 })
             },
             Postfix(OperatorPostfix::Try(..)) => {
@@ -737,7 +737,7 @@ impl<'s> ShuntingYard<'s> {
                         extent,
                         target: Box::new(expr),
                         whitespace: Vec::new(),
-                    }).into()
+                    })
                 })
             },
         }
@@ -843,7 +843,7 @@ impl<'s> ShuntingYard<'s> {
                 lhs: Box::new(lhs),
                 rhs: Box::new(rhs),
                 whitespace: Vec::new(),
-            }).into()
+            })
         })
     }
 
