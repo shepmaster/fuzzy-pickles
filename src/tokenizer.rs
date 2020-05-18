@@ -695,27 +695,27 @@ fn whitespace<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
 fn comment_or_doc_comment<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token> {
     let spt = pt;
     if pt.s.starts_with("///") && !pt.s.starts_with("////") {
-        let eol = pt.s.find('\n').unwrap_or(pt.s.len());
+        let eol = pt.s.find('\n').unwrap_or_else(|| pt.s.len());
         let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
         Progress::success(pt, Token::DocCommentOuterLine(ex(spt, pt)))
     } else if pt.s.starts_with("//!") {
-        let eol = pt.s.find('\n').unwrap_or(pt.s.len());
+        let eol = pt.s.find('\n').unwrap_or_else(|| pt.s.len());
         let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
         Progress::success(pt, Token::DocCommentInnerLine(ex(spt, pt)))
     } else if pt.s.starts_with("//") {
-        let eol = pt.s.find('\n').unwrap_or(pt.s.len());
+        let eol = pt.s.find('\n').unwrap_or_else(|| pt.s.len());
         let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
         Progress::success(pt, Token::CommentLine(ex(spt, pt)))
     } else if pt.s.starts_with("/**") && !pt.s.starts_with("/***") && !pt.s.starts_with("/**/") {
-        let eol = pt.s[3..].find("*/").map(|x| 3 + x + 2).unwrap_or(pt.s.len());
+        let eol = pt.s[3..].find("*/").map(|x| 3 + x + 2).unwrap_or_else(|| pt.s.len());
         let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
         Progress::success(pt, Token::DocCommentOuterBlock(ex(spt, pt)))
     } else if pt.s.starts_with("/*!") {
-        let eol = pt.s[3..].find("*/").map(|x| 3 + x + 2).unwrap_or(pt.s.len());
+        let eol = pt.s[3..].find("*/").map(|x| 3 + x + 2).unwrap_or_else(|| pt.s.len());
         let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
         Progress::success(pt, Token::DocCommentInnerBlock(ex(spt, pt)))
     } else if pt.s.starts_with("/*") {
-        let eol = pt.s[2..].find("*/").map(|x| 2 + x + 2).unwrap_or(pt.s.len());
+        let eol = pt.s[2..].find("*/").map(|x| 2 + x + 2).unwrap_or_else(|| pt.s.len());
         let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
         Progress::success(pt, Token::CommentBlock(ex(spt, pt)))
     } else {
