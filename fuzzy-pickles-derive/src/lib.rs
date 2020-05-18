@@ -208,7 +208,7 @@ fn impl_decompose(ast: &syn::DeriveInput) -> TokenStream {
 
     let into_fns = enum_info.iter().map(|info| {
         let Info { variant_name, ref variant_snake_name, variant_type } = *info;
-        let method_name = Ident::new(&format!("into{}", variant_snake_name), Span::call_site());;
+        let method_name = Ident::new(&format!("into{}", variant_snake_name), Span::call_site());
 
         quote! {
             pub fn #method_name(self) -> Option<#variant_type> {

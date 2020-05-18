@@ -19,7 +19,6 @@ use self::{
     },
 };
 use crate::tokenizer::{self, Token};
-use peresil;
 use peresil::combinators::*;
 use std::{self, fmt};
 use std::collections::BTreeSet;
@@ -2503,7 +2502,7 @@ fn typ_function_argument_variadic<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
 
 fn lifetime<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Lifetime> {
     lifetime_normal(pm, pt)
-        .map(|extent| Lifetime { extent: extent, name: Ident { extent } })
+        .map(|extent| Lifetime { extent, name: Ident { extent } })
     // FIXME: value; can we actually have whitespace here?
 }
 

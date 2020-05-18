@@ -205,7 +205,7 @@ impl VisitorMut for WhitespaceApportioner {
 
     // Everything else should fall into here
     fn exit_file(&mut self, node: &mut File) {
-        let remaining_whitespace = ::std::mem::replace(&mut self.0, Default::default())
+        let remaining_whitespace = ::std::mem::take(&mut self.0)
             .into_iter()
             .map(|(_, ws)| ws);
 

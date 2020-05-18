@@ -262,13 +262,13 @@ struct HumanTextError<'a> {
 impl<'a> HumanTextError<'a> {
     fn new(text: &'a str, location: usize) -> HumanTextError<'a> {
         let (head, tail) = text.split_at(location);
-        let start_of_line = head.rfind("\n").unwrap_or(0);
-        let end_of_line = tail.find("\n").unwrap_or_else(|| tail.len());
+        let start_of_line = head.rfind('\n').unwrap_or(0);
+        let end_of_line = tail.find('\n').unwrap_or_else(|| tail.len());
 
         let head_of_line = &head[start_of_line..];
         let tail_of_line = &tail[..end_of_line];
 
-        let line = head.matches("\n").count() + 1; // Normally the first line is #1, so add one
+        let line = head.matches('\n').count() + 1; // Normally the first line is #1, so add one
         let column = head_of_line.len();
 
         HumanTextError { head_of_line, tail_of_line, line, column }

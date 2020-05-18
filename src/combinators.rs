@@ -1,5 +1,3 @@
-use peresil;
-
 // TODO: generic enough to move to library?
 pub(crate) fn not<P, E, S, F, T>
     (parser: F, error: E)
