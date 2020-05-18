@@ -247,11 +247,11 @@ pub(crate) fn one_or_more_tailed<'s, S, F, T, U>(sep: S, f: F) ->
 
         match parse_tailed(&sep, &f, pm, pt) {
             TailedState::Nothing(pt, f) => {
-                return Progress::failure(pt, f);
+                Progress::failure(pt, f)
             }
             TailedState::ValueOnly(pt, v) => {
                 tailed.values.push(v);
-                return Progress::success(pt, tailed);
+                Progress::success(pt, tailed)
             }
             TailedState::ValueAndSeparator(pt, v) => {
                 tailed.values.push(v);
