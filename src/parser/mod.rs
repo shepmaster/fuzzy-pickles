@@ -2446,9 +2446,33 @@ fn associated_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Assoc
     sequence!(pm, pt, {
         spt   = point;
         name  = ident;
+        value = associated_type_value;
+    }, |pm: &mut Master, pt| AssociatedType { extent: pm.state.ex(spt, pt), name, value, whitespace: Vec::new() })
+}
+
+fn associated_type_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
+    Progress<'s, AssociatedTypeValue>
+{
+    pm.alternate(pt)
+        .one(map(associated_type_value_equal, AssociatedTypeValue::Equal))
+        .one(map(associated_type_value_bound, AssociatedTypeValue::Bound))
+        .finish()
+}
+
+fn associated_type_value_equal<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, AssociatedTypeValueEqual> {
+    sequence!(pm, pt, {
+        spt   = point;
         _     = equals;
         value = typ;
-    }, |pm: &mut Master, pt| AssociatedType { extent: pm.state.ex(spt, pt), name, value, whitespace: Vec::new() })
+    }, |pm: &mut Master, pt| AssociatedTypeValueEqual { extent: pm.state.ex(spt, pt), value, whitespace: Vec::new() })
+}
+
+fn associated_type_value_bound<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, AssociatedTypeValueBound> {
+    sequence!(pm, pt, {
+        spt    = point;
+        _      = colon;
+        bounds = trait_bounds;
+    }, |pm: &mut Master, pt| AssociatedTypeValueBound { extent: pm.state.ex(spt, pt), bounds, whitespace: Vec::new() })
 }
 
 fn typ_function<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeFunction> {
@@ -4141,9 +4165,15 @@ mod test {
     }
 
     #[test]
-    fn trait_bounds_with_associated_types() {
+    fn trait_bounds_with_associated_type_equality() {
         let p = qp(trait_bounds, "A<B, C = D>");
         assert_extent!(p, (0, 11))
+    }
+
+    #[test]
+    fn trait_bounds_with_associated_type_bounds() {
+        let p = qp(trait_bounds, "A<B, C: D>");
+        assert_extent!(p, (0, 10))
     }
 
     #[test]
