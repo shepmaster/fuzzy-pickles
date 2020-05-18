@@ -321,6 +321,7 @@ number!(NumberOctal);
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Error {
     Literal(&'static str),
+    ExpectedIdentOrKeyword,
     ExpectedIdent,
     ExpectedNumber,
     ExpectedHex,
@@ -328,13 +329,21 @@ pub(crate) enum Error {
     ExpectedComment,
     ExpectedCharacter,
     UnterminatedRawString,
+    RawIdentifierMissingIdentifier,
 
     // Internal parsing errors, should be recovered
     InvalidFollowForFractionalNumber,
 }
 
 impl peresil::Recoverable for Error {
-    fn recoverable(&self) -> bool { true }
+    fn recoverable(&self) -> bool {
+        use Error::*;
+
+        match self {
+            RawIdentifierMissingIdentifier => false,
+            _ => true,
+        }
+    }
 }
 
 /// Information about a tokenization error
@@ -503,9 +512,20 @@ fn single_token<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token> {
         .finish()
 }
 
-fn keyword_or_ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token> {
-    ident_raw(pm, pt).map(|(s, extent)| {
-        match s {
+fn keyword_or_ident<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token> {
+    if pt.s.starts_with("r#") {
+        let idx = ident_len(&pt.s[2..]);
+        if idx == 0 {
+            return Progress::failure(pt, Error::RawIdentifierMissingIdentifier);
+        }
+        return split_point_at_non_zero_offset(pt, 2 + idx, Error::ExpectedIdentOrKeyword)
+            .map(|(_, extent)| Token::Ident(extent));
+    }
+
+    let idx = ident_len(pt.s);
+
+    split_point_at_non_zero_offset(pt, idx, Error::ExpectedIdentOrKeyword).map(
+        |(s, extent)| match s {
             "as" => Token::As(extent),
             "async" => Token::Async(extent),
             "auto" => Token::Auto(extent),
@@ -543,28 +563,32 @@ fn keyword_or_ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Toke
             "unsafe" => Token::Unsafe(extent),
             "where" => Token::Where(extent),
             "while" => Token::While(extent),
-            _ => Token::Ident(extent)
-        }
-    })
+            _ => Token::Ident(extent),
+        },
+    )
 }
 
-fn ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
-    ident_raw(pm, pt).map(|(_, e)| e)
+fn simple_ident<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+    let idx = ident_len(pt.s);
+    split_point_at_non_zero_offset(pt, idx, Error::ExpectedIdent).map(|(_, e)| e)
 }
 
-fn ident_raw<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, (&'s str, Extent)> {
-    let mut ci = pt.s.chars();
+fn ident_len<'s>(s: &str) -> usize {
+    let mut ci = s.chars();
     let mut idx = 0;
 
     if let Some(c) = ci.next() {
         if UnicodeXID::is_xid_start(c) || c == '_' {
             idx += c.len_utf8();
 
-            idx += ci.take_while(|&c| UnicodeXID::is_xid_continue(c)).map(|c| c.len_utf8()).sum::<usize>();
+            idx += ci
+                .take_while(|&c| UnicodeXID::is_xid_continue(c))
+                .map(|c| c.len_utf8())
+                .sum::<usize>();
         }
     }
 
-    split_point_at_non_zero_offset(pt, idx, Error::ExpectedIdent)
+    idx
 }
 
 enum NumberPartial {
@@ -606,7 +630,7 @@ fn number<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Number> {
         spt         = point;
         value       = number_value;
         exponent    = optional(number_exponent);
-        type_suffix = optional(ident);
+        type_suffix = optional(simple_ident);
     }, |_, pt| value.finish(ex(spt, pt), exponent, type_suffix))
 }
 
@@ -639,7 +663,7 @@ fn number_fractional<'s>(radix: u32) ->
             spt = point;
             _   = literal(".");
             _   = not(peek(literal(".")), Error::InvalidFollowForFractionalNumber);
-            _   = not(peek(ident), Error::InvalidFollowForFractionalNumber);
+            _   = not(peek(simple_ident), Error::InvalidFollowForFractionalNumber);
             _   = optional(number_digits(radix));
         }, |_, pt| ex(spt, pt))
     }
@@ -888,7 +912,7 @@ fn lifetime<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
     sequence!(pm, pt, {
         spt = point;
         _   = literal("'");
-        _   = ident;
+        _   = simple_ident;
     }, |_, pt| ex(spt, pt))
 }
 
@@ -933,7 +957,11 @@ mod test {
     }
 
     fn tok(s: &str) -> Vec<Token> {
-        Tokens::new(s).collect::<Result<_, _>>().expect("Tokenization failed")
+        tok_full(s).expect("Tokenization failed")
+    }
+
+    fn tok_full(s: &str) -> Result<Vec<Token>, ErrorDetail> {
+        Tokens::new(s).collect()
     }
 
     #[test]
@@ -946,6 +974,20 @@ mod test {
     fn ident_can_have_keyword_substring() {
         let s = tokenize_as!("form", Token::Ident);
         assert_eq!(s, (0, 4))
+    }
+
+    #[test]
+    fn raw_idents_can_be_keywords() {
+        let s = tokenize_as!("r#for", Token::Ident);
+        assert_eq!(s, (0, 5))
+    }
+
+    #[test]
+    fn raw_idents_require_some_identifier() {
+        let tokens = tok_full("r#").unwrap_err();
+        assert!(tokens
+            .errors
+            .contains(&Error::RawIdentifierMissingIdentifier));
     }
 
     #[test]
