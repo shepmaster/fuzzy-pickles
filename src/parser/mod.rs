@@ -2502,7 +2502,7 @@ fn typ_function_argument_variadic<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
 
 fn lifetime<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Lifetime> {
     lifetime_normal(pm, pt)
-        .map(|extent| Lifetime { extent: extent, name: Ident { extent } })
+        .map(|extent| Lifetime { extent, name: Ident { extent } })
     // FIXME: value; can we actually have whitespace here?
 }
 
