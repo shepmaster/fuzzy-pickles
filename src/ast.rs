@@ -647,6 +647,14 @@ pub enum AssociatedTypeValue {
     Bound(AssociatedTypeValueBound),
 }
 
+/// An exact associated item
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() -> impl Iterator<Item = bool> {}
+/// //                           ^^^^^^
+/// ```
 #[derive(Debug, HasExtent, ExtentIndex, Visit)]
 pub struct AssociatedTypeValueEqual {
     pub extent: Extent,
@@ -654,6 +662,14 @@ pub struct AssociatedTypeValueEqual {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// An associated item with a trait bound
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() -> impl Iterator<Item: Debug> {}
+/// //                          ^^^^^^^
+/// ```
 #[derive(Debug, HasExtent, ExtentIndex, Visit)]
 pub struct AssociatedTypeValueBound {
     pub extent: Extent,
