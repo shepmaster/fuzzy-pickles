@@ -615,12 +615,32 @@ pub enum TypeGenericsAngleMember {
 /// fn a() -> impl Iterator<Item = bool> {}
 /// //                      ^^^^^^^^^^^
 /// ```
-// TODO: add "type" to the name?
+// TODO: prefix the name with "type"?
 #[derive(Debug, HasExtent, ExtentIndex, Visit)]
 pub struct AssociatedType {
     pub extent: Extent,
     pub name: Ident,
+    pub value: AssociatedTypeValue,
+    pub whitespace: Vec<Whitespace>,
+}
+
+#[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
+pub enum AssociatedTypeValue {
+    Equal(AssociatedTypeValueEqual),
+    Bound(AssociatedTypeValueBound),
+}
+
+#[derive(Debug, HasExtent, ExtentIndex, Visit)]
+pub struct AssociatedTypeValueEqual {
+    pub extent: Extent,
     pub value: Type,
+    pub whitespace: Vec<Whitespace>,
+}
+
+#[derive(Debug, HasExtent, ExtentIndex, Visit)]
+pub struct AssociatedTypeValueBound {
+    pub extent: Extent,
+    pub bounds: TraitBounds,
     pub whitespace: Vec<Whitespace>,
 }
 

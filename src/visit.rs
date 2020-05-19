@@ -125,6 +125,9 @@ pub trait Visitor<'ast> {
     fn visit_as_type(&mut self, _: &'ast AsType) -> Control { Control::Continue }
     fn visit_ascription(&mut self, _: &'ast Ascription) -> Control { Control::Continue }
     fn visit_associated_type(&mut self, _: &'ast AssociatedType) -> Control { Control::Continue }
+    fn visit_associated_type_value(&mut self, _: &'ast AssociatedTypeValue) -> Control { Control::Continue }
+    fn visit_associated_type_value_equal(&mut self, _: &'ast AssociatedTypeValueEqual) -> Control { Control::Continue }
+    fn visit_associated_type_value_bound(&mut self, _: &'ast AssociatedTypeValueBound) -> Control { Control::Continue }
     fn visit_async_block(&mut self, _: &'ast AsyncBlock) -> Control { Control::Continue }
     fn visit_attribute(&mut self, _: &'ast Attribute) -> Control { Control::Continue }
     fn visit_attribute_literal(&mut self, _: &'ast AttributeLiteral) -> Control { Control::Continue }
@@ -323,6 +326,9 @@ pub trait Visitor<'ast> {
     fn exit_as_type(&mut self, _: &'ast AsType) {}
     fn exit_ascription(&mut self, _: &'ast Ascription) {}
     fn exit_associated_type(&mut self, _: &'ast AssociatedType) {}
+    fn exit_associated_type_value(&mut self, _: &'ast AssociatedTypeValue) {}
+    fn exit_associated_type_value_equal(&mut self, _: &'ast AssociatedTypeValueEqual) {}
+    fn exit_associated_type_value_bound(&mut self, _: &'ast AssociatedTypeValueBound) {}
     fn exit_async_block(&mut self, _: &'ast AsyncBlock) {}
     fn exit_attribute(&mut self, _: &'ast Attribute) {}
     fn exit_attribute_literal(&mut self, _: &'ast AttributeLiteral) {}
@@ -530,6 +536,9 @@ pub trait VisitorMut {
     fn visit_as_type(&mut self, _: &mut AsType) -> Control { Control::Continue }
     fn visit_ascription(&mut self, _: &mut Ascription) -> Control { Control::Continue }
     fn visit_associated_type(&mut self, _: &mut AssociatedType) -> Control { Control::Continue }
+    fn visit_associated_type_value(&mut self, _: &mut AssociatedTypeValue) -> Control { Control::Continue }
+    fn visit_associated_type_value_equal(&mut self, _: &mut AssociatedTypeValueEqual) -> Control { Control::Continue }
+    fn visit_associated_type_value_bound(&mut self, _: &mut AssociatedTypeValueBound) -> Control { Control::Continue }
     fn visit_async_block(&mut self, _: &mut AsyncBlock) -> Control { Control::Continue }
     fn visit_attribute(&mut self, _: &mut Attribute) -> Control { Control::Continue }
     fn visit_attribute_literal(&mut self, _: &mut AttributeLiteral) -> Control { Control::Continue }
@@ -728,6 +737,9 @@ pub trait VisitorMut {
     fn exit_as_type(&mut self, _: &mut AsType) {}
     fn exit_ascription(&mut self, _: &mut Ascription) {}
     fn exit_associated_type(&mut self, _: &mut AssociatedType) {}
+    fn exit_associated_type_value(&mut self, _: &mut AssociatedTypeValue) {}
+    fn exit_associated_type_value_equal(&mut self, _: &mut AssociatedTypeValueEqual) {}
+    fn exit_associated_type_value_bound(&mut self, _: &mut AssociatedTypeValueBound) {}
     fn exit_async_block(&mut self, _: &mut AsyncBlock) {}
     fn exit_attribute(&mut self, _: &mut Attribute) {}
     fn exit_attribute_literal(&mut self, _: &mut AttributeLiteral) {}
