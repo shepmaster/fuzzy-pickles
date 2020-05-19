@@ -672,11 +672,13 @@ fn generic_declarations<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, 
         _         = left_angle;
         lifetimes = zero_or_more_tailed_values(comma, attributed(generic_declaration_lifetime));
         types     = zero_or_more_tailed_values(comma, attributed(generic_declaration_type));
+        consts    = zero_or_more_tailed_values(comma, attributed(generic_declaration_const));
         _         = right_angle;
     }, |pm: &mut Master, pt| GenericDeclarations {
         extent: pm.state.ex(spt, pt),
         lifetimes,
         types,
+        consts,
         whitespace: Vec::new(),
     })
 }
@@ -729,6 +731,21 @@ fn generic_declaration_type_default<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> P
         _   = equals;
         typ = typ;
     }, |_, _| typ)
+}
+
+fn generic_declaration_const<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, GenericDeclarationConst> {
+    sequence!(pm, pt, {
+        spt  = point;
+        _    = kw_const;
+        name = ident;
+        _    = colon;
+        typ  = typ;
+    }, |pm: &mut Master, pt| GenericDeclarationConst {
+        extent: pm.state.ex(spt, pt),
+        name,
+        typ,
+        whitespace: Vec::new(),
+    })
 }
 
 fn function_arglist<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Vec<Argument>> {
@@ -4139,6 +4156,12 @@ mod test {
     fn generic_declarations_allow_lifetime_bounds() {
         let p = qp(generic_declarations, "<'a: 'b>");
         assert_extent!(p, (0, 8))
+    }
+
+    #[test]
+    fn generic_declarations_allow_const_bounds() {
+        let p = qp(generic_declarations, "<const N: usize>");
+        assert_extent!(p, (0, 16))
     }
 
     #[test]

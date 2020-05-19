@@ -136,6 +136,7 @@ pub trait Visitor<'ast> {
     fn visit_attributed_enum_variant(&mut self, _: &'ast Attributed<EnumVariant>) -> Control { Control::Continue }
     fn visit_attributed_expression(&mut self, _: &'ast Attributed<Expression>) -> Control { Control::Continue }
     fn visit_attributed_extern_block_member(&mut self, _: &'ast Attributed<ExternBlockMember>) -> Control { Control::Continue }
+    fn visit_attributed_generic_declaration_const(&mut self, _: &'ast Attributed<GenericDeclarationConst>) -> Control { Control::Continue }
     fn visit_attributed_generic_declaration_lifetime(&mut self, _: &'ast Attributed<GenericDeclarationLifetime>) -> Control { Control::Continue }
     fn visit_attributed_generic_declaration_type(&mut self, _: &'ast Attributed<GenericDeclarationType>) -> Control { Control::Continue }
     fn visit_attributed_impl_member(&mut self, _: &'ast Attributed<ImplMember>) -> Control { Control::Continue }
@@ -178,6 +179,7 @@ pub trait Visitor<'ast> {
     fn visit_function(&mut self, _: &'ast Function) -> Control { Control::Continue }
     fn visit_function_header(&mut self, _: &'ast FunctionHeader) -> Control { Control::Continue }
     fn visit_function_qualifiers(&mut self, _: &'ast FunctionQualifiers) -> Control { Control::Continue }
+    fn visit_generic_declaration_const(&mut self, _: &'ast GenericDeclarationConst) -> Control { Control::Continue }
     fn visit_generic_declaration_lifetime(&mut self, _: &'ast GenericDeclarationLifetime) -> Control { Control::Continue }
     fn visit_generic_declaration_type(&mut self, _: &'ast GenericDeclarationType) -> Control { Control::Continue }
     fn visit_generic_declarations(&mut self, _: &'ast GenericDeclarations) -> Control { Control::Continue }
@@ -337,6 +339,7 @@ pub trait Visitor<'ast> {
     fn exit_attributed_enum_variant(&mut self, _: &'ast Attributed<EnumVariant>) {}
     fn exit_attributed_expression(&mut self, _: &'ast Attributed<Expression>) {}
     fn exit_attributed_extern_block_member(&mut self, _: &'ast Attributed<ExternBlockMember>) {}
+    fn exit_attributed_generic_declaration_const(&mut self, _: &'ast Attributed<GenericDeclarationConst>) {}
     fn exit_attributed_generic_declaration_lifetime(&mut self, _: &'ast Attributed<GenericDeclarationLifetime>) {}
     fn exit_attributed_generic_declaration_type(&mut self, _: &'ast Attributed<GenericDeclarationType>) {}
     fn exit_attributed_impl_member(&mut self, _: &'ast Attributed<ImplMember>) {}
@@ -379,6 +382,7 @@ pub trait Visitor<'ast> {
     fn exit_function(&mut self, _: &'ast Function) {}
     fn exit_function_header(&mut self, _: &'ast FunctionHeader) {}
     fn exit_function_qualifiers(&mut self, _: &'ast FunctionQualifiers) {}
+    fn exit_generic_declaration_const(&mut self, _: &'ast GenericDeclarationConst) {}
     fn exit_generic_declaration_lifetime(&mut self, _: &'ast GenericDeclarationLifetime) {}
     fn exit_generic_declaration_type(&mut self, _: &'ast GenericDeclarationType) {}
     fn exit_generic_declarations(&mut self, _: &'ast GenericDeclarations) {}
@@ -547,6 +551,7 @@ pub trait VisitorMut {
     fn visit_attributed_enum_variant(&mut self, _: &mut Attributed<EnumVariant>) -> Control { Control::Continue }
     fn visit_attributed_expression(&mut self, _: &mut Attributed<Expression>) -> Control { Control::Continue }
     fn visit_attributed_extern_block_member(&mut self, _: &mut Attributed<ExternBlockMember>) -> Control { Control::Continue }
+    fn visit_attributed_generic_declaration_const(&mut self, _: &mut Attributed<GenericDeclarationConst>) -> Control { Control::Continue }
     fn visit_attributed_generic_declaration_lifetime(&mut self, _: &mut Attributed<GenericDeclarationLifetime>) -> Control { Control::Continue }
     fn visit_attributed_generic_declaration_type(&mut self, _: &mut Attributed<GenericDeclarationType>) -> Control { Control::Continue }
     fn visit_attributed_impl_member(&mut self, _: &mut Attributed<ImplMember>) -> Control { Control::Continue }
@@ -589,6 +594,7 @@ pub trait VisitorMut {
     fn visit_function(&mut self, _: &mut Function) -> Control { Control::Continue }
     fn visit_function_header(&mut self, _: &mut FunctionHeader) -> Control { Control::Continue }
     fn visit_function_qualifiers(&mut self, _: &mut FunctionQualifiers) -> Control { Control::Continue }
+    fn visit_generic_declaration_const(&mut self, _: &mut GenericDeclarationConst) -> Control { Control::Continue }
     fn visit_generic_declaration_lifetime(&mut self, _: &mut GenericDeclarationLifetime) -> Control { Control::Continue }
     fn visit_generic_declaration_type(&mut self, _: &mut GenericDeclarationType) -> Control { Control::Continue }
     fn visit_generic_declarations(&mut self, _: &mut GenericDeclarations) -> Control { Control::Continue }
@@ -748,6 +754,7 @@ pub trait VisitorMut {
     fn exit_attributed_enum_variant(&mut self, _: &mut Attributed<EnumVariant>) {}
     fn exit_attributed_expression(&mut self, _: &mut Attributed<Expression>) {}
     fn exit_attributed_extern_block_member(&mut self, _: &mut Attributed<ExternBlockMember>) {}
+    fn exit_attributed_generic_declaration_const(&mut self, _: &mut Attributed<GenericDeclarationConst>) {}
     fn exit_attributed_generic_declaration_lifetime(&mut self, _: &mut Attributed<GenericDeclarationLifetime>) {}
     fn exit_attributed_generic_declaration_type(&mut self, _: &mut Attributed<GenericDeclarationType>) {}
     fn exit_attributed_impl_member(&mut self, _: &mut Attributed<ImplMember>) {}
@@ -790,6 +797,7 @@ pub trait VisitorMut {
     fn exit_function(&mut self, _: &mut Function) {}
     fn exit_function_header(&mut self, _: &mut FunctionHeader) {}
     fn exit_function_qualifiers(&mut self, _: &mut FunctionQualifiers) {}
+    fn exit_generic_declaration_const(&mut self, _: &mut GenericDeclarationConst) {}
     fn exit_generic_declaration_lifetime(&mut self, _: &mut GenericDeclarationLifetime) {}
     fn exit_generic_declaration_type(&mut self, _: &mut GenericDeclarationType) {}
     fn exit_generic_declarations(&mut self, _: &mut GenericDeclarations) {}

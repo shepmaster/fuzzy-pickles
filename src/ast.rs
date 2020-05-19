@@ -283,6 +283,7 @@ pub struct GenericDeclarations {
     pub extent: Extent,
     pub lifetimes: Vec<Attributed<GenericDeclarationLifetime>>,
     pub types: Vec<Attributed<GenericDeclarationType>>,
+    pub consts: Vec<Attributed<GenericDeclarationConst>>,
     pub whitespace: Vec<Whitespace>,
 }
 
@@ -316,6 +317,22 @@ pub struct GenericDeclarationType {
     pub name: Ident,
     pub bounds: Option<TraitBounds>,
     pub default: Option<Type>,
+    pub whitespace: Vec<Whitespace>,
+}
+
+/// Generic constants
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// struct A<const N: usize> {}
+/// //       ^^^^^^^^^^^^^^
+/// ```
+#[derive(Debug, HasExtent, ExtentIndex, Visit)]
+pub struct GenericDeclarationConst {
+    pub extent: Extent,
+    pub name: Ident,
+    pub typ: Type,
     pub whitespace: Vec<Whitespace>,
 }
 
@@ -1309,6 +1326,7 @@ macro_rules! visit_attributed {
 visit_attributed!(EnumVariant, visit_attributed_enum_variant, exit_attributed_enum_variant);
 visit_attributed!(Expression, visit_attributed_expression, exit_attributed_expression);
 visit_attributed!(ExternBlockMember, visit_attributed_extern_block_member, exit_attributed_extern_block_member);
+visit_attributed!(GenericDeclarationConst, visit_attributed_generic_declaration_const, exit_attributed_generic_declaration_const);
 visit_attributed!(GenericDeclarationLifetime, visit_attributed_generic_declaration_lifetime, exit_attributed_generic_declaration_lifetime);
 visit_attributed!(GenericDeclarationType, visit_attributed_generic_declaration_type, exit_attributed_generic_declaration_type);
 visit_attributed!(ImplMember, visit_attributed_impl_member, exit_attributed_impl_member);
