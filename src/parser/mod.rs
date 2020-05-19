@@ -1223,6 +1223,7 @@ fn pattern_slice_subslice<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s
         is_ref = optional(kw_ref);
         is_mut = optional(kw_mut);
         name   = ident;
+        _      = at;
         _      = double_period;
     }, |pm: &mut Master, pt| PatternSliceSubslice {
         extent: pm.state.ex(spt, pt),
@@ -3583,14 +3584,14 @@ mod test {
 
     #[test]
     fn pattern_with_slice_and_subslices() {
-        let p = qp(pattern, "[a, b..]");
-        assert_extent!(p, (0, 8))
+        let p = qp(pattern, "[a, b @ ..]");
+        assert_extent!(p, (0, 11))
     }
 
     #[test]
     fn pattern_with_slice_and_modified_subslices() {
-        let p = qp(pattern, "[a, ref mut b..]");
-        assert_extent!(p, (0, 16))
+        let p = qp(pattern, "[a, ref mut b @ ..]");
+        assert_extent!(p, (0, 19))
     }
 
     #[test]
