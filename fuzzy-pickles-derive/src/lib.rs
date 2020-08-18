@@ -147,7 +147,7 @@ fn is_ignore_field(field: &syn::Field) -> bool {
         let meta = attr.parse_meta().expect("Unknown attribute structure");
         match meta {
             Meta::List(ref list) => {
-                list.ident == "visit" && list.nested.iter().any(ignore_field_inner)
+                list.path.is_ident("visit") && list.nested.iter().any(ignore_field_inner)
             },
             _ => false,
         }
@@ -158,7 +158,7 @@ fn ignore_field_inner(item: &syn::NestedMeta) -> bool {
     use syn::{NestedMeta, Meta};
 
     match *item {
-        NestedMeta::Meta(Meta::Word(ref i)) => i == "ignore",
+        NestedMeta::Meta(Meta::Path(ref p)) => p.is_ident("ignore"),
         _ => false
     }
 }
