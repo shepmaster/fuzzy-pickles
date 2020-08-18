@@ -1,7 +1,7 @@
 [package]
 authors = ["Jake Goulding <jake.goulding@gmail.com>"]
 name = "fuzzy-pickles"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2018"
 
 description = "A low-level parser of Rust source code with high-level visitor implementations"
@@ -24,4 +24,4 @@ peresil = "0.4.0-alpha"
 
 [dependencies.fuzzy-pickles-derive]
 path = "fuzzy-pickles-derive"
-version = "0.1.0"
+version = "0.1.1"
