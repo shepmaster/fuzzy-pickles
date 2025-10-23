@@ -13,22 +13,22 @@ use proc_macro2::{TokenStream, Span};
 #[proc_macro_derive(Visit, attributes(visit))]
 pub fn visit_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);
-    let gen = impl_visit(&ast);
-    gen.into()
+    let generated = impl_visit(&ast);
+    generated.into()
 }
 
 #[proc_macro_derive(HasExtent)]
 pub fn has_extent_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);
-    let gen = impl_has_extent(&ast);
-    gen.into()
+    let generated = impl_has_extent(&ast);
+    generated.into()
 }
 
 #[proc_macro_derive(ExtentIndex)]
 pub fn extent_index_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);
-    let gen = impl_extent_index(&ast);
-    gen.into()
+    let generated = impl_extent_index(&ast);
+    generated.into()
 }
 
 fn camelcase_to_snake_case(camelcase: &str) -> String {
@@ -161,8 +161,8 @@ fn is_ignore_field(field: &syn::Field) -> bool {
 #[proc_macro_derive(Decompose)]
 pub fn decompose_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);
-    let gen = impl_decompose(&ast);
-    gen.into()
+    let generated = impl_decompose(&ast);
+    generated.into()
 }
 
 fn impl_decompose(ast: &syn::DeriveInput) -> TokenStream {

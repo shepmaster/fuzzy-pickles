@@ -2,7 +2,7 @@
 authors = ["Jake Goulding <jake.goulding@gmail.com>"]
 name = "fuzzy-pickles-derive"
 version = "0.1.1"
-edition = "2021"
+edition = "2024"
 
 description = "Procedural macros for fuzzy-pickles"
 repository = "https://github.com/shepmaster/fuzzy-pickles"
