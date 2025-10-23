@@ -141,26 +141,21 @@ fn impl_visit_fields(ast: &syn::DeriveInput, IsMut(is_mut): IsMut) -> TokenStrea
 }
 
 fn is_ignore_field(field: &syn::Field) -> bool {
-    use syn::Meta;
-
     field.attrs.iter().any(|attr| {
-        let meta = attr.parse_meta().expect("Unknown attribute structure");
-        match meta {
-            Meta::List(ref list) => {
-                list.path.is_ident("visit") && list.nested.iter().any(ignore_field_inner)
-            },
-            _ => false,
+        if !attr.path().is_ident("visit") {
+            return false;
         }
+
+        let mut is_ignore = false;
+
+        attr.parse_nested_meta(|meta| {
+            is_ignore = meta.path.is_ident("ignore");
+
+            Ok(())
+        }).expect("Unknown attribute structure");
+
+        is_ignore
     })
-}
-
-fn ignore_field_inner(item: &syn::NestedMeta) -> bool {
-    use syn::{NestedMeta, Meta};
-
-    match *item {
-        NestedMeta::Meta(Meta::Path(ref p)) => p.is_ident("ignore"),
-        _ => false
-    }
 }
 
 #[proc_macro_derive(Decompose)]
