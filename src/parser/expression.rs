@@ -150,6 +150,7 @@ where
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 enum OperatorPrefix {
     Box(Extent),
     Dereference(Extent),
@@ -161,6 +162,7 @@ enum OperatorPrefix {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 enum OperatorInfix {
     Add(Extent),
     AddAssign(Extent),
@@ -206,6 +208,7 @@ impl OperatorInfix {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 enum OperatorPostfix {
     Ascription { typ: Type },
     AsType { typ: Type },
