@@ -1408,7 +1408,7 @@ pub enum Expression {
 
 impl Expression {
     pub(crate) fn may_terminate_statement(&self) -> bool {
-        match *self {
+        matches!(self,
             Expression::Block(_)       |
             Expression::ForLoop(_)     |
             Expression::If(_)          |
@@ -1418,9 +1418,8 @@ impl Expression {
             Expression::UnsafeBlock(_) |
             Expression::While(_)       |
             Expression::WhileLet(_)    |
-            Expression::MacroCall(MacroCall { args: MacroCallArgs::Curly(_), .. }) => true,
-            _ => false,
-        }
+            Expression::MacroCall(MacroCall { args: MacroCallArgs::Curly(_), .. })
+        )
     }
 }
 

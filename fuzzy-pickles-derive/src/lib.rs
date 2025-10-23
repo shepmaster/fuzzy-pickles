@@ -95,7 +95,7 @@ fn impl_visit_fields(ast: &syn::DeriveInput, IsMut(is_mut): IsMut) -> TokenStrea
         fields
             .into_iter()
             .enumerate()
-            .filter(|&(_, ref f)| !is_ignore_field(f))
+            .filter(|(_, f)| !is_ignore_field(f))
             .map(|(i, f)| f.ident.clone().unwrap_or_else(|| Ident::new(&i.to_string(), Span::call_site())))
             .collect()
     }
