@@ -200,6 +200,7 @@ pub trait Visitor<'ast> {
     fn visit_impl_type(&mut self, _: &'ast ImplType) -> Control { Control::Continue }
     fn visit_item(&mut self, _: &'ast Item) -> Control { Control::Continue }
     fn visit_let(&mut self, _: &'ast Let) -> Control { Control::Continue }
+    fn visit_let_value(&mut self, _: &'ast LetValue) -> Control { Control::Continue }
     fn visit_lifetime(&mut self, _: &'ast Lifetime) -> Control { Control::Continue }
     fn visit_loop(&mut self, _: &'ast Loop) -> Control { Control::Continue }
     fn visit_macro_call(&mut self, _: &'ast MacroCall) -> Control { Control::Continue }
@@ -406,6 +407,7 @@ pub trait Visitor<'ast> {
     fn exit_impl_type(&mut self, _: &'ast ImplType) {}
     fn exit_item(&mut self, _: &'ast Item) {}
     fn exit_let(&mut self, _: &'ast Let) {}
+    fn exit_let_value(&mut self, _: &'ast LetValue) {}
     fn exit_lifetime(&mut self, _: &'ast Lifetime) {}
     fn exit_loop(&mut self, _: &'ast Loop) {}
     fn exit_macro_call(&mut self, _: &'ast MacroCall) {}
@@ -621,6 +623,7 @@ pub trait VisitorMut {
     fn visit_impl_type(&mut self, _: &mut ImplType) -> Control { Control::Continue }
     fn visit_item(&mut self, _: &mut Item) -> Control { Control::Continue }
     fn visit_let(&mut self, _: &mut Let) -> Control { Control::Continue }
+    fn visit_let_value(&mut self, _: &mut LetValue) -> Control { Control::Continue }
     fn visit_lifetime(&mut self, _: &mut Lifetime) -> Control { Control::Continue }
     fn visit_loop(&mut self, _: &mut Loop) -> Control { Control::Continue }
     fn visit_macro_call(&mut self, _: &mut MacroCall) -> Control { Control::Continue }
@@ -827,6 +830,7 @@ pub trait VisitorMut {
     fn exit_impl_type(&mut self, _: &mut ImplType) {}
     fn exit_item(&mut self, _: &mut Item) {}
     fn exit_let(&mut self, _: &mut Let) {}
+    fn exit_let_value(&mut self, _: &mut LetValue) {}
     fn exit_lifetime(&mut self, _: &mut Lifetime) {}
     fn exit_loop(&mut self, _: &mut Loop) {}
     fn exit_macro_call(&mut self, _: &mut MacroCall) {}
