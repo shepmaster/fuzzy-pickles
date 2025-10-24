@@ -127,6 +127,7 @@ pub enum Token {
     DocCommentOuterBlock(Extent),
     DocCommentInnerBlock(Extent),
     Lifetime(Extent),
+    Shebang(Extent),
     EndOfFile(Extent),
 }
 
@@ -220,6 +221,7 @@ impl Token {
             RightSquare(s)         |
             SelfIdent(s)           |
             Semicolon(s)           |
+            Shebang(s)             |
             ShiftLeftEquals(s)     |
             ShiftRightEquals(s)    |
             Slash(s)               |
@@ -327,6 +329,7 @@ pub(crate) enum Error {
     ExpectedHex,
     ExpectedWhitespace,
     ExpectedComment,
+    ExpectedShebang,
     ExpectedCharacter,
     UnterminatedRawString,
     RawIdentifierMissingIdentifier,
@@ -410,6 +413,14 @@ impl<'s> Iterator for Tokens<'s> {
         if self.pt.s.is_empty() {
             self.is_exhausted = true;
             return Some(Ok(Token::EndOfFile(Extent(self.pt.offset, self.pt.offset))));
+        }
+
+        if self.pt.offset == 0 {
+            let tok = shebang(&mut self.pm, self.pt);
+            if let peresil::Progress { status: peresil::Status::Success(value), point } = tok {
+                self.pt = point;
+                return Some(Ok(value));
+            }
         }
 
         let tok = single_token(&mut self.pm, self.pt);
@@ -741,6 +752,17 @@ fn comment_or_doc_comment<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'
         Progress::success(pt, Token::CommentBlock(ex(spt, pt)))
     } else {
         Progress::failure(pt, Error::ExpectedComment)
+    }
+}
+
+fn shebang<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token> {
+    let spt = pt;
+    if pt.s.starts_with("#!") && !pt.s.starts_with("#![") {
+        let eol = pt.s.find('\n').unwrap_or(pt.s.len());
+        let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedShebang));
+        Progress::success(pt, Token::Shebang(ex(spt, pt)))
+    } else {
+        Progress::failure(pt, Error::ExpectedShebang)
     }
 }
 

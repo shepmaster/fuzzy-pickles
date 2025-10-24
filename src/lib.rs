@@ -306,7 +306,7 @@ fn extract_whitespace(file: &str) -> Result<(WhitespaceApportioner, Vec<tokenize
 /// The entrypoint to parsing Rust code.
 pub fn parse_rust_file(file: &str) -> Result<ast::File, ErrorDetail> {
     use crate::{
-        parser::{attributed, item, Point, Master, State},
+        parser::{attributed, item, shebang, Point, Master, State},
         tokenizer::Token,
         visit::Visit,
     };
@@ -316,6 +316,14 @@ pub fn parse_rust_file(file: &str) -> Result<ast::File, ErrorDetail> {
     let mut pt = Point::new(&tokens);
     let mut pm = Master::with_state(State::new());
     let mut items = Vec::new();
+
+    let shebang = match shebang(&mut pm, pt) {
+        peresil::Progress { status: peresil::Status::Success(s), point } => {
+            pt = point;
+            Some(s)
+        }
+        _ => None,
+    };
 
     loop {
         if pt.s.first().map(Token::is_end_of_file).unwrap_or(true) { break }
@@ -340,7 +348,7 @@ pub fn parse_rust_file(file: &str) -> Result<ast::File, ErrorDetail> {
         pt = next_pt;
     }
 
-    let mut file = ast::File { items, whitespace: Vec::new() };
+    let mut file = ast::File { shebang, items, whitespace: Vec::new() };
 
     file.visit_mut(&mut ws);
     assert!(ws.is_empty(), "Did not assign all whitespace");
@@ -355,6 +363,12 @@ mod test {
     #[test]
     fn can_parse_an_empty_rust_file() {
         let r = parse_rust_file("");
+        assert!(r.is_ok());
+    }
+
+    #[test]
+    fn parse_shebang() {
+        let r = parse_rust_file("#!/bin/false --version");
         assert!(r.is_ok());
     }
 

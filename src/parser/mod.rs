@@ -261,6 +261,7 @@ pub(crate) enum Error {
     ExpectedRightSquare,
     ExpectedSelfIdent,
     ExpectedSemicolon,
+    ExpectedShebang,
     ExpectedShiftLeftEquals,
     ExpectedShiftRightEquals,
     ExpectedSlash,
@@ -473,6 +474,8 @@ shims! [
     (doc_comment_inner_line, Token::into_doc_comment_inner_line, Error::ExpectedDocCommentInnerLine),
     (doc_comment_outer_block, Token::into_doc_comment_outer_block, Error::ExpectedDocCommentOuterBlock),
     (doc_comment_outer_line, Token::into_doc_comment_outer_line, Error::ExpectedDocCommentOuterLine),
+
+    (tok_shebang, Token::into_shebang, Error::ExpectedShebang),
 ];
 
 fn token<'s, F, T>(token_convert: F, error: Error) ->
@@ -2613,6 +2616,10 @@ fn attribute_containing_literal<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progr
         text,
         whitespace: Vec::new(),
     })
+}
+
+pub(crate) fn shebang<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
+    tok_shebang(pm, pt)
 }
 
 #[cfg(test)]

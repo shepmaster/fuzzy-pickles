@@ -12,6 +12,7 @@ use crate::visit::{Visit, Visitor, VisitorMut};
 /// An entire Rust file
 #[derive(Debug, Visit)]
 pub struct File {
+    pub shebang: Option<Extent>,
     pub items: Vec<Attributed<Item>>,
     pub whitespace: Vec<Whitespace>,
 }
