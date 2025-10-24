@@ -983,8 +983,9 @@ impl ImplicitSeparator for Statement {
     }
 }
 
-// TODO: There's a good amount of duplication here; revisit and DRY up
-// Mostly in the required ; for paren and square...
+// TODO: There's a good amount of duplication between item and
+// expression macro call parsing, specifically differing around the
+// required `;` for paren and square calls; revisit and DRY up ...
 fn item_macro_call<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, MacroCall> {
     sequence!(pm, pt, {
         spt  = point;
@@ -2212,6 +2213,7 @@ fn typ_kind<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TypeKind> {
         .one(map(typ_higher_ranked_trait_bounds, TypeKind::HigherRankedTraitBounds))
         .one(map(typ_dyn_trait, TypeKind::DynTrait))
         .one(map(typ_impl_trait, TypeKind::ImplTrait))
+        .one(map(expr_macro_call, TypeKind::MacroCall))
         .one(map(typ_named, TypeKind::Named))
         .one(map(typ_pointer, TypeKind::Pointer))
         .one(map(typ_reference, TypeKind::Reference))
@@ -3947,6 +3949,12 @@ mod test {
     fn type_disambiguation_with_double_angle_brackets() {
         let p = qp(typ, "<<A as B> as Option<T>>");
         assert_extent!(p, (0, 23))
+    }
+
+    #[test]
+    fn type_macro_call() {
+        let p = qp(typ, "syn::Token![,]");
+        assert_extent!(p, (0, 14))
     }
 
     #[test]
