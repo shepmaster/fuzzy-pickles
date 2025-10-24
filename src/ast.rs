@@ -1265,6 +1265,21 @@ pub struct AsyncBlock {
     pub whitespace: Vec<Whitespace>,
 }
 
+/// A block which is evaluated at compile time
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { const { 1 + 1 } }
+/// //       ^^^^^^^^^^^^^^^
+/// ```
+#[derive(Debug, HasExtent, ExtentIndex, Visit)]
+pub struct ConstBlock {
+    pub extent: Extent,
+    pub body: Box<Block>,
+    pub whitespace: Vec<Whitespace>,
+}
+
 /// An expression surrounded by parenthesis
 ///
 /// ### Example Source
@@ -1381,6 +1396,7 @@ pub enum Expression {
     Character(Character),
     Closure(Closure),
     Continue(Continue),
+    ConstBlock(ConstBlock),
     Dereference(Dereference),
     Disambiguation(Disambiguation),
     FieldAccess(FieldAccess),
@@ -1412,6 +1428,7 @@ impl Expression {
     pub(crate) fn may_terminate_statement(&self) -> bool {
         matches!(self,
             Expression::Block(_)       |
+            Expression::ConstBlock(_)  |
             Expression::ForLoop(_)     |
             Expression::If(_)          |
             Expression::IfLet(_)       |

@@ -157,6 +157,7 @@ pub trait Visitor<'ast> {
     fn visit_closure_arg(&mut self, _: &'ast ClosureArg) -> Control { Control::Continue }
     fn visit_comment(&mut self, _: &'ast Comment) -> Control { Control::Continue }
     fn visit_const(&mut self, _: &'ast Const) -> Control { Control::Continue }
+    fn visit_const_block(&mut self, _: &'ast ConstBlock) -> Control { Control::Continue }
     fn visit_continue(&mut self, _: &'ast Continue) -> Control { Control::Continue }
     fn visit_crate(&mut self, _: &'ast Crate) -> Control { Control::Continue }
     fn visit_dereference(&mut self, _: &'ast Dereference) -> Control { Control::Continue }
@@ -362,6 +363,7 @@ pub trait Visitor<'ast> {
     fn exit_closure_arg(&mut self, _: &'ast ClosureArg) {}
     fn exit_comment(&mut self, _: &'ast Comment) {}
     fn exit_const(&mut self, _: &'ast Const) {}
+    fn exit_const_block(&mut self, _: &'ast ConstBlock) {}
     fn exit_continue(&mut self, _: &'ast Continue) {}
     fn exit_crate(&mut self, _: &'ast Crate) {}
     fn exit_dereference(&mut self, _: &'ast Dereference) {}
@@ -576,6 +578,7 @@ pub trait VisitorMut {
     fn visit_closure_arg(&mut self, _: &mut ClosureArg) -> Control { Control::Continue }
     fn visit_comment(&mut self, _: &mut Comment) -> Control { Control::Continue }
     fn visit_const(&mut self, _: &mut Const) -> Control { Control::Continue }
+    fn visit_const_block(&mut self, _: &mut ConstBlock) -> Control { Control::Continue }
     fn visit_continue(&mut self, _: &mut Continue) -> Control { Control::Continue }
     fn visit_crate(&mut self, _: &mut Crate) -> Control { Control::Continue }
     fn visit_dereference(&mut self, _: &mut Dereference) -> Control { Control::Continue }
@@ -781,6 +784,7 @@ pub trait VisitorMut {
     fn exit_closure_arg(&mut self, _: &mut ClosureArg) {}
     fn exit_comment(&mut self, _: &mut Comment) {}
     fn exit_const(&mut self, _: &mut Const) {}
+    fn exit_const_block(&mut self, _: &mut ConstBlock) {}
     fn exit_continue(&mut self, _: &mut Continue) {}
     fn exit_crate(&mut self, _: &mut Crate) {}
     fn exit_dereference(&mut self, _: &mut Dereference) {}
