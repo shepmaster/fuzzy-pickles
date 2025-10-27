@@ -15,6 +15,7 @@ use self::{
         expr_byte_string,
         expr_macro_call,
         expression,
+        expression_atom,
         statement_expression,
     },
 };
@@ -1053,9 +1054,7 @@ fn string_literal<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, String
 }
 
 fn number_literal<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Number> {
-    pm.alternate(pt)
-        .one(map(number_normal, convert_number))
-        .finish()
+    number_normal(pm, pt).map(convert_number)
 }
 
 fn convert_number(n: tokenizer::Number) -> Number {
@@ -2463,6 +2462,7 @@ fn typ_generics_angle_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
         .one(map(associated_type, TypeGenericsAngleMember::AssociatedType))
         .one(map(lifetime, TypeGenericsAngleMember::Lifetime))
         .one(map(typ, TypeGenericsAngleMember::Type))
+        .one(map(attributed(expression_atom), TypeGenericsAngleMember::Const))
         .finish()
 }
 
@@ -3773,9 +3773,27 @@ mod test {
     }
 
     #[test]
-    fn type_with_generics() {
+    fn type_with_generic_lifetimes() {
+        let p = qp(typ, "A<'a>");
+        assert_extent!(p, (0, 5))
+    }
+
+    #[test]
+    fn type_with_generic_types() {
         let p = qp(typ, "A<T>");
         assert_extent!(p, (0, 4))
+    }
+
+    #[test]
+    fn type_with_generic_consts() {
+        let p = qp(typ, "A<42>");
+        assert_extent!(p, (0, 5))
+    }
+
+    #[test]
+    fn type_with_generic_consts_block() {
+        let p = qp(typ, "A<{ u8::MAX as u64 }>");
+        assert_extent!(p, (0, 21))
     }
 
     #[test]

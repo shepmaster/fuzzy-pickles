@@ -446,7 +446,7 @@ fn operator_postfix_slice<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
     }, |_, _| OperatorPostfix::Slice { index })
 }
 
-fn expression_atom<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
+pub(crate) fn expression_atom<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
     pm.alternate(pt)
         .one(map(expr_if, Expression::If))
         .one(map(expr_if_let, Expression::IfLet))

@@ -623,7 +623,8 @@ pub struct TypeGenericsAngle {
 pub enum TypeGenericsAngleMember {
     Lifetime(Lifetime),
     Type(Type),
-    AssociatedType(AssociatedType)
+    AssociatedType(AssociatedType),
+    Const(Attributed<Expression>),
 }
 
 /// An associated item in a type with generics
