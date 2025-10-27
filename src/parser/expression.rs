@@ -1748,6 +1748,13 @@ mod test {
     }
 
     #[test]
+    fn expr_call_method_with_turbofish_const_generic_before_type_generic() {
+        let p = qp(expression, "Assert::<0, N>::fail()");
+        assert!(p.is_call());
+        assert_extent!(p, (0, 22))
+    }
+
+    #[test]
     fn expr_call_of_expr() {
         let p = qp(expression, "{foo}()");
         assert!(p.is_call());

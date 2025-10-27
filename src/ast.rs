@@ -815,9 +815,14 @@ pub struct PathComponent {
 pub struct Turbofish {
     pub extent: Extent,
     pub lifetimes: Vec<Lifetime>,
-    pub types: Vec<Type>,
-    pub consts: Vec<Attributed<Expression>>,
+    pub types_and_consts: Vec<TurbofishTypeOrConst>,
     pub whitespace: Vec<Whitespace>,
+}
+
+#[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
+pub enum TurbofishTypeOrConst {
+    Type(Type),
+    Const(Attributed<Expression>),
 }
 
 /// A constant value

@@ -283,6 +283,7 @@ pub trait Visitor<'ast> {
     fn visit_try_operator(&mut self, _: &'ast TryOperator) -> Control { Control::Continue }
     fn visit_tuple(&mut self, _: &'ast Tuple) -> Control { Control::Continue }
     fn visit_turbofish(&mut self, _: &'ast Turbofish) -> Control { Control::Continue }
+    fn visit_turbofish_type_or_const(&mut self, _: &'ast TurbofishTypeOrConst) -> Control { Control::Continue }
     fn visit_type(&mut self, _: &'ast Type) -> Control { Control::Continue }
     fn visit_type_additional(&mut self, _: &'ast TypeAdditional) -> Control { Control::Continue }
     fn visit_type_alias(&mut self, _: &'ast TypeAlias) -> Control { Control::Continue }
@@ -492,6 +493,7 @@ pub trait Visitor<'ast> {
     fn exit_try_operator(&mut self, _: &'ast TryOperator) {}
     fn exit_tuple(&mut self, _: &'ast Tuple) {}
     fn exit_turbofish(&mut self, _: &'ast Turbofish) {}
+    fn exit_turbofish_type_or_const(&mut self, _: &'ast TurbofishTypeOrConst) {}
     fn exit_type(&mut self, _: &'ast Type) {}
     fn exit_type_additional(&mut self, _: &'ast TypeAdditional) {}
     fn exit_type_alias(&mut self, _: &'ast TypeAlias) {}
@@ -710,6 +712,7 @@ pub trait VisitorMut {
     fn visit_try_operator(&mut self, _: &mut TryOperator) -> Control { Control::Continue }
     fn visit_tuple(&mut self, _: &mut Tuple) -> Control { Control::Continue }
     fn visit_turbofish(&mut self, _: &mut Turbofish) -> Control { Control::Continue }
+    fn visit_turbofish_type_or_const(&mut self, _: &mut TurbofishTypeOrConst) -> Control { Control::Continue }
     fn visit_type(&mut self, _: &mut Type) -> Control { Control::Continue }
     fn visit_type_additional(&mut self, _: &mut TypeAdditional) -> Control { Control::Continue }
     fn visit_type_alias(&mut self, _: &mut TypeAlias) -> Control { Control::Continue }
@@ -919,6 +922,7 @@ pub trait VisitorMut {
     fn exit_try_operator(&mut self, _: &mut TryOperator) {}
     fn exit_tuple(&mut self, _: &mut Tuple) {}
     fn exit_turbofish(&mut self, _: &mut Turbofish) {}
+    fn exit_turbofish_type_or_const(&mut self, _: &mut TurbofishTypeOrConst) {}
     fn exit_type(&mut self, _: &mut Type) {}
     fn exit_type_additional(&mut self, _: &mut TypeAdditional) {}
     fn exit_type_alias(&mut self, _: &mut TypeAlias) {}

@@ -1122,20 +1122,25 @@ fn path_component<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PathCo
 
 fn turbofish<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Turbofish> {
     sequence!(pm, pt, {
-        spt       = point;
-        _         = double_colon;
-        _         = left_angle;
-        lifetimes = zero_or_more_tailed_values(comma, lifetime);
-        types     = zero_or_more_tailed_values(comma, typ);
-        consts    = zero_or_more_tailed_values(comma, attributed(expression_atom));
-        _     = right_angle;
+        spt              = point;
+        _                = double_colon;
+        _                = left_angle;
+        lifetimes        = zero_or_more_tailed_values(comma, lifetime);
+        types_and_consts = zero_or_more_tailed_values(comma, turbofish_typ_or_const);
+        _                = right_angle;
     }, |pm: &mut Master, pt| Turbofish {
         extent: pm.state.ex(spt, pt),
         lifetimes,
-        types,
-        consts,
+        types_and_consts,
         whitespace: Vec::new(),
     })
+}
+
+fn turbofish_typ_or_const<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TurbofishTypeOrConst> {
+    pm.alternate(pt)
+        .one(map(typ, TurbofishTypeOrConst::Type))
+        .one(map(attributed(expression_atom), TurbofishTypeOrConst::Const))
+        .finish()
 }
 
 fn pattern<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Pattern> {
