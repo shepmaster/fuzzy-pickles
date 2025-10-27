@@ -811,6 +811,7 @@ pub struct Turbofish {
     pub extent: Extent,
     pub lifetimes: Vec<Lifetime>,
     pub types: Vec<Type>,
+    pub consts: Vec<Attributed<Expression>>,
     pub whitespace: Vec<Whitespace>,
 }
 

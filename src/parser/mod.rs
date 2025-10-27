@@ -1122,11 +1122,13 @@ fn turbofish<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Turbofish> 
         _         = left_angle;
         lifetimes = zero_or_more_tailed_values(comma, lifetime);
         types     = zero_or_more_tailed_values(comma, typ);
+        consts    = zero_or_more_tailed_values(comma, attributed(expression_atom));
         _     = right_angle;
     }, |pm: &mut Master, pt| Turbofish {
         extent: pm.state.ex(spt, pt),
         lifetimes,
         types,
+        consts,
         whitespace: Vec::new(),
     })
 }
