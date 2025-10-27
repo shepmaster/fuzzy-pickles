@@ -672,17 +672,15 @@ fn ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ident> {
 
 fn generic_declarations<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, GenericDeclarations> {
     sequence!(pm, pt, {
-        spt       = point;
-        _         = left_angle;
-        lifetimes = zero_or_more_tailed_values(comma, attributed(generic_declaration_lifetime));
-        types     = zero_or_more_tailed_values(comma, attributed(generic_declaration_type));
-        consts    = zero_or_more_tailed_values(comma, attributed(generic_declaration_const));
-        _         = right_angle;
+        spt              = point;
+        _                = left_angle;
+        lifetimes        = zero_or_more_tailed_values(comma, attributed(generic_declaration_lifetime));
+        types_and_consts = zero_or_more_tailed_values(comma, attributed(generic_declaration_type_or_const));
+        _                = right_angle;
     }, |pm: &mut Master, pt| GenericDeclarations {
         extent: pm.state.ex(spt, pt),
         lifetimes,
-        types,
-        consts,
+        types_and_consts,
         whitespace: Vec::new(),
     })
 }
@@ -705,6 +703,13 @@ fn generic_declaration_lifetime_bounds<'s>(pm: &mut Master<'s>, pt: Point<'s>) -
         _      = colon;
         bounds = zero_or_more_tailed_values(plus, lifetime);
     }, |_, _| bounds)
+}
+
+fn generic_declaration_type_or_const<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, GenericDeclarationTypeOrConst> {
+    pm.alternate(pt)
+        .one(map(generic_declaration_type, GenericDeclarationTypeOrConst::Type))
+        .one(map(generic_declaration_const, GenericDeclarationTypeOrConst::Const))
+        .finish()
 }
 
 fn generic_declaration_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, GenericDeclarationType> {
@@ -4210,6 +4215,12 @@ mod test {
     fn generic_declarations_allow_const_bounds() {
         let p = qp(generic_declarations, "<const N: usize>");
         assert_extent!(p, (0, 16))
+    }
+
+    #[test]
+    fn generic_declarations_consts_before_types() {
+        let p = qp(generic_declarations, "<const N: usize, T>");
+        assert_extent!(p, (0, 19))
     }
 
     #[test]
