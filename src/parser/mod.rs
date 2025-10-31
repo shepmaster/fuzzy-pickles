@@ -1569,13 +1569,15 @@ fn p_enum<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Enum> {
 
 fn enum_variant<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, EnumVariant> {
     sequence!(pm, pt, {
-        spt  = point;
-        name = ident;
-        body = enum_variant_body;
+        spt          = point;
+        name         = ident;
+        body         = optional(enum_variant_body);
+        discriminant = optional(enum_discriminant);
     }, |pm: &mut Master, pt| EnumVariant {
         extent: pm.state.ex(spt, pt),
         name,
         body,
+        discriminant,
         whitespace: Vec::new(),
     })
 }
@@ -1584,7 +1586,6 @@ fn enum_variant_body<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Enu
     pm.alternate(pt)
         .one(map(struct_defn_body_tuple_only, EnumVariantBody::Tuple))
         .one(map(struct_defn_body_brace_only, EnumVariantBody::Struct))
-        .one(map(optional(enum_discriminant), EnumVariantBody::Unit))
         .finish()
 }
 
@@ -3210,6 +3211,12 @@ mod test {
     fn enum_with_discriminant() {
         let p = qp(p_enum, "enum Foo { A = 1, B = 2 }");
         assert_extent!(p, (0, 25))
+    }
+
+    #[test]
+    fn enum_with_value_and_discriminant() {
+        let p = qp(p_enum, "enum Foo { A(u8) = 1, B(bool) = 2 }");
+        assert_extent!(p, (0, 35))
     }
 
     #[test]
