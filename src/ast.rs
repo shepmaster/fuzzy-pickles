@@ -2789,6 +2789,8 @@ pub struct Crate {
 #[derive(Debug, HasExtent, ExtentIndex, Visit)]
 pub struct ExternBlock {
     pub extent: Extent,
+    #[visit(ignore)]
+    pub is_unsafe: bool,
     pub abi: Option<String>,
     pub members: Vec<Attributed<ExternBlockMember>>,
     pub whitespace: Vec<Whitespace>,

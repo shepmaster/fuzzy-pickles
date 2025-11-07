@@ -1925,13 +1925,14 @@ fn extern_crate_rename<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, I
 
 fn extern_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExternBlock> {
     sequence!(pm, pt, {
-        spt     = point;
-        _       = kw_extern;
-        abi     = optional(string_literal);
-        _       = left_curly;
-        members = zero_or_more(attributed(extern_block_member));
-        _       = right_curly;
-    }, |pm: &mut Master, pt| ExternBlock { extent: pm.state.ex(spt, pt), abi, members, whitespace: Vec::new() })
+        spt       = point;
+        kw_unsafe = optional(kw_unsafe);
+        _         = kw_extern;
+        abi       = optional(string_literal);
+        _         = left_curly;
+        members   = zero_or_more(attributed(extern_block_member));
+        _         = right_curly;
+    }, |pm: &mut Master, pt| ExternBlock { extent: pm.state.ex(spt, pt), is_unsafe: kw_unsafe.is_some(), abi, members, whitespace: Vec::new() })
 }
 
 fn extern_block_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ExternBlockMember> {
@@ -2933,6 +2934,12 @@ mod test {
     fn item_extern_block() {
         let p = qp(item, r#"extern {}"#);
         assert_extent!(p, (0, 9))
+    }
+
+    #[test]
+    fn item_extern_block_with_unsafe() {
+        let p = qp(item, r#"unsafe extern {}"#);
+        assert_extent!(p, (0, 16))
     }
 
     #[test]
