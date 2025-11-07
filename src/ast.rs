@@ -339,6 +339,7 @@ pub struct GenericDeclarationConst {
     pub extent: Extent,
     pub name: Ident,
     pub typ: Type,
+    pub value: Option<Attributed<Expression>>,
     pub whitespace: Vec<Whitespace>,
 }
 

@@ -744,17 +744,26 @@ fn generic_declaration_type_default<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> P
 
 fn generic_declaration_const<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, GenericDeclarationConst> {
     sequence!(pm, pt, {
-        spt  = point;
-        _    = kw_const;
-        name = ident;
-        _    = colon;
-        typ  = typ;
+        spt   = point;
+        _     = kw_const;
+        name  = ident;
+        _     = colon;
+        typ   = typ;
+        value = optional(generic_declaration_const_value);
     }, |pm: &mut Master, pt| GenericDeclarationConst {
         extent: pm.state.ex(spt, pt),
         name,
         typ,
+        value,
         whitespace: Vec::new(),
     })
+}
+
+fn generic_declaration_const_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Attributed<Expression>> {
+    sequence!(pm, pt, {
+        _     = equals;
+        value = attributed(expression_atom);
+    }, |_, _| value)
 }
 
 fn function_arglist<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Vec<Argument>> {
@@ -4220,6 +4229,12 @@ mod test {
     fn generic_declarations_allow_const_bounds() {
         let p = qp(generic_declarations, "<const N: usize>");
         assert_extent!(p, (0, 16))
+    }
+
+    #[test]
+    fn generic_declarations_allow_const_bounds_with_default() {
+        let p = qp(generic_declarations, "<const N: usize = 42>");
+        assert_extent!(p, (0, 21))
     }
 
     #[test]
