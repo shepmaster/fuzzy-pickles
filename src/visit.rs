@@ -141,8 +141,10 @@ pub trait Visitor<'ast> {
     fn visit_attributed_generic_declaration_type(&mut self, _: &'ast Attributed<GenericDeclarationType>) -> Control { Control::Continue }
     fn visit_attributed_impl_member(&mut self, _: &'ast Attributed<ImplMember>) -> Control { Control::Continue }
     fn visit_attributed_item(&mut self, _: &'ast Attributed<Item>) -> Control { Control::Continue }
+    fn visit_attributed_pattern_struct_field(&mut self, _: &'ast Attributed<PatternStructField>) -> Control { Control::Continue }
     fn visit_attributed_struct_definition_field_named(&mut self, _: &'ast Attributed<StructDefinitionFieldNamed>) -> Control { Control::Continue }
     fn visit_attributed_struct_definition_field_unnamed(&mut self, _: &'ast Attributed<StructDefinitionFieldUnnamed>) -> Control { Control::Continue }
+    fn visit_attributed_struct_literal_field(&mut self, _: &'ast Attributed<StructLiteralField>) -> Control { Control::Continue }
     fn visit_attributed_trait_member(&mut self, _: &'ast Attributed<TraitMember>) -> Control { Control::Continue }
     fn visit_binary(&mut self, _: &'ast Binary) -> Control { Control::Continue }
     fn visit_block(&mut self, _: &'ast Block) -> Control { Control::Continue }
@@ -344,8 +346,10 @@ pub trait Visitor<'ast> {
     fn exit_attributed_generic_declaration_type(&mut self, _: &'ast Attributed<GenericDeclarationType>) {}
     fn exit_attributed_impl_member(&mut self, _: &'ast Attributed<ImplMember>) {}
     fn exit_attributed_item(&mut self, _: &'ast Attributed<Item>) {}
+    fn exit_attributed_pattern_struct_field(&mut self, _: &'ast Attributed<PatternStructField>) {}
     fn exit_attributed_struct_definition_field_named(&mut self, _: &'ast Attributed<StructDefinitionFieldNamed>) {}
     fn exit_attributed_struct_definition_field_unnamed(&mut self, _: &'ast Attributed<StructDefinitionFieldUnnamed>) {}
+    fn exit_attributed_struct_literal_field(&mut self, _: &'ast Attributed<StructLiteralField>) {}
     fn exit_attributed_trait_member(&mut self, _: &'ast Attributed<TraitMember>) {}
     fn exit_binary(&mut self, _: &'ast Binary) {}
     fn exit_block(&mut self, _: &'ast Block) {}
@@ -556,8 +560,10 @@ pub trait VisitorMut {
     fn visit_attributed_generic_declaration_type(&mut self, _: &mut Attributed<GenericDeclarationType>) -> Control { Control::Continue }
     fn visit_attributed_impl_member(&mut self, _: &mut Attributed<ImplMember>) -> Control { Control::Continue }
     fn visit_attributed_item(&mut self, _: &mut Attributed<Item>) -> Control { Control::Continue }
+    fn visit_attributed_pattern_struct_field(&mut self, _: &mut Attributed<PatternStructField>) -> Control { Control::Continue }
     fn visit_attributed_struct_definition_field_named(&mut self, _: &mut Attributed<StructDefinitionFieldNamed>) -> Control { Control::Continue }
     fn visit_attributed_struct_definition_field_unnamed(&mut self, _: &mut Attributed<StructDefinitionFieldUnnamed>) -> Control { Control::Continue }
+    fn visit_attributed_struct_literal_field(&mut self, _: &mut Attributed<StructLiteralField>) -> Control { Control::Continue }
     fn visit_attributed_trait_member(&mut self, _: &mut Attributed<TraitMember>) -> Control { Control::Continue }
     fn visit_binary(&mut self, _: &mut Binary) -> Control { Control::Continue }
     fn visit_block(&mut self, _: &mut Block) -> Control { Control::Continue }
@@ -759,7 +765,9 @@ pub trait VisitorMut {
     fn exit_attributed_generic_declaration_type(&mut self, _: &mut Attributed<GenericDeclarationType>) {}
     fn exit_attributed_impl_member(&mut self, _: &mut Attributed<ImplMember>) {}
     fn exit_attributed_item(&mut self, _: &mut Attributed<Item>) {}
+    fn exit_attributed_pattern_struct_field(&mut self, _: &mut Attributed<PatternStructField>) {}
     fn exit_attributed_struct_definition_field_named(&mut self, _: &mut Attributed<StructDefinitionFieldNamed>) {}
+    fn exit_attributed_struct_literal_field(&mut self, _: &mut Attributed<StructLiteralField>) {}
     fn exit_attributed_struct_definition_field_unnamed(&mut self, _: &mut Attributed<StructDefinitionFieldUnnamed>) {}
     fn exit_attributed_trait_member(&mut self, _: &mut Attributed<TraitMember>) {}
     fn exit_binary(&mut self, _: &mut Binary) {}

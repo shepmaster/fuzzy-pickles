@@ -1256,7 +1256,7 @@ fn pattern_struct<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Patter
         spt      = point;
         name     = pathed_ident;
         _        = left_curly;
-        fields   = zero_or_more_tailed_values(comma, pattern_struct_field);
+        fields   = zero_or_more_tailed_values(comma, attributed(pattern_struct_field));
         wildcard = optional(double_period);
         _        = right_curly;
     }, |pm: &mut Master, pt| PatternStruct {
@@ -3562,6 +3562,12 @@ mod test {
     fn pattern_with_enum_struct_wildcard() {
         let p = qp(pattern, "Baz { .. }");
         assert_extent!(p, (0, 10))
+    }
+
+    #[test]
+    fn pattern_with_enum_struct_with_attribute() {
+        let p = qp(pattern, "Baz { #[cfg(false)] ref a }");
+        assert_extent!(p, (0, 27))
     }
 
     #[test]

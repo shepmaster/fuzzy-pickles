@@ -1353,7 +1353,7 @@ fn expr_value_struct_literal<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress
     sequence!(pm, pt, {
         spt    = point;
         _      = left_curly;
-        fields = zero_or_more_tailed_values(comma, expr_value_struct_literal_field);
+        fields = zero_or_more_tailed_values(comma, attributed(expr_value_struct_literal_field));
         splat  = optional(expr_value_struct_literal_splat);
         _      = right_curly;
     }, |pm: &mut Master, pt| StructLiteral {
@@ -2071,6 +2071,12 @@ mod test {
     fn expr_value_struct_literal_with_splat() {
         let p = qp(expression, "Point { x: 1, ..point }");
         assert_extent!(p, (0, 23))
+    }
+
+    #[test]
+    fn expr_value_struct_literal_with_attribute() {
+        let p = qp(expression, "Point { #[ignore] a: 1 }");
+        assert_extent!(p, (0, 24))
     }
 
     #[test]
