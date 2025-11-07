@@ -1081,9 +1081,9 @@ fn expr_while_let<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, WhileL
 
 impl ImplicitSeparator for MatchArm {
     fn is_implicit_separator(&self) -> bool {
-        match self.hand {
+        match &self.hand {
             MatchHand::Brace(..) => true,
-            MatchHand::Expression(..) => false,
+            MatchHand::Expression(expr) => expr.may_terminate_statement(),
         }
     }
 }
@@ -1795,6 +1795,12 @@ mod test {
     fn expr_match_head_followed_by_block() {
         let p = qp(expression, "match foo {}");
         assert_extent!(p, (0, 12))
+    }
+
+    #[test]
+    fn expr_match_arm_expression_is_curly_no_comma() {
+        let p = qp(expression, "match 0 { 1 => if true {} _ => {} }");
+        assert_extent!(p, (0, 35))
     }
 
     #[test]
