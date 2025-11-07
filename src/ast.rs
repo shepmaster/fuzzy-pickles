@@ -1479,7 +1479,23 @@ pub struct Let {
     pub extent: Extent,
     pub pattern: Pattern,
     pub typ: Option<Type>,
-    pub value: Option<Box<Attributed<Expression>>>,
+    pub value: Option<LetValue>,
+    pub whitespace: Vec<Whitespace>,
+}
+
+/// A variable declaration's value
+///
+/// ### Example Source
+///
+/// ```rust,ignore
+/// fn a() { let Some(b) = x else { panic!() }; }
+/// //                   ^^^^^^^^^^^^^^^^^^^^^
+/// ```
+#[derive(Debug, HasExtent, ExtentIndex, Visit)]
+pub struct LetValue {
+    pub extent: Extent,
+    pub value: Box<Attributed<Expression>>,
+    pub else_body: Option<Box<Block>>,
     pub whitespace: Vec<Whitespace>,
 }
 

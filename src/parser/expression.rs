@@ -918,12 +918,12 @@ fn expr_let<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Let> {
         _       = kw_let;
         pattern = pattern;
         typ     = optional(expr_let_type);
-        value   = optional(expr_let_rhs);
+        value   = optional(expr_let_value);
     }, |pm: &mut Master, pt| Let {
         extent: pm.state.ex(spt, pt),
         pattern,
         typ,
-        value: value.map(Box::new),
+        value,
         whitespace: Vec::new(),
     })
 }
@@ -935,11 +935,25 @@ fn expr_let_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Type> {
     }, |_, _| typ)
 }
 
-fn expr_let_rhs<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Attributed<Expression>> {
+fn expr_let_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, LetValue> {
     sequence!(pm, pt, {
-        _     = equals;
-        value = expression;
-    }, |_, _| value)
+        spt       = point;
+        _         = equals;
+        value     = expression;
+        else_body = optional(expr_let_value_else);
+    }, |pm: &mut Master, pt| LetValue {
+        extent: pm.state.ex(spt, pt),
+        value: Box::new(value),
+        else_body: else_body.map(Box::new),
+        whitespace: Vec::new(),
+    })
+}
+
+fn expr_let_value_else<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Block> {
+    sequence!(pm, pt, {
+        _    = kw_else;
+        body = block;
+    }, |_, _| body)
 }
 
 fn expr_if<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, If> {
@@ -1581,6 +1595,12 @@ mod test {
     fn expr_let_no_value() {
         let p = qp(expression, "let pm");
         assert_extent!(p, (0, 6))
+    }
+
+    #[test]
+    fn expr_let_else() {
+        let p = qp(expression, "let Some(v) = k else { panic!() }");
+        assert_extent!(p, (0, 33))
     }
 
     #[test]
