@@ -363,6 +363,7 @@ pub enum TypeKind {
     DynTrait(TypeDynTrait),
     ImplTrait(TypeImplTrait),
     Named(TypeNamed),
+    MacroCall(MacroCall),
     Pointer(TypePointer),
     Reference(TypeReference),
     Slice(TypeSlice),
@@ -2519,6 +2520,7 @@ pub struct PatternNumber {
 /// fn a() { let magic!(); }
 /// //           ^^^^^^^^
 /// ```
+// TODO: Why is this a separate type?
 #[derive(Debug, HasExtent, ExtentIndex, Visit)]
 pub struct PatternMacroCall {
     pub extent: Extent,
