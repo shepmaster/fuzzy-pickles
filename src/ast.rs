@@ -1347,6 +1347,7 @@ visit_attributed!(GenericDeclarationLifetime, visit_attributed_generic_declarati
 visit_attributed!(GenericDeclarationType, visit_attributed_generic_declaration_type, exit_attributed_generic_declaration_type);
 visit_attributed!(ImplMember, visit_attributed_impl_member, exit_attributed_impl_member);
 visit_attributed!(Item, visit_attributed_item, exit_attributed_item);
+visit_attributed!(PatternStructField, visit_attributed_pattern_struct_field, exit_attributed_pattern_struct_field);
 visit_attributed!(StructDefinitionFieldNamed, visit_attributed_struct_definition_field_named, exit_attributed_struct_definition_field_named);
 visit_attributed!(StructDefinitionFieldUnnamed, visit_attributed_struct_definition_field_unnamed, exit_attributed_struct_definition_field_unnamed);
 visit_attributed!(StructLiteralField, visit_attributed_struct_literal_field, exit_attributed_struct_literal_field);
@@ -2303,7 +2304,7 @@ pub struct PatternIdent {
 pub struct PatternStruct {
     pub extent: Extent,
     pub name: PathedIdent,
-    pub fields: Vec<PatternStructField>,
+    pub fields: Vec<Attributed<PatternStructField>>,
     #[visit(ignore)]
     pub wildcard: bool,
     pub whitespace: Vec<Whitespace>,
