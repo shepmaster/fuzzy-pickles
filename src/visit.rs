@@ -41,7 +41,7 @@ where
     where
         V: Visitor<'ast>,
     {
-        for i in self {
+        if let Some(i) = self {
             i.visit(v)
         }
     }
@@ -50,7 +50,7 @@ where
     where
         V: VisitorMut,
     {
-        for i in self {
+        if let Some(i) = self {
             i.visit_mut(v)
         }
     }

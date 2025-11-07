@@ -1,8 +1,8 @@
-/// This is the shunting yard algorithm (probably modified from the
-/// *pure* algorithm). It tracks the previously parsed thing so that
-/// the next token looked for is in a limited set and thus the error
-/// messages are accurate. In addition to precedence, it is also needed
-/// to reduce the total depth of recursion.
+//! This is the shunting yard algorithm (probably modified from the
+//! *pure* algorithm). It tracks the previously parsed thing so that
+//! the next token looked for is in a limited set and thus the error
+//! messages are accurate. In addition to precedence, it is also needed
+//! to reduce the total depth of recursion.
 
 use peresil::combinators::*;
 
@@ -35,7 +35,7 @@ pub(crate) fn statement_expression<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
 
                 // If we have parsed one expression, is it one of the
                 // special expressions that ends in a curly brace?
-                let may_terminate_statement = shunting_yard.result.first().map_or(false, |expr| {
+                let may_terminate_statement = shunting_yard.result.first().is_some_and(|expr| {
                     expr.value.may_terminate_statement()
                 });
 
@@ -150,6 +150,7 @@ where
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 enum OperatorPrefix {
     Box(Extent),
     Dereference(Extent),
@@ -161,6 +162,7 @@ enum OperatorPrefix {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 enum OperatorInfix {
     Add(Extent),
     AddAssign(Extent),
@@ -198,14 +200,12 @@ enum OperatorInfix {
 impl OperatorInfix {
     fn is_range(&self) -> bool {
         use self::OperatorInfix::*;
-        match *self {
-            RangeInclusive(..) | RangeExclusive(..) => true,
-            _ => false,
-        }
+        matches!(self, RangeInclusive(..) | RangeExclusive(..))
     }
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 enum OperatorPostfix {
     Ascription { typ: Type },
     AsType { typ: Type },
@@ -546,7 +546,7 @@ impl<'s> ShuntingYard<'s> {
 
     fn apply_precedence(&mut self, pm: &Master, operator: &OperatorKind) -> ExprResult<'s, ()>  {
         //println!("About to push {:?}", operator);
-        while self.operators.last().map_or(false, |&ShuntCar { value: ref top, .. }| operator.should_pop(top)) {
+        while self.operators.last().is_some_and(|ShuntCar { value: top, .. }| operator.should_pop(top)) {
             let ShuntCar { value, spt, ept } = self.operators.pop()
                 .expect("Cannot pop operator that was just there");
             self.apply_one(pm, value, spt..ept)?;
@@ -1413,8 +1413,9 @@ fn expr_disambiguation<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, D
     })
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, Default, PartialEq)]
 pub enum ExpressionAmbiguity {
+    #[default]
     Unambiguous,
     OnlyStructLiterals,
     Maximum,
@@ -1424,15 +1425,8 @@ impl ExpressionAmbiguity {
     fn is_ambiguous(&self) -> bool {
         use self::ExpressionAmbiguity::*;
 
-        match *self {
-            Unambiguous => false,
-            _ => true,
-        }
+        !matches!(self, Unambiguous)
     }
-}
-
-impl Default for ExpressionAmbiguity {
-    fn default() -> Self { ExpressionAmbiguity::Unambiguous }
 }
 
 fn control_flow_head_expression<'s, F, T>(parser: F) ->

@@ -13,22 +13,22 @@ use proc_macro2::{TokenStream, Span};
 #[proc_macro_derive(Visit, attributes(visit))]
 pub fn visit_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);
-    let gen = impl_visit(&ast);
-    gen.into()
+    let generated = impl_visit(&ast);
+    generated.into()
 }
 
 #[proc_macro_derive(HasExtent)]
 pub fn has_extent_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);
-    let gen = impl_has_extent(&ast);
-    gen.into()
+    let generated = impl_has_extent(&ast);
+    generated.into()
 }
 
 #[proc_macro_derive(ExtentIndex)]
 pub fn extent_index_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);
-    let gen = impl_extent_index(&ast);
-    gen.into()
+    let generated = impl_extent_index(&ast);
+    generated.into()
 }
 
 fn camelcase_to_snake_case(camelcase: &str) -> String {
@@ -95,7 +95,7 @@ fn impl_visit_fields(ast: &syn::DeriveInput, IsMut(is_mut): IsMut) -> TokenStrea
         fields
             .into_iter()
             .enumerate()
-            .filter(|&(_, ref f)| !is_ignore_field(f))
+            .filter(|(_, f)| !is_ignore_field(f))
             .map(|(i, f)| f.ident.clone().unwrap_or_else(|| Ident::new(&i.to_string(), Span::call_site())))
             .collect()
     }
@@ -141,33 +141,28 @@ fn impl_visit_fields(ast: &syn::DeriveInput, IsMut(is_mut): IsMut) -> TokenStrea
 }
 
 fn is_ignore_field(field: &syn::Field) -> bool {
-    use syn::Meta;
-
     field.attrs.iter().any(|attr| {
-        let meta = attr.parse_meta().expect("Unknown attribute structure");
-        match meta {
-            Meta::List(ref list) => {
-                list.path.is_ident("visit") && list.nested.iter().any(ignore_field_inner)
-            },
-            _ => false,
+        if !attr.path().is_ident("visit") {
+            return false;
         }
+
+        let mut is_ignore = false;
+
+        attr.parse_nested_meta(|meta| {
+            is_ignore = meta.path.is_ident("ignore");
+
+            Ok(())
+        }).expect("Unknown attribute structure");
+
+        is_ignore
     })
-}
-
-fn ignore_field_inner(item: &syn::NestedMeta) -> bool {
-    use syn::{NestedMeta, Meta};
-
-    match *item {
-        NestedMeta::Meta(Meta::Path(ref p)) => p.is_ident("ignore"),
-        _ => false
-    }
 }
 
 #[proc_macro_derive(Decompose)]
 pub fn decompose_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);
-    let gen = impl_decompose(&ast);
-    gen.into()
+    let generated = impl_decompose(&ast);
+    generated.into()
 }
 
 fn impl_decompose(ast: &syn::DeriveInput) -> TokenStream {

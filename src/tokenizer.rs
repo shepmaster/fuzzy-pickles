@@ -339,10 +339,7 @@ impl peresil::Recoverable for Error {
     fn recoverable(&self) -> bool {
         use Error::*;
 
-        match self {
-            RawIdentifierMissingIdentifier => false,
-            _ => true,
-        }
+        !matches!(self, RawIdentifierMissingIdentifier)
     }
 }
 
@@ -573,7 +570,7 @@ fn simple_ident<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent>
     split_point_at_non_zero_offset(pt, idx, Error::ExpectedIdent).map(|(_, e)| e)
 }
 
-fn ident_len<'s>(s: &str) -> usize {
+fn ident_len(s: &str) -> usize {
     let mut ci = s.chars();
     let mut idx = 0;
 
@@ -719,27 +716,27 @@ fn whitespace<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Extent> {
 fn comment_or_doc_comment<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Token> {
     let spt = pt;
     if pt.s.starts_with("///") && !pt.s.starts_with("////") {
-        let eol = pt.s.find('\n').unwrap_or_else(|| pt.s.len());
+        let eol = pt.s.find('\n').unwrap_or(pt.s.len());
         let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
         Progress::success(pt, Token::DocCommentOuterLine(ex(spt, pt)))
     } else if pt.s.starts_with("//!") {
-        let eol = pt.s.find('\n').unwrap_or_else(|| pt.s.len());
+        let eol = pt.s.find('\n').unwrap_or(pt.s.len());
         let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
         Progress::success(pt, Token::DocCommentInnerLine(ex(spt, pt)))
     } else if pt.s.starts_with("//") {
-        let eol = pt.s.find('\n').unwrap_or_else(|| pt.s.len());
+        let eol = pt.s.find('\n').unwrap_or(pt.s.len());
         let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
         Progress::success(pt, Token::CommentLine(ex(spt, pt)))
     } else if pt.s.starts_with("/**") && !pt.s.starts_with("/***") && !pt.s.starts_with("/**/") {
-        let eol = pt.s[3..].find("*/").map(|x| 3 + x + 2).unwrap_or_else(|| pt.s.len());
+        let eol = pt.s[3..].find("*/").map(|x| 3 + x + 2).unwrap_or(pt.s.len());
         let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
         Progress::success(pt, Token::DocCommentOuterBlock(ex(spt, pt)))
     } else if pt.s.starts_with("/*!") {
-        let eol = pt.s[3..].find("*/").map(|x| 3 + x + 2).unwrap_or_else(|| pt.s.len());
+        let eol = pt.s[3..].find("*/").map(|x| 3 + x + 2).unwrap_or(pt.s.len());
         let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
         Progress::success(pt, Token::DocCommentInnerBlock(ex(spt, pt)))
     } else if pt.s.starts_with("/*") {
-        let eol = pt.s[2..].find("*/").map(|x| 2 + x + 2).unwrap_or_else(|| pt.s.len());
+        let eol = pt.s[2..].find("*/").map(|x| 2 + x + 2).unwrap_or(pt.s.len());
         let (pt, _) = try_parse!(spt.consume_to(Some(eol)).map_err(|_| Error::ExpectedComment));
         Progress::success(pt, Token::CommentBlock(ex(spt, pt)))
     } else {
@@ -804,7 +801,7 @@ fn escaped_char_unicode<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, 
 
 fn hex_string<'s>(_pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, &'s str> {
     let ci = pt.s.chars();
-    let idx = ci.take_while(|c| c.is_digit(16)).map(|c| c.len_utf8()).sum();
+    let idx = ci.take_while(char::is_ascii_hexdigit).map(|c| c.len_utf8()).sum();
 
     let idx = if idx == 0 { None } else { Some(idx) };
     pt.consume_to(idx).map_err(|_| Error::ExpectedHex)

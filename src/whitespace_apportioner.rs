@@ -1,5 +1,4 @@
 use std::{
-    cmp,
     collections::BTreeMap,
 };
 
@@ -8,21 +7,6 @@ use crate::{
     HasExtent,
     visit::VisitorMut,
 };
-
-#[derive(Debug, PartialEq, Eq)]
-struct FirstIsMax(Whitespace);
-
-impl PartialOrd for FirstIsMax {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for FirstIsMax {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        self.0.extent().cmp(&other.0.extent())
-    }
-}
 
 #[derive(Debug, Default)]
 pub struct WhitespaceApportioner(BTreeMap<usize, Whitespace>);
@@ -206,8 +190,7 @@ impl VisitorMut for WhitespaceApportioner {
     // Everything else should fall into here
     fn exit_file(&mut self, node: &mut File) {
         let remaining_whitespace = ::std::mem::take(&mut self.0)
-            .into_iter()
-            .map(|(_, ws)| ws);
+            .into_values();
 
         node.whitespace.extend(remaining_whitespace)
     }

@@ -943,7 +943,7 @@ fn block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Block> {
         (mut stmts, term) = zero_or_more_implicitly_tailed_values_terminated(semicolon, statement);
         _                 = right_curly;
     }, |pm: &mut Master, pt| {
-        let expr = if !term && stmts.last().map_or(false, Statement::is_expression) {
+        let expr = if !term && stmts.last().is_some_and(Statement::is_expression) {
             stmts.pop().and_then(Statement::into_expression)
         } else {
             None

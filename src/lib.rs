@@ -202,7 +202,7 @@ impl<T: HasExtent> HasExtent for Box<T>{
     fn extent(&self) -> Extent { (**self).extent() }
 }
 
-impl<'a, T: HasExtent> HasExtent for &'a T {
+impl<T: HasExtent> HasExtent for &T {
     fn extent(&self) -> Extent { (**self).extent() }
 }
 
@@ -263,7 +263,7 @@ impl<'a> HumanTextError<'a> {
     fn new(text: &'a str, location: usize) -> HumanTextError<'a> {
         let (head, tail) = text.split_at(location);
         let start_of_line = head.rfind('\n').unwrap_or(0);
-        let end_of_line = tail.find('\n').unwrap_or_else(|| tail.len());
+        let end_of_line = tail.find('\n').unwrap_or(tail.len());
 
         let head_of_line = &head[start_of_line..];
         let tail_of_line = &tail[..end_of_line];
