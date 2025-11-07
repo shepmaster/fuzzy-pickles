@@ -457,6 +457,7 @@ fn expression_atom<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expre
         .one(map(expr_match, Expression::Match))
         .one(map(expr_unsafe_block, Expression::UnsafeBlock))
         .one(map(expr_async_block, Expression::AsyncBlock))
+        .one(map(expr_const_block, Expression::ConstBlock))
         .one(map(expr_block, Expression::Block))
         .one(map(expr_macro_call, Expression::MacroCall))
         .one(map(expr_let, Expression::Let))
@@ -1324,6 +1325,18 @@ fn expr_async_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Asyn
     })
 }
 
+fn expr_const_block<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, ConstBlock> {
+    sequence!(pm, pt, {
+        spt  = point;
+        _    = kw_const;
+        body = block;
+    }, |pm: &mut Master, pt| ConstBlock {
+        extent: pm.state.ex(spt, pt),
+        body: Box::new(body),
+        whitespace: Vec::new(),
+    })
+}
+
 fn expr_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Value> {
     if pm.state.expression_ambiguity.is_ambiguous() {
         sequence!(pm, pt, {
@@ -1824,6 +1837,13 @@ mod test {
         assert_extent!(p, (0, 13));
         let ab = unwrap_as!(p.value, Expression::AsyncBlock);
         assert!(ab.is_move.is_some());
+    }
+
+    #[test]
+    fn expr_const_block() {
+        let p = qp(expression, "const {}");
+        assert_extent!(p, (0, 8));
+        assert!(p.is_const_block());
     }
 
     #[test]
