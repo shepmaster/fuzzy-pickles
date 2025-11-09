@@ -283,8 +283,7 @@ pub struct TraitImplFunctionHeader {
 pub struct GenericDeclarations {
     pub extent: Extent,
     pub lifetimes: Vec<Attributed<GenericDeclarationLifetime>>,
-    pub types: Vec<Attributed<GenericDeclarationType>>,
-    pub consts: Vec<Attributed<GenericDeclarationConst>>,
+    pub types_and_consts: Vec<Attributed<GenericDeclarationTypeOrConst>>,
     pub whitespace: Vec<Whitespace>,
 }
 
@@ -302,6 +301,12 @@ pub struct GenericDeclarationLifetime {
     pub name: Lifetime,
     pub bounds: Vec<Lifetime>,
     pub whitespace: Vec<Whitespace>,
+}
+
+#[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
+pub enum GenericDeclarationTypeOrConst {
+    Type(GenericDeclarationType),
+    Const(GenericDeclarationConst),
 }
 
 /// Generic type parameters
@@ -334,6 +339,7 @@ pub struct GenericDeclarationConst {
     pub extent: Extent,
     pub name: Ident,
     pub typ: Type,
+    pub value: Option<Attributed<Expression>>,
     pub whitespace: Vec<Whitespace>,
 }
 
@@ -623,7 +629,8 @@ pub struct TypeGenericsAngle {
 pub enum TypeGenericsAngleMember {
     Lifetime(Lifetime),
     Type(Type),
-    AssociatedType(AssociatedType)
+    AssociatedType(AssociatedType),
+    Const(Attributed<Expression>),
 }
 
 /// An associated item in a type with generics
@@ -809,8 +816,14 @@ pub struct PathComponent {
 pub struct Turbofish {
     pub extent: Extent,
     pub lifetimes: Vec<Lifetime>,
-    pub types: Vec<Type>,
+    pub types_and_consts: Vec<TurbofishTypeOrConst>,
     pub whitespace: Vec<Whitespace>,
+}
+
+#[derive(Debug, HasExtent, ExtentIndex, Visit, Decompose)]
+pub enum TurbofishTypeOrConst {
+    Type(Type),
+    Const(Attributed<Expression>),
 }
 
 /// A constant value
@@ -1359,9 +1372,8 @@ macro_rules! visit_attributed {
 visit_attributed!(EnumVariant, visit_attributed_enum_variant, exit_attributed_enum_variant);
 visit_attributed!(Expression, visit_attributed_expression, exit_attributed_expression);
 visit_attributed!(ExternBlockMember, visit_attributed_extern_block_member, exit_attributed_extern_block_member);
-visit_attributed!(GenericDeclarationConst, visit_attributed_generic_declaration_const, exit_attributed_generic_declaration_const);
 visit_attributed!(GenericDeclarationLifetime, visit_attributed_generic_declaration_lifetime, exit_attributed_generic_declaration_lifetime);
-visit_attributed!(GenericDeclarationType, visit_attributed_generic_declaration_type, exit_attributed_generic_declaration_type);
+visit_attributed!(GenericDeclarationTypeOrConst, visit_attributed_generic_declaration_type_or_const, exit_attributed_generic_declaration_type_or_const);
 visit_attributed!(ImplMember, visit_attributed_impl_member, exit_attributed_impl_member);
 visit_attributed!(Item, visit_attributed_item, exit_attributed_item);
 visit_attributed!(PatternStructField, visit_attributed_pattern_struct_field, exit_attributed_pattern_struct_field);

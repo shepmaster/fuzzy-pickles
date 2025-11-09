@@ -446,7 +446,7 @@ fn operator_postfix_slice<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
     }, |_, _| OperatorPostfix::Slice { index })
 }
 
-fn expression_atom<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
+pub(crate) fn expression_atom<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Expression> {
     pm.alternate(pt)
         .one(map(expr_if, Expression::If))
         .one(map(expr_if_let, Expression::IfLet))
@@ -1738,6 +1738,20 @@ mod test {
         let p = qp(expression, "Foo::<u8>::bar()");
         assert!(p.is_call());
         assert_extent!(p, (0, 16))
+    }
+
+    #[test]
+    fn expr_call_method_with_turbofish_const_generic() {
+        let p = qp(expression, "Assert::<N, 0>::fail()");
+        assert!(p.is_call());
+        assert_extent!(p, (0, 22))
+    }
+
+    #[test]
+    fn expr_call_method_with_turbofish_const_generic_before_type_generic() {
+        let p = qp(expression, "Assert::<0, N>::fail()");
+        assert!(p.is_call());
+        assert_extent!(p, (0, 22))
     }
 
     #[test]

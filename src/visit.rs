@@ -139,6 +139,7 @@ pub trait Visitor<'ast> {
     fn visit_attributed_generic_declaration_const(&mut self, _: &'ast Attributed<GenericDeclarationConst>) -> Control { Control::Continue }
     fn visit_attributed_generic_declaration_lifetime(&mut self, _: &'ast Attributed<GenericDeclarationLifetime>) -> Control { Control::Continue }
     fn visit_attributed_generic_declaration_type(&mut self, _: &'ast Attributed<GenericDeclarationType>) -> Control { Control::Continue }
+    fn visit_attributed_generic_declaration_type_or_const(&mut self, _: &'ast Attributed<GenericDeclarationTypeOrConst>) -> Control { Control::Continue }
     fn visit_attributed_impl_member(&mut self, _: &'ast Attributed<ImplMember>) -> Control { Control::Continue }
     fn visit_attributed_item(&mut self, _: &'ast Attributed<Item>) -> Control { Control::Continue }
     fn visit_attributed_pattern_struct_field(&mut self, _: &'ast Attributed<PatternStructField>) -> Control { Control::Continue }
@@ -185,6 +186,7 @@ pub trait Visitor<'ast> {
     fn visit_generic_declaration_const(&mut self, _: &'ast GenericDeclarationConst) -> Control { Control::Continue }
     fn visit_generic_declaration_lifetime(&mut self, _: &'ast GenericDeclarationLifetime) -> Control { Control::Continue }
     fn visit_generic_declaration_type(&mut self, _: &'ast GenericDeclarationType) -> Control { Control::Continue }
+    fn visit_generic_declaration_type_or_const(&mut self, _: &'ast GenericDeclarationTypeOrConst) -> Control { Control::Continue }
     fn visit_generic_declarations(&mut self, _: &'ast GenericDeclarations) -> Control { Control::Continue }
     fn visit_ident(&mut self, _: &'ast Ident) -> Control { Control::Continue }
     fn visit_if(&mut self, _: &'ast If) -> Control { Control::Continue }
@@ -281,6 +283,7 @@ pub trait Visitor<'ast> {
     fn visit_try_operator(&mut self, _: &'ast TryOperator) -> Control { Control::Continue }
     fn visit_tuple(&mut self, _: &'ast Tuple) -> Control { Control::Continue }
     fn visit_turbofish(&mut self, _: &'ast Turbofish) -> Control { Control::Continue }
+    fn visit_turbofish_type_or_const(&mut self, _: &'ast TurbofishTypeOrConst) -> Control { Control::Continue }
     fn visit_type(&mut self, _: &'ast Type) -> Control { Control::Continue }
     fn visit_type_additional(&mut self, _: &'ast TypeAdditional) -> Control { Control::Continue }
     fn visit_type_alias(&mut self, _: &'ast TypeAlias) -> Control { Control::Continue }
@@ -346,6 +349,7 @@ pub trait Visitor<'ast> {
     fn exit_attributed_generic_declaration_const(&mut self, _: &'ast Attributed<GenericDeclarationConst>) {}
     fn exit_attributed_generic_declaration_lifetime(&mut self, _: &'ast Attributed<GenericDeclarationLifetime>) {}
     fn exit_attributed_generic_declaration_type(&mut self, _: &'ast Attributed<GenericDeclarationType>) {}
+    fn exit_attributed_generic_declaration_type_or_const(&mut self, _: &'ast Attributed<GenericDeclarationTypeOrConst>) {}
     fn exit_attributed_impl_member(&mut self, _: &'ast Attributed<ImplMember>) {}
     fn exit_attributed_item(&mut self, _: &'ast Attributed<Item>) {}
     fn exit_attributed_pattern_struct_field(&mut self, _: &'ast Attributed<PatternStructField>) {}
@@ -392,6 +396,7 @@ pub trait Visitor<'ast> {
     fn exit_generic_declaration_const(&mut self, _: &'ast GenericDeclarationConst) {}
     fn exit_generic_declaration_lifetime(&mut self, _: &'ast GenericDeclarationLifetime) {}
     fn exit_generic_declaration_type(&mut self, _: &'ast GenericDeclarationType) {}
+    fn exit_generic_declaration_type_or_const(&mut self, _: &'ast GenericDeclarationTypeOrConst) {}
     fn exit_generic_declarations(&mut self, _: &'ast GenericDeclarations) {}
     fn exit_ident(&mut self, _: &'ast Ident) {}
     fn exit_if(&mut self, _: &'ast If) {}
@@ -488,6 +493,7 @@ pub trait Visitor<'ast> {
     fn exit_try_operator(&mut self, _: &'ast TryOperator) {}
     fn exit_tuple(&mut self, _: &'ast Tuple) {}
     fn exit_turbofish(&mut self, _: &'ast Turbofish) {}
+    fn exit_turbofish_type_or_const(&mut self, _: &'ast TurbofishTypeOrConst) {}
     fn exit_type(&mut self, _: &'ast Type) {}
     fn exit_type_additional(&mut self, _: &'ast TypeAdditional) {}
     fn exit_type_alias(&mut self, _: &'ast TypeAlias) {}
@@ -562,6 +568,7 @@ pub trait VisitorMut {
     fn visit_attributed_generic_declaration_const(&mut self, _: &mut Attributed<GenericDeclarationConst>) -> Control { Control::Continue }
     fn visit_attributed_generic_declaration_lifetime(&mut self, _: &mut Attributed<GenericDeclarationLifetime>) -> Control { Control::Continue }
     fn visit_attributed_generic_declaration_type(&mut self, _: &mut Attributed<GenericDeclarationType>) -> Control { Control::Continue }
+    fn visit_attributed_generic_declaration_type_or_const(&mut self, _: &mut Attributed<GenericDeclarationTypeOrConst>) -> Control { Control::Continue }
     fn visit_attributed_impl_member(&mut self, _: &mut Attributed<ImplMember>) -> Control { Control::Continue }
     fn visit_attributed_item(&mut self, _: &mut Attributed<Item>) -> Control { Control::Continue }
     fn visit_attributed_pattern_struct_field(&mut self, _: &mut Attributed<PatternStructField>) -> Control { Control::Continue }
@@ -608,6 +615,7 @@ pub trait VisitorMut {
     fn visit_generic_declaration_const(&mut self, _: &mut GenericDeclarationConst) -> Control { Control::Continue }
     fn visit_generic_declaration_lifetime(&mut self, _: &mut GenericDeclarationLifetime) -> Control { Control::Continue }
     fn visit_generic_declaration_type(&mut self, _: &mut GenericDeclarationType) -> Control { Control::Continue }
+    fn visit_generic_declaration_type_or_const(&mut self, _: &mut GenericDeclarationTypeOrConst) -> Control { Control::Continue }
     fn visit_generic_declarations(&mut self, _: &mut GenericDeclarations) -> Control { Control::Continue }
     fn visit_ident(&mut self, _: &mut Ident) -> Control { Control::Continue }
     fn visit_if(&mut self, _: &mut If) -> Control { Control::Continue }
@@ -704,6 +712,7 @@ pub trait VisitorMut {
     fn visit_try_operator(&mut self, _: &mut TryOperator) -> Control { Control::Continue }
     fn visit_tuple(&mut self, _: &mut Tuple) -> Control { Control::Continue }
     fn visit_turbofish(&mut self, _: &mut Turbofish) -> Control { Control::Continue }
+    fn visit_turbofish_type_or_const(&mut self, _: &mut TurbofishTypeOrConst) -> Control { Control::Continue }
     fn visit_type(&mut self, _: &mut Type) -> Control { Control::Continue }
     fn visit_type_additional(&mut self, _: &mut TypeAdditional) -> Control { Control::Continue }
     fn visit_type_alias(&mut self, _: &mut TypeAlias) -> Control { Control::Continue }
@@ -769,6 +778,7 @@ pub trait VisitorMut {
     fn exit_attributed_generic_declaration_const(&mut self, _: &mut Attributed<GenericDeclarationConst>) {}
     fn exit_attributed_generic_declaration_lifetime(&mut self, _: &mut Attributed<GenericDeclarationLifetime>) {}
     fn exit_attributed_generic_declaration_type(&mut self, _: &mut Attributed<GenericDeclarationType>) {}
+    fn exit_attributed_generic_declaration_type_or_const(&mut self, _: &mut Attributed<GenericDeclarationTypeOrConst>) {}
     fn exit_attributed_impl_member(&mut self, _: &mut Attributed<ImplMember>) {}
     fn exit_attributed_item(&mut self, _: &mut Attributed<Item>) {}
     fn exit_attributed_pattern_struct_field(&mut self, _: &mut Attributed<PatternStructField>) {}
@@ -815,6 +825,7 @@ pub trait VisitorMut {
     fn exit_generic_declaration_const(&mut self, _: &mut GenericDeclarationConst) {}
     fn exit_generic_declaration_lifetime(&mut self, _: &mut GenericDeclarationLifetime) {}
     fn exit_generic_declaration_type(&mut self, _: &mut GenericDeclarationType) {}
+    fn exit_generic_declaration_type_or_const(&mut self, _: &mut GenericDeclarationTypeOrConst) {}
     fn exit_generic_declarations(&mut self, _: &mut GenericDeclarations) {}
     fn exit_ident(&mut self, _: &mut Ident) {}
     fn exit_if(&mut self, _: &mut If) {}
@@ -911,6 +922,7 @@ pub trait VisitorMut {
     fn exit_try_operator(&mut self, _: &mut TryOperator) {}
     fn exit_tuple(&mut self, _: &mut Tuple) {}
     fn exit_turbofish(&mut self, _: &mut Turbofish) {}
+    fn exit_turbofish_type_or_const(&mut self, _: &mut TurbofishTypeOrConst) {}
     fn exit_type(&mut self, _: &mut Type) {}
     fn exit_type_additional(&mut self, _: &mut TypeAdditional) {}
     fn exit_type_alias(&mut self, _: &mut TypeAlias) {}

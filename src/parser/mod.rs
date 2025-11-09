@@ -15,6 +15,7 @@ use self::{
         expr_byte_string,
         expr_macro_call,
         expression,
+        expression_atom,
         statement_expression,
     },
 };
@@ -671,17 +672,15 @@ fn ident<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Ident> {
 
 fn generic_declarations<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, GenericDeclarations> {
     sequence!(pm, pt, {
-        spt       = point;
-        _         = left_angle;
-        lifetimes = zero_or_more_tailed_values(comma, attributed(generic_declaration_lifetime));
-        types     = zero_or_more_tailed_values(comma, attributed(generic_declaration_type));
-        consts    = zero_or_more_tailed_values(comma, attributed(generic_declaration_const));
-        _         = right_angle;
+        spt              = point;
+        _                = left_angle;
+        lifetimes        = zero_or_more_tailed_values(comma, attributed(generic_declaration_lifetime));
+        types_and_consts = zero_or_more_tailed_values(comma, attributed(generic_declaration_type_or_const));
+        _                = right_angle;
     }, |pm: &mut Master, pt| GenericDeclarations {
         extent: pm.state.ex(spt, pt),
         lifetimes,
-        types,
-        consts,
+        types_and_consts,
         whitespace: Vec::new(),
     })
 }
@@ -704,6 +703,13 @@ fn generic_declaration_lifetime_bounds<'s>(pm: &mut Master<'s>, pt: Point<'s>) -
         _      = colon;
         bounds = zero_or_more_tailed_values(plus, lifetime);
     }, |_, _| bounds)
+}
+
+fn generic_declaration_type_or_const<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, GenericDeclarationTypeOrConst> {
+    pm.alternate(pt)
+        .one(map(generic_declaration_type, GenericDeclarationTypeOrConst::Type))
+        .one(map(generic_declaration_const, GenericDeclarationTypeOrConst::Const))
+        .finish()
 }
 
 fn generic_declaration_type<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, GenericDeclarationType> {
@@ -738,17 +744,26 @@ fn generic_declaration_type_default<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> P
 
 fn generic_declaration_const<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, GenericDeclarationConst> {
     sequence!(pm, pt, {
-        spt  = point;
-        _    = kw_const;
-        name = ident;
-        _    = colon;
-        typ  = typ;
+        spt   = point;
+        _     = kw_const;
+        name  = ident;
+        _     = colon;
+        typ   = typ;
+        value = optional(generic_declaration_const_value);
     }, |pm: &mut Master, pt| GenericDeclarationConst {
         extent: pm.state.ex(spt, pt),
         name,
         typ,
+        value,
         whitespace: Vec::new(),
     })
+}
+
+fn generic_declaration_const_value<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Attributed<Expression>> {
+    sequence!(pm, pt, {
+        _     = equals;
+        value = attributed(expression_atom);
+    }, |_, _| value)
 }
 
 fn function_arglist<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Vec<Argument>> {
@@ -1053,9 +1068,7 @@ fn string_literal<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, String
 }
 
 fn number_literal<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Number> {
-    pm.alternate(pt)
-        .one(map(number_normal, convert_number))
-        .finish()
+    number_normal(pm, pt).map(convert_number)
 }
 
 fn convert_number(n: tokenizer::Number) -> Number {
@@ -1118,18 +1131,25 @@ fn path_component<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, PathCo
 
 fn turbofish<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Turbofish> {
     sequence!(pm, pt, {
-        spt       = point;
-        _         = double_colon;
-        _         = left_angle;
-        lifetimes = zero_or_more_tailed_values(comma, lifetime);
-        types     = zero_or_more_tailed_values(comma, typ);
-        _     = right_angle;
+        spt              = point;
+        _                = double_colon;
+        _                = left_angle;
+        lifetimes        = zero_or_more_tailed_values(comma, lifetime);
+        types_and_consts = zero_or_more_tailed_values(comma, turbofish_typ_or_const);
+        _                = right_angle;
     }, |pm: &mut Master, pt| Turbofish {
         extent: pm.state.ex(spt, pt),
         lifetimes,
-        types,
+        types_and_consts,
         whitespace: Vec::new(),
     })
+}
+
+fn turbofish_typ_or_const<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, TurbofishTypeOrConst> {
+    pm.alternate(pt)
+        .one(map(typ, TurbofishTypeOrConst::Type))
+        .one(map(attributed(expression_atom), TurbofishTypeOrConst::Const))
+        .finish()
 }
 
 fn pattern<'s>(pm: &mut Master<'s>, pt: Point<'s>) -> Progress<'s, Pattern> {
@@ -2463,6 +2483,7 @@ fn typ_generics_angle_member<'s>(pm: &mut Master<'s>, pt: Point<'s>) ->
         .one(map(associated_type, TypeGenericsAngleMember::AssociatedType))
         .one(map(lifetime, TypeGenericsAngleMember::Lifetime))
         .one(map(typ, TypeGenericsAngleMember::Type))
+        .one(map(attributed(expression_atom), TypeGenericsAngleMember::Const))
         .finish()
 }
 
@@ -3773,9 +3794,27 @@ mod test {
     }
 
     #[test]
-    fn type_with_generics() {
+    fn type_with_generic_lifetimes() {
+        let p = qp(typ, "A<'a>");
+        assert_extent!(p, (0, 5))
+    }
+
+    #[test]
+    fn type_with_generic_types() {
         let p = qp(typ, "A<T>");
         assert_extent!(p, (0, 4))
+    }
+
+    #[test]
+    fn type_with_generic_consts() {
+        let p = qp(typ, "A<42>");
+        assert_extent!(p, (0, 5))
+    }
+
+    #[test]
+    fn type_with_generic_consts_block() {
+        let p = qp(typ, "A<{ u8::MAX as u64 }>");
+        assert_extent!(p, (0, 21))
     }
 
     #[test]
@@ -4190,6 +4229,18 @@ mod test {
     fn generic_declarations_allow_const_bounds() {
         let p = qp(generic_declarations, "<const N: usize>");
         assert_extent!(p, (0, 16))
+    }
+
+    #[test]
+    fn generic_declarations_allow_const_bounds_with_default() {
+        let p = qp(generic_declarations, "<const N: usize = 42>");
+        assert_extent!(p, (0, 21))
+    }
+
+    #[test]
+    fn generic_declarations_consts_before_types() {
+        let p = qp(generic_declarations, "<const N: usize, T>");
+        assert_extent!(p, (0, 19))
     }
 
     #[test]
