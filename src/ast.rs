@@ -998,7 +998,8 @@ pub struct Enum {
 pub struct EnumVariant {
     pub extent: Extent,
     pub name: Ident,
-    pub body: EnumVariantBody,
+    pub body: Option<EnumVariantBody>,
+    pub discriminant: Option<Attributed<Expression>>,
     pub whitespace: Vec<Whitespace>,
 }
 
@@ -1006,7 +1007,6 @@ pub struct EnumVariant {
 pub enum EnumVariantBody {
     Tuple(Vec<Attributed<StructDefinitionFieldUnnamed>>),
     Struct(StructDefinitionBodyBrace),
-    Unit(Option<Attributed<Expression>>),
 }
 
 #[derive(Debug, Visit, Decompose)] // TODO: HasExtent?
